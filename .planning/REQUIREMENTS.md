@@ -13,7 +13,7 @@
 
 - [x] **FND-01**: 应用可在桌面（Windows / macOS / Linux）启动，并端到端打开一本 EPUB 完成阅读
 - [x] **FND-02**: 应用可在 Android 真机启动，并端到端打开一本 EPUB 完成阅读
-- [ ] **FND-03**: 用户可从设备存储导入书籍；Android 经 SAF 授权后书籍持久可访问（基于 storage-handle 抽象，不依赖裸文件路径）
+- [x] **FND-03**: 用户可从设备存储导入书籍；Android 经 SAF 授权后书籍持久可访问（基于 storage-handle 抽象，不依赖裸文件路径）
 - [x] **FND-04**: 遇到 DRM 加密或损坏书籍时，应用明确提示不支持并安全拒绝（不崩溃、不尝试破解）
 
 ### Reading Experience（阅读体验）
@@ -112,7 +112,7 @@
 |-------------|-------|--------|
 | FND-01 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete |
 | FND-02 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete (emulator per D-13; physical device pending) |
-| FND-03 | Phase 1 — Foundation & Cross-Platform Skeleton | Pending |
+| FND-03 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete (emulator per D-13) |
 | FND-04 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete |
 | READ-01 | Phase 2 — EPUB Reading Core | Pending |
 | READ-02 | Phase 2 — EPUB Reading Core | Pending |

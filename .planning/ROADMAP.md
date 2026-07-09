@@ -12,7 +12,7 @@
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation & Cross-Platform Skeleton** - Tauri v2 shell on desktop + real Android, storage-handle abstraction, DRM detect-and-refuse, 3 day-1 abstractions stubbed, key decisions locked
+- [x] **Phase 1: Foundation & Cross-Platform Skeleton** - Tauri v2 shell on desktop + real Android, storage-handle abstraction, DRM detect-and-refuse, 3 day-1 abstractions stubbed, key decisions locked
 - [ ] **Phase 2: EPUB Reading Core** - Immersive, themeable EPUB reading (Lithium-parity milestone): modes, typography knobs, themes, TOC, search, custom fonts
 - [ ] **Phase 3: CJK Typography Differentiation** - The moat: punctuation compression, autospace, kinsoku, CJK defaults, bundled font + coverage-aware fallback
 - [ ] **Phase 4: Local Library** - SQLite library store with covers, metadata, sort/filter; real Publication trait + stable identity
@@ -41,7 +41,7 @@ Plans:
 - [x] 01-02-PLAN.md — DRM & corruption detect-and-refuse: pure-`core` `detect_protection()` (clean / font-obfuscation / content-DRM), typed soft-fail, fully off-device unit-tested with tiny fixtures (FND-04) [Wave 2, autonomous, TDD]
 - [x] 01-03-PLAN.md — Day-1 seams + schema + decisions: `Publication` trait, composite `Locator`, `BookSource` storage-handle, identity+change-log SQLite migration v1, and the license / WebView-engine / DRM decision records [Wave 2, autonomous]
 - [x] 01-04-PLAN.md — Bundled-EPUB thin reading slice on desktop + Android emulator: foliate-js open → render → page-turn, DRM-gated (FND-01, FND-02) [Wave 3, non-autonomous]
-- [ ] 01-05-PLAN.md — Storage-handle import + Android SAF persisted grants across restart; native-Kotlin-vs-community-plugin supply-chain decision (FND-03) [Wave 4, non-autonomous]
+- [x] 01-05-PLAN.md — Storage-handle import + Android SAF persisted grants across restart; native-Kotlin-vs-community-plugin supply-chain decision (FND-03) [Wave 4, non-autonomous]
 
 ### Phase 2: EPUB Reading Core
 **Goal**: Deliver the first demonstrably-usable milestone — immersive, themeable EPUB reading at Lithium parity — so a user can comfortably read a whole EPUB with full control over layout, themes, navigation, and search. Malformed/FXL/obfuscated books soft-fail via a CI torture corpus.
@@ -161,7 +161,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Cross-Platform Skeleton | 4/5 | In Progress|  |
+| 1. Foundation & Cross-Platform Skeleton | 5/5 | Executed | 2026-07-10 |
 | 2. EPUB Reading Core | 0/TBD | Not started | - |
 | 3. CJK Typography Differentiation | 0/TBD | Not started | - |
 | 4. Local Library | 0/TBD | Not started | - |

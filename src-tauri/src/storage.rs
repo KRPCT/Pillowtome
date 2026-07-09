@@ -1,21 +1,23 @@
-//! Source registry: maps an opaque book id to the file that backs it.
+//! Source registry: maps an opaque book id to the [`BookSource`] that backs it.
 //!
 //! Held in Tauri managed state and read by the `pillow://` protocol handler.
 //! The registry is the **only** authority on which bytes a given id may read —
 //! the protocol never reads a caller-supplied path (threat T-01-01).
 //!
-//! P1 stores a [`PathBuf`]; Plan 05 migrates the value type to
-//! `pillowtome_core::source::BookSource`.
+//! Values are opaque `BookSource` handles (D-05): a desktop filesystem
+//! `Path`, or an Android SAF `content://` `ContentUri` backed by a persisted
+//! URI permission grant. A raw path never crosses this boundary.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Mutex;
 
-/// Registry of `id -> backing file path`, guarded for interior mutability so it
-/// can live in Tauri managed state behind a shared reference.
+use pillowtome_core::source::BookSource;
+
+/// Registry of `id -> BookSource`, guarded for interior mutability so it can
+/// live in Tauri managed state behind a shared reference.
 #[derive(Default)]
 pub struct SourceRegistry {
-    inner: Mutex<HashMap<String, PathBuf>>,
+    inner: Mutex<HashMap<String, BookSource>>,
 }
 
 impl SourceRegistry {
@@ -23,15 +25,64 @@ impl SourceRegistry {
         Self::default()
     }
 
-    /// Register (or replace) the path backing `id`.
-    pub fn register(&self, id: impl Into<String>, path: impl Into<PathBuf>) {
-        self.inner.lock().unwrap().insert(id.into(), path.into());
+    /// Register (or replace) the [`BookSource`] backing `id`.
+    ///
+    /// Accepts anything convertible into a `BookSource` (a bare `PathBuf`
+    /// becomes `BookSource::Path`), so the registry never stores a raw path.
+    pub fn register(&self, id: impl Into<String>, source: impl Into<BookSource>) {
+        self.inner.lock().unwrap().insert(id.into(), source.into());
     }
 
-    /// Resolve `id` to its registered path, if any.
-    pub fn resolve(&self, id: &str) -> Option<PathBuf> {
+    /// Resolve `id` to its registered [`BookSource`], if any.
+    pub fn resolve(&self, id: &str) -> Option<BookSource> {
         self.inner.lock().unwrap().get(id).cloned()
     }
+
+    /// All registered ids (order unspecified) — used to list importable books.
+    pub fn ids(&self) -> Vec<String> {
+        self.inner.lock().unwrap().keys().cloned().collect()
+    }
+}
+
+/// Read the full bytes behind a [`BookSource`].
+///
+/// `Path` reads from disk on every platform; `ContentUri` reads via the Android
+/// SAF plugin **in-session** (Android only), which needs the app handle to reach
+/// the plugin state. Book bytes are read here in Rust — they never cross Tauri
+/// IPC (D-06); the caller streams them out over `pillow://`.
+pub fn resolve_bytes<R: tauri::Runtime>(
+    source: &BookSource,
+    app: &tauri::AppHandle<R>,
+) -> std::io::Result<Vec<u8>> {
+    match source {
+        BookSource::Path(path) => std::fs::read(path),
+        BookSource::ContentUri(uri) => read_content_uri(uri, app),
+    }
+}
+
+/// Read a SAF `content://` URI via the Android FS plugin (Android only).
+#[cfg(target_os = "android")]
+fn read_content_uri<R: tauri::Runtime>(
+    uri: &str,
+    app: &tauri::AppHandle<R>,
+) -> std::io::Result<Vec<u8>> {
+    use tauri_plugin_android_fs::{AndroidFsExt, FileUri};
+
+    app.android_fs()
+        .read(&FileUri::from_uri(uri))
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+}
+
+/// On desktop a `content://` handle is unreachable — resolution is a no-op error.
+#[cfg(not(target_os = "android"))]
+fn read_content_uri<R: tauri::Runtime>(
+    _uri: &str,
+    _app: &tauri::AppHandle<R>,
+) -> std::io::Result<Vec<u8>> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "content:// sources require Android",
+    ))
 }
 
 /// Extract the book id from a request path (e.g. `/sample` -> `sample`),

@@ -26,9 +26,24 @@ pub enum BookSource {
     ContentUri(String),
 }
 
+impl From<PathBuf> for BookSource {
+    /// A bare filesystem path is the desktop book handle. This conversion lets
+    /// call sites register a `PathBuf` while the registry keeps only opaque
+    /// `BookSource` values (D-05) — a raw path never leaks past this boundary.
+    fn from(path: PathBuf) -> Self {
+        BookSource::Path(path)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn path_buf_converts_to_path_handle() {
+        let src: BookSource = PathBuf::from("/books/凉州词.epub").into();
+        assert_eq!(src, BookSource::Path(PathBuf::from("/books/凉州词.epub")));
+    }
 
     #[test]
     fn book_source_round_trips() {

@@ -11,12 +11,13 @@
 //! is returned — the book itself is never serialized across the bridge.
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use pillowtome_core::error::CoreError;
 use pillowtome_core::protection::{detect_protection, Protection};
+use pillowtome_core::source::BookSource;
 
-use crate::storage::SourceRegistry;
+use crate::storage::{resolve_bytes, SourceRegistry};
 
 /// Result of the pre-render DRM/corruption gate, shaped for the WebView.
 ///
@@ -67,14 +68,143 @@ pub fn decide(detected: Result<Protection, CoreError>) -> ProtectionDecision {
 /// and returns the render/refuse verdict. The book bytes are NOT returned; the
 /// WebView fetches them separately over `pillow://` only when `can_render`.
 #[tauri::command]
-pub fn check_protection(id: String, registry: State<'_, SourceRegistry>) -> ProtectionDecision {
-    let Some(path) = registry.resolve(&id) else {
+pub fn check_protection(
+    id: String,
+    app: AppHandle,
+    registry: State<'_, SourceRegistry>,
+) -> ProtectionDecision {
+    let Some(source) = registry.resolve(&id) else {
         return ProtectionDecision::refuse("找不到该书籍。");
     };
-    match std::fs::read(&path) {
+    // Bytes are read in Rust (from disk, or a SAF content:// URI on Android);
+    // only the verdict crosses IPC (D-06).
+    match resolve_bytes(&source, &app) {
         Ok(bytes) => decide(detect_protection(&bytes)),
         Err(_) => ProtectionDecision::refuse("无法读取书籍文件。"),
     }
+}
+
+/// A book that has been registered in the [`SourceRegistry`], shaped for the UI.
+///
+/// Only the opaque `id` and a display `name` cross IPC — never the book bytes or
+/// a raw path (D-05/D-06). The frontend builds the `pillow://` URL from `id`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedBook {
+    pub id: String,
+    pub name: String,
+}
+
+/// Whether this build targets Android — lets the frontend pick the import path
+/// (desktop `dialog.open` vs the Android SAF picker driven in Rust).
+#[tauri::command]
+pub fn is_android() -> bool {
+    cfg!(target_os = "android")
+}
+
+/// Import a book from device storage through the opaque [`BookSource`] handle
+/// (FND-03), register it, and return its id + display name.
+///
+/// Desktop: the frontend picks a path via `dialog.open` and passes it here; it
+/// becomes `BookSource::Path`. Android: `path` is ignored and the SAF picker is
+/// shown in Rust, the returned `content://` URI's permission is **persisted**
+/// (`takePersistableUriPermission`) so it survives a restart, and it becomes
+/// `BookSource::ContentUri`. Book bytes never cross IPC (D-06) — only id/name.
+#[tauri::command]
+pub async fn import(
+    app: AppHandle,
+    registry: State<'_, SourceRegistry>,
+    path: Option<String>,
+) -> Result<ImportedBook, String> {
+    let source = pick_source(&app, path).await?;
+    let id = book_id(&source);
+    let name = source_name(&app, &source);
+    registry.register(id.clone(), source);
+    Ok(ImportedBook { id, name })
+}
+
+/// List currently-registered imported books (excluding the bundled `sample`).
+///
+/// On Android this includes handles re-hydrated from persisted SAF grants at
+/// launch, so a previously imported book reappears after a restart (FND-03).
+#[tauri::command]
+pub fn imported_books(app: AppHandle, registry: State<'_, SourceRegistry>) -> Vec<ImportedBook> {
+    let mut books: Vec<ImportedBook> = registry
+        .ids()
+        .into_iter()
+        .filter(|id| id != crate::SAMPLE_ID)
+        .filter_map(|id| {
+            let source = registry.resolve(&id)?;
+            let name = source_name(&app, &source);
+            Some(ImportedBook { id, name })
+        })
+        .collect();
+    books.sort_by(|a, b| a.name.cmp(&b.name));
+    books
+}
+
+/// A stable id derived from the handle, so a freshly imported book and the same
+/// book re-hydrated after a restart share one id. Only `[0-9a-f-]` — passes
+/// `sanitize_id` (no `/`, `\`, or `..`).
+pub(crate) fn book_id(source: &BookSource) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    match source {
+        BookSource::Path(p) => p.hash(&mut hasher),
+        BookSource::ContentUri(u) => u.hash(&mut hasher),
+    }
+    format!("import-{:016x}", hasher.finish())
+}
+
+/// A human-facing display name for a handle (best-effort; falls back to the id).
+fn source_name<R: tauri::Runtime>(app: &AppHandle<R>, source: &BookSource) -> String {
+    match source {
+        BookSource::Path(p) => p
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| book_id(source)),
+        BookSource::ContentUri(uri) => content_uri_name(app, uri).unwrap_or_else(|| book_id(source)),
+    }
+}
+
+#[cfg(target_os = "android")]
+fn content_uri_name<R: tauri::Runtime>(app: &AppHandle<R>, uri: &str) -> Option<String> {
+    use tauri_plugin_android_fs::{AndroidFsExt, FileUri};
+    app.android_fs().get_name(&FileUri::from_uri(uri)).ok()
+}
+
+#[cfg(not(target_os = "android"))]
+fn content_uri_name<R: tauri::Runtime>(_app: &AppHandle<R>, _uri: &str) -> Option<String> {
+    None
+}
+
+/// Resolve the user's pick into a [`BookSource`], per platform.
+#[cfg(not(target_os = "android"))]
+async fn pick_source(_app: &AppHandle, path: Option<String>) -> Result<BookSource, String> {
+    let path = path.ok_or_else(|| "未选择文件".to_string())?;
+    Ok(BookSource::Path(std::path::PathBuf::from(path)))
+}
+
+/// Show the Android SAF picker, persist the grant, and wrap the URI (FND-03).
+#[cfg(target_os = "android")]
+async fn pick_source(app: &AppHandle, _path: Option<String>) -> Result<BookSource, String> {
+    use tauri_plugin_android_fs::AndroidFsExt;
+
+    let picker = app.android_fs_async().file_picker();
+    let uri = picker
+        .pick_file(None, &["application/epub+zip"], false)
+        .await
+        .map_err(|e| format!("打开文件选择器失败：{e}"))?
+        .ok_or_else(|| "已取消导入".to_string())?;
+
+    // takePersistableUriPermission — the grant must survive a full app restart
+    // so the book reopens without re-granting (FND-03, the hard part).
+    picker
+        .persist_uri_permission(&uri)
+        .await
+        .map_err(|e| format!("无法持久化访问授权：{e}"))?;
+
+    Ok(BookSource::ContentUri(uri.uri))
 }
 
 #[cfg(test)]

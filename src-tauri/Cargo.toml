@@ -19,9 +19,20 @@ tauri-build = { version = "=2.6.3", features = [] }
 # Exact pins only (supply-chain zero-trust baseline). Cargo.lock is committed.
 tauri = { version = "=2.11.5", features = [] }
 tauri-plugin-sql = { version = "=2.4.0", features = ["sqlite"] }
+# Desktop file picker for import (matches the JS @tauri-apps/plugin-dialog 2.7.1).
+tauri-plugin-dialog = "=2.7.1"
 pillowtome-core = { path = "../core" }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.150"
+
+# Android SAF (FND-03): picker + persistable URI grants. Audited + exact-pinned
+# per docs/decisions/DEC-004-android-saf-mechanism.md (=28.2.2, the soaked
+# release; NOT 28.4.0). Default features only (`commands`) — the
+# `legacy_storage_permission*` and `notification_permission` features are left
+# OFF so the plugin's build.rs injects NO extra <uses-permission> (mitigation
+# #3). Target-gated: desktop never links this crate.
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-android-fs = "=28.2.2"
 
 [dev-dependencies]
 # Off-device migration smoke test only. Pinned to the SAME sqlx the

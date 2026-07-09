@@ -12,6 +12,7 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
+use pillowtome_core::source::BookSource;
 use tauri::http::{header, HeaderValue, Response, StatusCode};
 
 use crate::storage::{sanitize_id, SourceRegistry};
@@ -127,7 +128,9 @@ pub fn serve(
     let Some(id) = sanitize_id(raw_path) else {
         return status_only(StatusCode::NOT_FOUND);
     };
-    let Some(path) = registry.resolve(&id) else {
+    // `content://` handles are read in the protocol closure (they need the app
+    // handle to reach the SAF plugin); only `Path` streams from disk here.
+    let Some(BookSource::Path(path)) = registry.resolve(&id) else {
         return status_only(StatusCode::NOT_FOUND);
     };
     let Ok(mut file) = File::open(&path) else {
@@ -144,13 +147,7 @@ pub fn serve(
             if file.read_to_end(&mut buf).is_err() {
                 return status_only(StatusCode::INTERNAL_SERVER_ERROR);
             }
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "application/octet-stream")
-                .header(header::ACCEPT_RANGES, "bytes")
-                .header(header::CONTENT_LENGTH, len)
-                .body(buf)
-                .unwrap()
+            full_response(buf)
         }
         RangeResolution::Partial { start, end, total } => {
             let count = end - start + 1;
@@ -158,21 +155,76 @@ pub fn serve(
             if file.seek(SeekFrom::Start(start)).is_err() || file.read_exact(&mut buf).is_err() {
                 return status_only(StatusCode::INTERNAL_SERVER_ERROR);
             }
-            Response::builder()
-                .status(StatusCode::PARTIAL_CONTENT)
-                .header(header::CONTENT_TYPE, "application/octet-stream")
-                .header(header::ACCEPT_RANGES, "bytes")
-                .header(header::CONTENT_RANGE, format!("bytes {start}-{end}/{total}"))
-                .header(header::CONTENT_LENGTH, count)
-                .body(buf)
-                .unwrap()
+            partial_response(buf, start, end, total)
         }
-        RangeResolution::Unsatisfiable { total } => Response::builder()
-            .status(StatusCode::RANGE_NOT_SATISFIABLE)
-            .header(header::CONTENT_RANGE, format!("bytes */{total}"))
-            .body(Vec::new())
-            .unwrap(),
+        RangeResolution::Unsatisfiable { total } => unsatisfiable_response(total),
     })
+}
+
+/// Serve already-read bytes with the same Range/CORS semantics as [`serve`].
+///
+/// This backs the Android `content://` path: the SAF plugin reads the file into
+/// memory **in Rust** (D-06) and the bytes are then sliced here per the request's
+/// Range header. Pure and unit-testable without a WebView or a device.
+pub fn serve_bytes(bytes: Vec<u8>, range_header: Option<&str>) -> Response<Vec<u8>> {
+    let total_len = bytes.len() as u64;
+    cors(match parse_range(range_header, total_len) {
+        RangeResolution::Full { .. } => full_response(bytes),
+        RangeResolution::Partial { start, end, total } => {
+            let slice = bytes[start as usize..=end as usize].to_vec();
+            partial_response(slice, start, end, total)
+        }
+        RangeResolution::Unsatisfiable { total } => unsatisfiable_response(total),
+    })
+}
+
+/// Read a SAF `content://` book via the Android FS plugin and serve it (Android).
+///
+/// Bytes are read in Rust and streamed over `pillow://` — they never cross IPC
+/// (D-06). Reads the whole file (P1 books are small); Range is applied in memory.
+#[cfg(target_os = "android")]
+pub fn serve_content_uri<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    uri: &str,
+    range_header: Option<&str>,
+) -> Response<Vec<u8>> {
+    use tauri_plugin_android_fs::{AndroidFsExt, FileUri};
+
+    match app.android_fs().read(&FileUri::from_uri(uri)) {
+        Ok(bytes) => serve_bytes(bytes, range_header),
+        Err(_) => status_only(StatusCode::NOT_FOUND),
+    }
+}
+
+fn full_response(body: Vec<u8>) -> Response<Vec<u8>> {
+    let len = body.len() as u64;
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::CONTENT_LENGTH, len)
+        .body(body)
+        .unwrap()
+}
+
+fn partial_response(body: Vec<u8>, start: u64, end: u64, total: u64) -> Response<Vec<u8>> {
+    let count = end - start + 1;
+    Response::builder()
+        .status(StatusCode::PARTIAL_CONTENT)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::CONTENT_RANGE, format!("bytes {start}-{end}/{total}"))
+        .header(header::CONTENT_LENGTH, count)
+        .body(body)
+        .unwrap()
+}
+
+fn unsatisfiable_response(total: u64) -> Response<Vec<u8>> {
+    Response::builder()
+        .status(StatusCode::RANGE_NOT_SATISFIABLE)
+        .header(header::CONTENT_RANGE, format!("bytes */{total}"))
+        .body(Vec::new())
+        .unwrap()
 }
 
 fn status_only(status: StatusCode) -> Response<Vec<u8>> {

@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/android-schema.json",
+  "identifier": "android-saf",
+  "description": "Android SAF surface for FND-03: pick a book, persist its URI grant across restarts, and check/release that grant. Scoped per DEC-004 — no write/remove/MediaStore/notification/thumbnail/share command is granted. Book bytes are read in Rust inside the pillow:// handler (D-06), so no read-stream command is granted here.",
+  "platforms": ["android"],
+  "windows": ["main"],
+  "permissions": [
+    "android-fs:allow-show-open-file-picker",
+    "android-fs:allow-persist-picker-uri-permission",
+    "android-fs:allow-check-persisted-picker-uri-permission",
+    "android-fs:allow-release-persisted-picker-uri-permission"
+  ]
+}

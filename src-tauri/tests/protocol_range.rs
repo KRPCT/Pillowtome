@@ -82,3 +82,48 @@ fn registry_serves_full_and_range() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The WebView never shares an origin with `pillow://` — dev serves the page
+/// from `http://localhost:1420`, release from `tauri.localhost`. Without CORS
+/// the browser blocks `fetch` before the status is observable and the reader
+/// shows an opaque "corrupt file" error. Regression guard: every response,
+/// including the error statuses, must carry the headers.
+#[test]
+fn every_response_carries_cors() {
+    let dir = std::env::temp_dir().join(format!("pillow_cors_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("fixture.bin");
+    std::fs::File::create(&file).unwrap().write_all(&[0u8; 64]).unwrap();
+
+    let registry = SourceRegistry::new();
+    registry.register("fixture", file);
+
+    let responses = [
+        serve(&registry, "/fixture", None),                    // 200
+        serve(&registry, "/fixture", Some("bytes=0-9")),       // 206
+        serve(&registry, "/fixture", Some("bytes=500-600")),   // 416
+        serve(&registry, "/nope", None),                       // 404
+        serve(&registry, "/../secret", None),                  // 404
+    ];
+
+    for res in responses {
+        let headers = res.headers();
+        assert_eq!(
+            headers
+                .get("access-control-allow-origin")
+                .and_then(|v| v.to_str().ok()),
+            Some("*"),
+            "missing Access-Control-Allow-Origin on {}",
+            res.status()
+        );
+        let exposed = headers
+            .get("access-control-expose-headers")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+        for h in ["Accept-Ranges", "Content-Range", "Content-Length"] {
+            assert!(exposed.contains(h), "{h} not exposed on {}", res.status());
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

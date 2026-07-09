@@ -12,12 +12,41 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
-use tauri::http::{header, Response, StatusCode};
+use tauri::http::{header, HeaderValue, Response, StatusCode};
 
 use crate::storage::{sanitize_id, SourceRegistry};
 
 /// Cap each served range at 1 MiB, matching `examples/streaming` upstream.
 pub const MAX_LEN: u64 = 1024 * 1024;
+
+/// Headers the WebView must be allowed to read off a cross-origin response.
+const EXPOSED_HEADERS: &str = "Accept-Ranges, Content-Range, Content-Length";
+
+/// Attach CORS headers to every `pillow://` response.
+///
+/// The WebView never shares an origin with this protocol: in dev the page is
+/// served by the Vite dev server (`http://localhost:1420`), and in a release
+/// build it is `tauri.localhost` — while book bytes come from
+/// `pillow.localhost` (Windows/Android) or `pillow://localhost`. Without
+/// `Access-Control-Allow-Origin` the browser blocks `fetch` before our handler's
+/// status is ever observable, so the reader sees an opaque failure. Tauri's own
+/// `asset:` protocol does exactly this.
+///
+/// `*` is safe here because [`serve`] resolves ids **only** through the
+/// `SourceRegistry` and rejects traversal (threat T-01-01) — there is no
+/// attacker-reachable path surface to widen.
+fn cors(mut response: Response<Vec<u8>>) -> Response<Vec<u8>> {
+    let headers = response.headers_mut();
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_EXPOSE_HEADERS,
+        HeaderValue::from_static(EXPOSED_HEADERS),
+    );
+    response
+}
 
 /// Pure result of resolving a `Range` header against a known content length.
 #[derive(Debug, PartialEq, Eq)]
@@ -109,7 +138,7 @@ pub fn serve(
         Err(_) => return status_only(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
-    match parse_range(range_header, total_len) {
+    cors(match parse_range(range_header, total_len) {
         RangeResolution::Full { len } => {
             let mut buf = Vec::with_capacity(len as usize);
             if file.read_to_end(&mut buf).is_err() {
@@ -143,9 +172,9 @@ pub fn serve(
             .header(header::CONTENT_RANGE, format!("bytes */{total}"))
             .body(Vec::new())
             .unwrap(),
-    }
+    })
 }
 
 fn status_only(status: StatusCode) -> Response<Vec<u8>> {
-    Response::builder().status(status).body(Vec::new()).unwrap()
+    cors(Response::builder().status(status).body(Vec::new()).unwrap())
 }

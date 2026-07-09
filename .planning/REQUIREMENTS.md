@@ -106,17 +106,46 @@
 
 ## Traceability
 
-各 phase 覆盖哪些需求。由 roadmap 创建时填充（`gsd-roadmapper`）。
+各 phase 覆盖哪些需求。由 roadmap 创建时填充（`gsd-roadmapper`）。每条 v1 需求恰好映射到一个 phase，无重复、无遗漏。
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _(populated during roadmap creation)_ | — | Pending |
+| FND-01 | Phase 1 — Foundation & Cross-Platform Skeleton | Pending |
+| FND-02 | Phase 1 — Foundation & Cross-Platform Skeleton | Pending |
+| FND-03 | Phase 1 — Foundation & Cross-Platform Skeleton | Pending |
+| FND-04 | Phase 1 — Foundation & Cross-Platform Skeleton | Pending |
+| READ-01 | Phase 2 — EPUB Reading Core | Pending |
+| READ-02 | Phase 2 — EPUB Reading Core | Pending |
+| READ-03 | Phase 2 — EPUB Reading Core | Pending |
+| READ-04 | Phase 2 — EPUB Reading Core | Pending |
+| READ-05 | Phase 2 — EPUB Reading Core | Pending |
+| READ-06 | Phase 2 — EPUB Reading Core | Pending |
+| READ-07 | Phase 2 — EPUB Reading Core | Pending |
+| CJK-01 | Phase 3 — CJK Typography Differentiation | Pending |
+| CJK-02 | Phase 3 — CJK Typography Differentiation | Pending |
+| CJK-03 | Phase 3 — CJK Typography Differentiation | Pending |
+| CJK-04 | Phase 3 — CJK Typography Differentiation | Pending |
+| CJK-05 | Phase 3 — CJK Typography Differentiation | Pending |
+| LIB-01 | Phase 4 — Local Library | Pending |
+| LIB-02 | Phase 4 — Local Library | Pending |
+| LIB-03 | Phase 4 — Local Library | Pending |
+| LIB-04 | Phase 4 — Local Library | Pending |
+| ANNO-01 | Phase 5 — Annotations & Composite Locator | Pending |
+| ANNO-02 | Phase 5 — Annotations & Composite Locator | Pending |
+| ANNO-03 | Phase 5 — Annotations & Composite Locator | Pending |
+| ANNO-04 | Phase 5 — Annotations & Composite Locator | Pending |
+| FMT-01 | Phase 6 — TXT Format & Format-Abstraction Validation | Pending |
+| SYNC-01 | Phase 7 — WebDAV Self-Hosted Sync | Pending |
+| SYNC-02 | Phase 7 — WebDAV Self-Hosted Sync | Pending |
+| SYNC-03 | Phase 7 — WebDAV Self-Hosted Sync | Pending |
+| SYNC-04 | Phase 7 — WebDAV Self-Hosted Sync | Pending |
+| SYNC-05 | Phase 7 — WebDAV Self-Hosted Sync | Pending |
 
 **Coverage:**
 - v1 requirements: 30 total（FND 4 · READ 7 · CJK 5 · LIB 4 · ANNO 4 · FMT 1 · SYNC 5）
-- Mapped to phases: 0（待 roadmap 填充）
-- Unmapped: 30 ⚠️（roadmap 创建后应归零）
+- Mapped to phases: 30 ✓（每条恰好一个 phase，无重复）
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-09 after initial definition*
+*Last updated: 2026-07-09 after roadmap creation (traceability populated, 30/30 mapped)*

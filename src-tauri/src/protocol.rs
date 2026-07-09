@@ -178,3 +178,40 @@ pub fn serve(
 fn status_only(status: StatusCode) -> Response<Vec<u8>> {
     cors(Response::builder().status(status).body(Vec::new()).unwrap())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Android `content://` path reads bytes in Rust (D-06) and serves them
+    /// from memory. `serve_bytes` must honour Range exactly like the file path,
+    /// including CORS on every response.
+    #[test]
+    fn serve_bytes_honors_range_and_cors() {
+        let data: Vec<u8> = (0..100u8).collect();
+
+        let full = serve_bytes(data.clone(), None);
+        assert_eq!(full.status().as_u16(), 200);
+        assert_eq!(full.body().len(), 100);
+        assert_eq!(
+            full.headers()
+                .get("access-control-allow-origin")
+                .and_then(|v| v.to_str().ok()),
+            Some("*")
+        );
+
+        let partial = serve_bytes(data.clone(), Some("bytes=0-9"));
+        assert_eq!(partial.status().as_u16(), 206);
+        assert_eq!(partial.body().len(), 10);
+        assert_eq!(
+            partial
+                .headers()
+                .get("content-range")
+                .and_then(|v| v.to_str().ok()),
+            Some("bytes 0-9/100")
+        );
+
+        let unsat = serve_bytes(data, Some("bytes=500-600"));
+        assert_eq!(unsat.status().as_u16(), 416);
+    }
+}

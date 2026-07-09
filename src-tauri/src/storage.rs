@@ -51,6 +51,8 @@ pub fn sanitize_id(raw_path: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pillowtome_core::source::BookSource;
+    use std::path::PathBuf;
 
     #[test]
     fn sanitize_rejects_traversal_and_nesting() {
@@ -62,10 +64,33 @@ mod tests {
     }
 
     #[test]
-    fn register_then_resolve() {
+    fn registry_stores_book_source_not_raw_path() {
+        // D-05: what backs an id is an opaque BookSource, never a bare path.
+        // A bare PathBuf is accepted for ergonomics but stored as BookSource::Path.
         let reg = SourceRegistry::new();
         reg.register("x", PathBuf::from("/tmp/x.epub"));
-        assert_eq!(reg.resolve("x"), Some(PathBuf::from("/tmp/x.epub")));
+        assert!(matches!(reg.resolve("x"), Some(BookSource::Path(_))));
         assert_eq!(reg.resolve("missing"), None);
+    }
+
+    #[test]
+    fn migrated_sample_still_resolves() {
+        // The bundled sample migrates from a bare PathBuf (Plan 01) to a
+        // BookSource::Path; it must keep resolving after the type change so the
+        // FND-01/FND-02 reading slice does not regress.
+        let reg = SourceRegistry::new();
+        let sample = BookSource::Path(PathBuf::from("/data/sample.epub"));
+        reg.register("sample", sample.clone());
+        assert_eq!(reg.resolve("sample"), Some(sample));
+    }
+
+    #[test]
+    fn ids_lists_registered_handles() {
+        let reg = SourceRegistry::new();
+        reg.register("sample", PathBuf::from("/data/sample.epub"));
+        reg.register("import-1", BookSource::ContentUri("content://x/1".into()));
+        let mut ids = reg.ids();
+        ids.sort();
+        assert_eq!(ids, vec!["import-1".to_string(), "sample".to_string()]);
     }
 }

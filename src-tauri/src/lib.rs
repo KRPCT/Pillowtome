@@ -42,6 +42,10 @@ pub fn run() {
             let response = protocol::serve(&registry, &path, range.as_deref());
             responder.respond(response);
         })
+        // Small structured IPC only. `check_protection` returns the pre-render
+        // DRM/corruption verdict for a registered id; book bytes never cross
+        // IPC (D-06) — they stream over pillow:// once the gate says render.
+        .invoke_handler(tauri::generate_handler![commands::check_protection])
         .setup(|app| {
             // Pre-register the bundled sample unconditionally so the
             // registry -> protocol plumbing is live from Wave 1 and

@@ -20,11 +20,11 @@
     "security": {
       "csp": {
         "default-src": "'self' ipc: http://ipc.localhost",
-        "connect-src": "'self' ipc: http://ipc.localhost",
-        "img-src": "'self' asset: data: blob: ipc: http://ipc.localhost",
-        "media-src": "'self' asset: blob: ipc: http://ipc.localhost",
-        "style-src": "'self' 'unsafe-inline'",
-        "font-src": "'self' data:"
+        "connect-src": "'self' ipc: http://ipc.localhost http://pillow.localhost https://pillow.localhost pillow:",
+        "img-src": "'self' asset: data: blob: ipc: http://ipc.localhost http://pillow.localhost https://pillow.localhost pillow:",
+        "media-src": "'self' asset: blob: ipc: http://ipc.localhost http://pillow.localhost https://pillow.localhost pillow:",
+        "style-src": "'self' 'unsafe-inline' http://pillow.localhost https://pillow.localhost pillow:",
+        "font-src": "'self' data: http://pillow.localhost https://pillow.localhost pillow:"
       }
     }
   },

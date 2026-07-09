@@ -15,3 +15,8 @@ blake3 = "=1.8.5"
 zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
 thiserror = "=2.0.18"
 serde = { version = "=1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+# Same exact pin/features as the runtime dep (no new Cargo.lock entries): the
+# protection tests build a zip-slip archive in memory to exercise the guard.
+zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }

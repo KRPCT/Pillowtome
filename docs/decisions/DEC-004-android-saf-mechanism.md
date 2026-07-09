@@ -68,6 +68,70 @@ that keeps the swap-out cost confined to `src-tauri`.
 **Exit path:** if the maintainer goes dark or a supply-chain incident occurs, replace with the
 native Kotlin plugin originally recommended. Blast radius is one file behind `BookSource::ContentUri`.
 
+## As-built implementation (Plan 01-05)
+
+The decision above was implemented in Plan 01-05. Recorded here so the audit and
+the shipped code stay in one place.
+
+**Pin (confirmed):** `tauri-plugin-android-fs = "=28.2.2"` as a
+`[target.'cfg(target_os = "android")'.dependencies]` entry (desktop never links
+it). `Cargo.lock` resolved it — plus its self-authored transitive `sync_async
+0.1.0` — cleanly against our pinned `tauri 2.11.5`. Default features only
+(`commands`); `legacy_storage_permission*` and `notification_permission` are
+**off**.
+
+**Flow — driven from the plugin's Rust API** (`app.android_fs()` /
+`android_fs_async()`), not the JS bridge:
+- Import: `file_picker().pick_file(..)` → `persist_uri_permission(&uri)`
+  (`takePersistableUriPermission`) → wrap the `content://` string as
+  `BookSource::ContentUri`.
+- Read: `android_fs().read(&FileUri)` **inside the `pillow://` protocol handler**,
+  so book bytes are read in Rust and streamed over the custom protocol — they
+  never cross IPC (**D-06**).
+- Re-hydrate: at launch, `get_all_persisted_uri_permissions()` re-registers each
+  still-granted file under the same stable id a fresh import would produce, so a
+  previously imported book reopens after a force-stop + relaunch (**FND-03**).
+
+**Capability scoping (as-built)** — `src-tauri/capabilities/android.json`,
+`platforms: ["android"]`, grants exactly:
+`android-fs:allow-show-open-file-picker`,
+`android-fs:allow-persist-picker-uri-permission`,
+`android-fs:allow-check-persisted-picker-uri-permission`,
+`android-fs:allow-release-persisted-picker-uri-permission`.
+Reconciliations with the decision's illustrative list:
+- **File picker, not dir picker** — the P1 flow imports a single book file; a
+  single-file SAF grant is persistable, so `show_open_dir_picker` is not needed.
+- **`open_read_file_stream` deliberately withheld** — granting it would permit
+  streaming book bytes over the JS bridge, violating **D-06**. Bytes are read in
+  Rust instead. D-06 (hard constraint) overrides the illustrative ceiling.
+- No `write` / `remove` / MediaStore / notification / thumbnail / share command
+  is granted (mitigation #2 honoured). The current flow drives picker/persist via
+  the Rust API; these grants are the permitted ceiling for a future JS-driven UI.
+
+**Mitigation #4 — AndroidManifest `<uses-permission>` diff:** with our feature
+set (no `legacy_storage_permission*`, no `notification_permission`), the plugin's
+`build.rs` builds an **empty** permission list and writes it into the
+`ANDROID FS PLUGIN` manifest block — i.e. it injects **zero** `<uses-permission>`
+entries. This is provable from the crate's `build.rs` (the `permissions` Vec is
+only populated behind those two `CARGO_FEATURE_*` gates) and is the intended
+outcome of mitigation #3. **Before/after `<uses-permission>` set: unchanged
+(empty injection).** A full post-`gradle` capture of the generated
+`src-tauri/gen/android/app/src/main/AndroidManifest.xml` is pending the first APK
+build on a host with symlink privilege (see below).
+
+**Verification status:**
+- ✅ `cargo test --workspace` — 35 passed (was 31; no regressions).
+- ✅ `pnpm build` — green.
+- ✅ Android **Rust cross-compile** — `cargo build --target aarch64-linux-android
+  --lib` produced `libpillowtome_lib.so`; `tauri-plugin-android-fs` and
+  `tauri-plugin-dialog` compiled for the target.
+- ⛔ Full APK / emulator run blocked in this session by the Windows
+  `SeCreateSymbolicLinkPrivilege` symlink step (ANDROID-BUILD.md trap #1 — env,
+  not code; resolved by enabling Developer Mode / elevated shell).
+- ⏳ **PENDING human verification** — the import → force-stop → relaunch → reopen
+  (no re-grant) cycle on the emulator (FND-03, D-13) is not yet run. This ADR does
+  **not** assert that gate passed.
+
 ## Related
 
 - DEC-001 (license clean-room) — permissive license confirmed, no AGPL contagion

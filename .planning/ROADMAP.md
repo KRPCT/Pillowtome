@@ -32,15 +32,16 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can import a book from device storage; on Android the SAF-granted access persists across app restarts — import flows through the storage-handle abstraction, never raw file paths.
   4. A DRM-encrypted or corrupted book is detected and refused with a clear "unsupported" message; the app never crashes and never attempts decryption.
   5. The three day-1 seams exist as stubs (format-agnostic `Publication` trait, composite locator type, UUID + content-hash + change-log schema) and key decisions are documented (permissive license / foliate-js MIT clean-room, WebView-engine strategy, DRM detect-and-refuse policy).
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: no
 **Research flag**: yes — Tauri v2 Android maturity, SAF `takePersistableUriPermission` / multi-API-level persistence + Play `MANAGE_EXTERNAL_STORAGE` policy, and the WebView-engine strategy (system WebView vs bundled Chromium) are architectural and benefit from `/gsd-plan-phase --research-phase`.
 
 Plans:
-- [ ] 01-01: Tauri v2 + React/Vite/TS WebView scaffold; IPC bridge + custom-protocol byte streaming (book bytes never cross IPC)
-- [ ] 01-02: Desktop build + real-hardware Android build slice; bundled-EPUB thin end-to-end reading slice on both targets
-- [ ] 01-03: Storage-handle abstraction + import (desktop paths / Android SAF persisted URI grants)
-- [ ] 01-04: DRM/corruption detect-and-refuse; stub `Publication`/locator/identity+change-log schema; document license, WebView-engine, and DRM decisions
+- [ ] 01-01-PLAN.md — Cross-platform scaffold: Tauri v2 + React/Vite/TS workspace (portable `pillowtome-core` + `src-tauri`), vendored pinned foliate-js, exact-pinned deps + lockfiles, and the Range-aware `pillow://` custom-protocol byte streamer + CSP (book bytes never cross IPC) [Wave 1, autonomous]
+- [ ] 01-02-PLAN.md — DRM & corruption detect-and-refuse: pure-`core` `detect_protection()` (clean / font-obfuscation / content-DRM), typed soft-fail, fully off-device unit-tested with tiny fixtures (FND-04) [Wave 2, autonomous, TDD]
+- [ ] 01-03-PLAN.md — Day-1 seams + schema + decisions: `Publication` trait, composite `Locator`, `BookSource` storage-handle, identity+change-log SQLite migration v1, and the license / WebView-engine / DRM decision records [Wave 2, autonomous]
+- [ ] 01-04-PLAN.md — Bundled-EPUB thin reading slice on desktop + Android emulator: foliate-js open → render → page-turn, DRM-gated (FND-01, FND-02) [Wave 3, non-autonomous]
+- [ ] 01-05-PLAN.md — Storage-handle import + Android SAF persisted grants across restart; native-Kotlin-vs-community-plugin supply-chain decision (FND-03) [Wave 4, non-autonomous]
 
 ### Phase 2: EPUB Reading Core
 **Goal**: Deliver the first demonstrably-usable milestone — immersive, themeable EPUB reading at Lithium parity — so a user can comfortably read a whole EPUB with full control over layout, themes, navigation, and search. Malformed/FXL/obfuscated books soft-fail via a CI torture corpus.
@@ -160,7 +161,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Cross-Platform Skeleton | 0/TBD | Not started | - |
+| 1. Foundation & Cross-Platform Skeleton | 0/5 | Planned | - |
 | 2. EPUB Reading Core | 0/TBD | Not started | - |
 | 3. CJK Typography Differentiation | 0/TBD | Not started | - |
 | 4. Local Library | 0/TBD | Not started | - |

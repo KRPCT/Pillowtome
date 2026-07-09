@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Research flag**: yes — Tauri v2 Android maturity, SAF `takePersistableUriPermission` / multi-API-level persistence + Play `MANAGE_EXTERNAL_STORAGE` policy, and the WebView-engine strategy (system WebView vs bundled Chromium) are architectural and benefit from `/gsd-plan-phase --research-phase`.
 
 Plans:
-- [ ] 01-01-PLAN.md — Cross-platform scaffold: Tauri v2 + React/Vite/TS workspace (portable `pillowtome-core` + `src-tauri`), vendored pinned foliate-js, exact-pinned deps + lockfiles, and the Range-aware `pillow://` custom-protocol byte streamer + CSP (book bytes never cross IPC) [Wave 1, autonomous]
+- [x] 01-01-PLAN.md — Cross-platform scaffold: Tauri v2 + React/Vite/TS workspace (portable `pillowtome-core` + `src-tauri`), vendored pinned foliate-js, exact-pinned deps + lockfiles, and the Range-aware `pillow://` custom-protocol byte streamer + CSP (book bytes never cross IPC) [Wave 1, autonomous]
 - [ ] 01-02-PLAN.md — DRM & corruption detect-and-refuse: pure-`core` `detect_protection()` (clean / font-obfuscation / content-DRM), typed soft-fail, fully off-device unit-tested with tiny fixtures (FND-04) [Wave 2, autonomous, TDD]
 - [ ] 01-03-PLAN.md — Day-1 seams + schema + decisions: `Publication` trait, composite `Locator`, `BookSource` storage-handle, identity+change-log SQLite migration v1, and the license / WebView-engine / DRM decision records [Wave 2, autonomous]
 - [ ] 01-04-PLAN.md — Bundled-EPUB thin reading slice on desktop + Android emulator: foliate-js open → render → page-turn, DRM-gated (FND-01, FND-02) [Wave 3, non-autonomous]
@@ -161,7 +161,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Cross-Platform Skeleton | 0/5 | Planned | - |
+| 1. Foundation & Cross-Platform Skeleton | 1/5 | In Progress|  |
 | 2. EPUB Reading Core | 0/TBD | Not started | - |
 | 3. CJK Typography Differentiation | 0/TBD | Not started | - |
 | 4. Local Library | 0/TBD | Not started | - |

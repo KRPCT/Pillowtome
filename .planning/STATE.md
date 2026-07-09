@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
+status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-07-09T09:40:48.526Z"
-last_activity: 2026-07-09 — Roadmap created; 30/30 v1 requirements mapped across 7 phases
+last_updated: "2026-07-09T11:09:30.056Z"
+last_activity: 2026-07-09
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 5
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 1 of 7 (Foundation & Cross-Platform Skeleton)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-07-09 — Roadmap created; 30/30 v1 requirements mapped across 7 phases
+Phase: 1 (Foundation & Cross-Platform Skeleton) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-07-09
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 1 P01 | 27 | 3 tasks | 58 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - [Roadmap]: Dependency-spine structure — render engine → identity/locator/schema → sync/formats hang off stable abstractions (anti-Lithium-refactor).
 - [Phase 1]: Lock 3 day-1 abstractions (format-agnostic Publication, composite locator, UUID+hash+change-log) + decisions (permissive license/foliate-js MIT clean-room, WebView-engine strategy, DRM detect-and-refuse) before any feature binds to them.
 - [Phase 3]: CJK typography front-loaded as the differentiator; must be visibly better than Readest/Lithium on day 1.
+- [Phase ?]: [01-01] Desktop builds use the MSVC Rust toolchain + vcvars (host GNU gcc is broken); Android uses NDK clang.
+- [Phase ?]: [01-01] pillow:// custom protocol is the sole book-byte path (D-06); SourceRegistry scope-guards ids (T-01-01).
+- [Phase ?]: [01-01] Supply-chain: exact pins + committed lockfiles; foliate-js vendored at pinned SHA 78914ae.
 
 ### Pending Todos
 
@@ -86,6 +90,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-09T09:40:48.517Z
+Last session: 2026-07-09T11:08:54.461Z
 Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-foundation-cross-platform-skeleton/01-CONTEXT.md
+Resume file: None

@@ -1,49 +1,20 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
+/**
+ * Pillowtome 应用外壳（简体中文）。
+ *
+ * 本阶段（Plan 01-01）只验证 WebView 能挂载并渲染 React 外壳。
+ * 「打开示例书籍」按钮与 foliate-js 阅读视图由 Plan 04 接入。
+ *
+ * 注意（D-06）：书籍字节只经由 `pillow://` 自定义协议流式送达 WebView，
+ * 绝不通过 Tauri IPC 传输。此处不注册任何返回书籍字节的命令。
+ */
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
   return (
     <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+      <h1>枕籍</h1>
+      <p className="subtitle">干净、舒适的中文电子书阅读器</p>
+      <p className="hint">跨平台外壳已就绪，阅读功能即将上线。</p>
     </main>
   );
 }

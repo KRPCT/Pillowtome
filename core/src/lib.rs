@@ -4,7 +4,19 @@
 //! Tauri or platform dependencies (D-03) so it cross-compiles to Android via
 //! the NDK unchanged and is unit-testable off-device.
 //!
-//! The seam modules (`error`, `protection`, `publication`, `locator`,
-//! `source`) are declared in plan 01-02 (Task 2). This Task-1 root is
-//! intentionally minimal so the Cargo workspace compiles before those seams
-//! land.
+//! ## Seam modules (declared here, filled by later plans)
+//!
+//! These modules are pre-declared so downstream plans add real logic to their
+//! own files without ever touching this shared crate root:
+//!
+//! - [`error`] — typed `CoreError` for DRM/corruption soft-fail (plan 01-02, D-10)
+//! - [`protection`] — DRM / corruption detect-and-refuse (plan 01-02, FND-04)
+//! - [`publication`] — `Publication` trait + `Format` enum (plan 01-03, D-07)
+//! - [`locator`] — composite self-healing `Locator` (plan 01-03, D-08)
+//! - [`source`] — opaque `BookSource` storage-handle (plan 01-03, D-05)
+
+pub mod error;
+pub mod locator;
+pub mod protection;
+pub mod publication;
+pub mod source;

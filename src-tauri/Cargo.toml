@@ -1,0 +1,23 @@
+[package]
+name = "pillowtome"
+version = "0.1.0"
+description = "枕籍 (Pillowtome) — cross-platform Chinese-first e-book reader."
+authors = ["Pillowtome"]
+edition = "2021"
+license = "MIT"
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin name (required on
+# Windows, see rust-lang/cargo#8519). Integration tests link against this crate.
+name = "pillowtome_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+# Exact pins only (supply-chain zero-trust baseline). Cargo.lock is committed.
+tauri = { version = "=2.11.5", features = [] }
+tauri-plugin-opener = "=2.5.4"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"

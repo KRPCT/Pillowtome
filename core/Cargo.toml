@@ -1,0 +1,17 @@
+[package]
+name = "pillowtome-core"
+version = "0.1.0"
+edition = "2021"
+description = "Portable, platform-agnostic core for Pillowtome (no Tauri/platform deps; unit-testable off-device)."
+license = "MIT"
+
+[dependencies]
+# Exact pins only (supply-chain zero-trust baseline). Cargo.lock is committed.
+uuid = { version = "=1.23.4", features = ["v4"] }
+blake3 = "=1.8.5"
+# EPUB (OCF) archives only use Stored + Deflate entries, so we disable zip's
+# default features (which pull native lzma/bzip2/zstd C backends) and enable the
+# pure-Rust deflate backend. Smaller supply-chain surface, no C toolchain needed.
+zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
+thiserror = "=2.0.18"
+serde = { version = "=1.0.228", features = ["derive"] }

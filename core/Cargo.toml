@@ -7,7 +7,7 @@ license = "MIT"
 
 [dependencies]
 # Exact pins only (supply-chain zero-trust baseline). Cargo.lock is committed.
-uuid = { version = "=1.23.4", features = ["v4"] }
+uuid = { version = "=1.23.4", features = ["v4", "serde"] }
 blake3 = "=1.8.5"
 # EPUB (OCF) archives only use Stored + Deflate entries, so we disable zip's
 # default features (which pull native lzma/bzip2/zstd C backends) and enable the
@@ -20,3 +20,7 @@ serde = { version = "=1.0.228", features = ["derive"] }
 # Same exact pin/features as the runtime dep (no new Cargo.lock entries): the
 # protection tests build a zip-slip archive in memory to exercise the guard.
 zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
+# Seam serde round-trip tests (Locator/BookSource/Format). Test-only — the
+# runtime crate never serializes on its own; the Tauri layer owns JSON at the IPC
+# boundary. Same version already resolved in the workspace Cargo.lock.
+serde_json = "=1.0.150"

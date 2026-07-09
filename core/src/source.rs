@@ -5,6 +5,27 @@
 //! access is never a raw path. Android scoped storage makes paths meaningless,
 //! so all access flows through this handle.
 
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+/// The opaque book-access handle (D-05).
+///
+/// This is the **only** type through which `core` and the DB refer to a book's
+/// bytes — a raw filesystem path must never appear in core/DB APIs. On desktop a
+/// book is a filesystem [`Path`](Self::Path); on Android it is a SAF
+/// [`ContentUri`](Self::ContentUri) (`content://…`) backed by a persisted URI
+/// permission grant, because Android scoped storage makes bare paths
+/// meaningless. Plan 01-05 wires the SAF grant persistence behind this handle.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BookSource {
+    /// A desktop filesystem path.
+    Path(PathBuf),
+
+    /// An Android SAF `content://` URI (with a persisted permission grant).
+    ContentUri(String),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

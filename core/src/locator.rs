@@ -5,6 +5,48 @@
 //! a bare percentage — so positions survive re-pagination and travel across
 //! devices. Used fully by annotations in Phase 5.
 
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// A composite, self-healing reading position (D-08).
+///
+/// A `Locator` is deliberately **not** a bare percentage. It binds a position to
+/// a `work_id` (stable identity, not a file path), a primary [`cfi`](Self::cfi)
+/// anchor, an always-present `progress_fraction`, and a surrounding
+/// [`TextContext`] so the position can re-anchor after re-pagination and travel
+/// across devices. Annotations (P5) build on this exact shape.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Locator {
+    /// Stable identity of the work this position belongs to (D-09) — never a
+    /// file path, so the position survives moves and crosses devices.
+    pub work_id: Uuid,
+
+    /// Primary anchor: an EPUB CFI (or, for non-CFI formats, a part+offset
+    /// encoded as a string). Optional because some formats/positions have none.
+    pub cfi: Option<String>,
+
+    /// Reading progress in `0.0..=1.0`. **Always present** — the coarse fallback
+    /// that keeps a usable position even when `cfi`/`text_context` cannot
+    /// re-anchor after a layout change (D-08).
+    pub progress_fraction: f64,
+
+    /// Surrounding text used to re-find the position after re-pagination.
+    pub text_context: TextContext,
+}
+
+/// Text surrounding a located position, used to re-anchor it after the layout
+/// changes (font size, viewport, pagination). Mirrors the standard
+/// pre/exact/post match window.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct TextContext {
+    /// Text immediately before the position.
+    pub pre: String,
+    /// The exact text at the position.
+    pub exact: String,
+    /// Text immediately after the position.
+    pub post: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

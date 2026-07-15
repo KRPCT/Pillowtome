@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase_complete
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-07-15T13:39:26.000Z"
-last_activity: 2026-07-15 -- Phase 2 plan 02-04 complete (READ-06/07)
+status: completed
+stopped_at: Phase 3 context gathered
+last_updated: "2026-07-15T18:41:42.048Z"
+last_activity: 2026-07-16 -- Deferred continuous-scroll position continuity (`READER-POS`) to Phase 4 library progress SSOT
 progress:
   total_phases: 7
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-09)
 
 **Core value:** 在任意一端打开书，都能以干净、舒适的中文排版稳定阅读，并与自托管（WebDAV）书库/进度状态可靠互通。
-**Current focus:** Phase 3 — CJK Typography Differentiation
+**Current focus:** Phase 3 — CJK Typography Differentiation (reader position continuity deferred — see MAJOR `READER-POS`)
 
 ## Current Position
 
 Phase: 2 (EPUB Reading Core) — COMPLETE
 Plan: 5 of 5
-Status: Phase complete — ready for Phase 3
-Last activity: 2026-07-15 -- Completed 02-04 (fonts + search + torture soft-fail)
+Status: Phase complete — ready for Phase 3; **MAJOR reader-position continuity deferred to Phase 4**
+Last activity: 2026-07-16 -- Deferred continuous-scroll position continuity (`READER-POS`) to Phase 4 library progress SSOT
 
 Progress: [███░░░░░░░] ~29% (Phases 1–2 complete)
 
@@ -102,16 +102,25 @@ Carried from research — resolve during phase planning, not blocking start:
 - [Phase 3]: Blink-vs-WebKit CJK CSS parity + font bundling/embedding-license need engine-specific research (`--research-phase`).
 - [Phase 7]: WebDAV conflict/merge model is MEDIUM confidence — design against a real proxied WebDAV server (`--research-phase`).
 
+### Major Issues (tracked)
+
+- **[MAJOR][READER-POS] Continuous-scroll position continuity incomplete** — see Deferred Items. Do **not** keep patching ad-hoc in Phase 3; resolve with Phase 4 library progress SSOT (+ Phase 5 locator formalization). Current known failures after Phase-2 reading-core:
+  1. Paginate → scroll still lands at book start (stream seed / jump race).
+  2. Scroll-mode TOC chapter jump still no-ops (href→spine resolve / jump apply).
+  3. Scroll resume / dual-surface jump bus remains fragile (foliate host hidden + ContinuousScrollStream stacked iframes).
+  - What already works: pure scroll pan no longer auto-jumps to start; scroll → paginate is acceptable.
+  - Note: SQL alone does **not** fix jump/TOC; the hard part is frontend dual-surface position ownership.
+
 ## Deferred Items
 
 Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| MAJOR / Reader position | Continuous-scroll position continuity (paginate↔scroll seed, scroll TOC jump, dual-surface resume SSOT). Defer to **Phase 4 Local Library** progress model; formalize further in **Phase 5** composite locator. Tracking id: `READER-POS`. | Deferred → Phase 4 (+ Phase 5) | 2026-07-16 |
 
 ## Session Continuity
 
-Last session: 2026-07-15T13:39:26.000Z
-Stopped at: Completed 02-04-PLAN.md
-Resume file: None
+Last session: 2026-07-15T18:41:42.038Z
+Stopped at: Phase 3 context gathered
+Resume file: .planning/phases/03-cjk-typography-differentiation/03-CONTEXT.md

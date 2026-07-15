@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-07-15T13:28:26.368Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-07-15T13:32:29.086Z"
 last_activity: 2026-07-15 -- Phase 2 execution started
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 14
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 2 (EPUB Reading Core) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-07-15 -- Phase 2 execution started
 
@@ -58,6 +58,7 @@ Progress: [██░░░░░░░░] ~14% (Phase 1 complete; Phase 2 plann
 | Phase 02 P00 | 2 min | 2 tasks | 14 files |
 | Phase 02 P01 | 2 min | 2 tasks | 12 files |
 | Phase 02 P02 | 3 min | 2 tasks | 6 files |
+| Phase 02 P03 | 3 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 02]: SCHEMA_V2 seeds global defaults; loadReadingPrefs fails soft to DEFAULT_PREFS — SQL unavailable outside Tauri; defaults match UI-SPEC
 - [Phase 02]: PREFS_SAVE_DEBOUNCE_MS=400 with unmount flush — D-22 auto-save without spamming SQLite
 - [Phase 02]: UNIQUE idx_locator_work_id for one progress row per work — Enables 02-03 upsert without rewriting v1 locator table
+- [Phase 02]: work_id = blake3 content_hash hex; fallback work-{registry_id} — uuid crate only enables v4; content-addressed identity matches D-09
+- [Phase 02]: ensure_work hashes in Rust; frontend INSERT OR IGNORE + locator upsert — Plan recommended path; keeps book bytes off IPC (D-06)
+- [Phase 02]: Immersive default + 500ms locator debounce/flush; no 3s auto-hide — READ-04/D-24; optional auto-hide skipped per CONTEXT discretion
 
 ### Pending Todos
 
@@ -104,6 +108,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-15T13:28:26.361Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-07-15T13:32:29.079Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None

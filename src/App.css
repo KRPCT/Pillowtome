@@ -281,6 +281,61 @@ foliate-view {
   color: var(--reader-muted, #6b6458);
 }
 
+.reader-settings-section__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.reader-settings-section__title--inline {
+  margin: 0;
+}
+
+.reader-settings-section__value {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--reader-muted, #6b6458);
+}
+
+.reader-font-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reader-font-list__item {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--reader-fg, #1c1915);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reader-font-list__item:hover {
+  background: color-mix(
+    in srgb,
+    var(--reader-chrome, #efe8db) 70%,
+    var(--reader-fg, #1c1915) 6%
+  );
+}
+
+.reader-font-list__item--selected {
+  border-color: var(--reader-accent, #8b6914);
+  color: var(--reader-accent, #8b6914);
+  box-shadow: inset 2px 0 0 var(--reader-accent, #8b6914);
+}
+
 /* --- DRM/damaged error card (D-10) --- */
 .error-card {
   position: fixed;

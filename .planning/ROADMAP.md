@@ -53,15 +53,16 @@ Plans:
   3. User can enter immersive full-screen reading with hidden chrome and tap-to-turn page zones.
   4. User can jump to any chapter via the table of contents and search text within the book, with Chinese matching that works without space delimiters.
   5. User can import a custom font and apply it to the reading view.
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
 **Research flag**: no — foliate-js integration is well-documented and Readest-proven; standard patterns.
 
 Plans:
-- [ ] 02-01: foliate-js integration via custom protocol; paginate ↔ scroll toggle
-- [ ] 02-02: Typography controls (font / size / line-height / margin) + day/night/sepia themes
-- [ ] 02-03: Immersive mode (chrome hide, tap zones) + TOC navigation
-- [ ] 02-04: In-book search (CJK substring matching) + custom font import; EPUB torture-corpus soft-fail in CI
+- [ ] 02-00-PLAN.md — Wave 0: vitest pure helpers + SQL capabilities + Foliate ambient types [Wave 0, autonomous]
+- [ ] 02-01-PLAN.md — Reading chrome foundation + live paginate↔scroll (READ-01) + shadcn primitives [Wave 1, autonomous]
+- [ ] 02-02-PLAN.md — Typography + day/night/sepia + SCHEMA_V2 prefs/fonts + debounced SQLite prefs (READ-02, READ-03) [Wave 2, autonomous]
+- [ ] 02-03-PLAN.md — Immersive tap zones + TOC + locator persist/restore + desktop keys (READ-04, READ-05) [Wave 3, autonomous]
+- [ ] 02-04-PLAN.md — Custom fonts + pillow fonts/ serve + CJK search + torture soft-fail CI (READ-06, READ-07) [Wave 4, autonomous]
 
 ### Phase 3: CJK Typography Differentiation
 **Goal**: Build the product's reason to exist — a visibly superior Chinese reading experience — as a first-class render/CSS + font subsystem injected into every render document, verified for parity across Blink (Windows/Android) and WebKit (macOS/Linux). Front-loaded right after the reading core because it shapes the render-CSS pipeline and is the competitive moat.
@@ -162,7 +163,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Cross-Platform Skeleton | 5/5 | Executed | 2026-07-10 |
-| 2. EPUB Reading Core | 0/TBD | Not started | - |
+| 2. EPUB Reading Core | 0/5 | Planned | - |
 | 3. CJK Typography Differentiation | 0/TBD | Not started | - |
 | 4. Local Library | 0/TBD | Not started | - |
 | 5. Annotations & Composite Locator | 0/TBD | Not started | - |

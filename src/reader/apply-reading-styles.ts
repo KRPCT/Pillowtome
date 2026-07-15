@@ -65,15 +65,19 @@ export const FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX = 10000;
 /**
  * Header/footer band for top+bottom air (px). Clamped so it never eats the
  * whole viewport; independent of left/right body padding from prefs.
+ * Top gets a little extra via body padding-top in buildReadingCss.
  */
 export function foliateMarginBandPx(hostHeightPx?: number | null): number {
   const h =
     hostHeightPx != null && Number.isFinite(hostHeightPx) && hostHeightPx > 0
       ? hostHeightPx
       : 800;
-  // ~3% of height, clamp 16–48 so phones get air without huge empty bands.
-  return Math.max(16, Math.min(48, Math.round(h * 0.03)));
+  // ~5.5% of height, clamp 28–64 — more breathing room under status bar.
+  return Math.max(28, Math.min(64, Math.round(h * 0.055)));
 }
+
+/** Extra top inset on the page body (px), on top of the foliate margin band. */
+export const PAGE_TOP_EXTRA_PX = 12;
 
 /**
  * Apply foliate layout attributes that control paginator grid geometry.
@@ -110,6 +114,7 @@ export function buildReadingCss(
 ): string {
   const colors = PAGE_COLORS[prefs.theme];
   const m = prefs.marginPx;
+  const top = PAGE_TOP_EXTRA_PX;
   return `
     ${fontFaceCss}
     html {
@@ -120,7 +125,8 @@ export function buildReadingCss(
       font-family: ${fontFamilyCss};
       font-size: ${prefs.fontSizePx}px;
       line-height: ${prefs.lineHeight};
-      padding: 0 ${m}px !important;
+      /* Extra top air; sides from prefs; bottom 0 (band handles bottom air) */
+      padding: ${top}px ${m}px 0 ${m}px !important;
       box-sizing: border-box !important;
       margin: 0 !important;
     }

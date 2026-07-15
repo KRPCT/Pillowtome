@@ -59,8 +59,8 @@ describe("buildReadingCss", () => {
       expect(css).toContain("/* face */");
       expect(css).toContain("font-size: 20px");
       expect(css).toContain("line-height: 1.8");
-      // Horizontal page inset only (vertical air via foliate margin band).
-      expect(css).toContain("padding: 0 24px");
+      // Sides from prefs; extra top air; bottom via foliate margin band.
+      expect(css).toContain("padding: 12px 24px 0 24px");
       expect(css).toContain(colors.background);
       expect(css).toContain(colors.foreground);
       expect(css).toContain(SYSTEM_CJK_STACK);
@@ -70,16 +70,16 @@ describe("buildReadingCss", () => {
 });
 
 describe("foliateMarginBandPx / applyFoliateLayoutAttrs", () => {
-  it("clamps band between 16 and 48", () => {
-    expect(foliateMarginBandPx(200)).toBe(16);
-    expect(foliateMarginBandPx(800)).toBe(24);
-    expect(foliateMarginBandPx(3000)).toBe(48);
+  it("clamps band between 28 and 64", () => {
+    expect(foliateMarginBandPx(200)).toBe(28);
+    expect(foliateMarginBandPx(800)).toBe(44); // 800 * 0.055 = 44
+    expect(foliateMarginBandPx(3000)).toBe(64);
   });
 
   it("sets margin band px and max-block-size from host height", () => {
     const setAttribute = vi.fn();
     applyFoliateLayoutAttrs({ setAttribute }, 800);
-    expect(setAttribute).toHaveBeenCalledWith("margin", "24px");
+    expect(setAttribute).toHaveBeenCalledWith("margin", "44px");
     expect(setAttribute).toHaveBeenCalledWith("max-block-size", "800px");
   });
 
@@ -90,7 +90,7 @@ describe("foliateMarginBandPx / applyFoliateLayoutAttrs", () => {
       "max-block-size",
       `${FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX}px`,
     );
-    // band falls back to ~800 → 24px
-    expect(setAttribute).toHaveBeenCalledWith("margin", "24px");
+    // band falls back to ~800 → 44px
+    expect(setAttribute).toHaveBeenCalledWith("margin", "44px");
   });
 });

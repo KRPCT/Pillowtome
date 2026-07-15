@@ -162,9 +162,21 @@ button {
   overflow: hidden;
 }
 
+/*
+ * Toolbar overlays the page — never participates in flex height.
+ * Showing/hiding chrome must not resize .reader__view (avoids reflow / re-pagination).
+ */
 .reader__chrome {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 10;
+  /* Solid paper chrome so controls stay legible over text */
+  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 1px 0 var(--reader-border, #e0d6c4);
 }
 
 .reader__toolbar {
@@ -176,8 +188,10 @@ button {
   box-sizing: border-box;
   padding: env(safe-area-inset-top, 0) 8px 0 max(8px, env(safe-area-inset-left, 0));
   padding-right: max(8px, env(safe-area-inset-right, 0));
-  background: var(--reader-chrome, #efe8db);
-  border-bottom: 1px solid var(--reader-border, #e0d6c4);
+  /* height already accounts for safe-area via padding-top; grow if needed */
+  min-height: calc(48px + env(safe-area-inset-top, 0px));
+  background: transparent;
+  border-bottom: none;
   color: var(--reader-fg, #1c1915);
 }
 
@@ -224,11 +238,11 @@ button {
   background: color-mix(in srgb, var(--reader-chrome, #efe8db) 70%, var(--reader-fg, #1c1915) 8%);
 }
 
-/* 2px hairline progress under toolbar */
+/* 2px hairline progress under toolbar (still inside overlay chrome) */
 .reader__progress-bar {
   height: 2px;
   width: 100%;
-  background: var(--reader-chrome, #efe8db);
+  background: color-mix(in srgb, var(--reader-border, #e0d6c4) 60%, transparent);
   overflow: hidden;
 }
 
@@ -250,12 +264,13 @@ button {
   z-index: 5;
 }
 
-/* foliate-js needs an explicit sized host (Phase 1 height lesson). */
+/* foliate-js needs an explicit sized host (Phase 1 height lesson).
+   Always fills the reader; chrome overlays on top and must not shrink this. */
 .reader__view {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
   position: relative;
-  /* Page surface fills the host; avoid floating card look from engine defaults. */
   background: var(--page-bg, #fffef9);
 }
 

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-07-15T13:32:29.086Z"
-last_activity: 2026-07-15 -- Phase 2 execution started
+status: phase_complete
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-07-15T13:39:26.000Z"
+last_activity: 2026-07-15 -- Phase 2 plan 02-04 complete (READ-06/07)
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 10
-  completed_plans: 9
-  percent: 14
+  completed_plans: 10
+  percent: 29
 ---
 
 # Project State
@@ -21,34 +21,35 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-09)
 
 **Core value:** 在任意一端打开书，都能以干净、舒适的中文排版稳定阅读，并与自托管（WebDAV）书库/进度状态可靠互通。
-**Current focus:** Phase 2 — EPUB Reading Core
+**Current focus:** Phase 3 — CJK Typography Differentiation
 
 ## Current Position
 
-Phase: 2 (EPUB Reading Core) — EXECUTING
+Phase: 2 (EPUB Reading Core) — COMPLETE
 Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-07-15 -- Phase 2 execution started
+Status: Phase complete — ready for Phase 3
+Last activity: 2026-07-15 -- Completed 02-04 (fonts + search + torture soft-fail)
 
-Progress: [██░░░░░░░░] ~14% (Phase 1 complete; Phase 2 planned)
+Progress: [███░░░░░░░] ~29% (Phases 1–2 complete)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 10 (Phase 1: 5, Phase 2: 5)
 - Average duration: — min
-- Total execution time: 0 hours
+- Total execution time: —
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 1 | 5/5 | — | — |
+| 2 | 5/5 | — | — |
 
 **Recent Trend:**
 
-- Last 5 plans: —
+- Last 5 plans: 02-00..02-04
 - Trend: —
 
 *Updated after each plan completion*
@@ -59,6 +60,7 @@ Progress: [██░░░░░░░░] ~14% (Phase 1 complete; Phase 2 plann
 | Phase 02 P01 | 2 min | 2 tasks | 12 files |
 | Phase 02 P02 | 3 min | 2 tasks | 6 files |
 | Phase 02 P03 | 3 min | 2 tasks | 7 files |
+| Phase 02 P04 | 6 min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -85,6 +87,8 @@ Recent decisions affecting current work:
 - [Phase 02]: work_id = blake3 content_hash hex; fallback work-{registry_id} — uuid crate only enables v4; content-addressed identity matches D-09
 - [Phase 02]: ensure_work hashes in Rust; frontend INSERT OR IGNORE + locator upsert — Plan recommended path; keeps book bytes off IPC (D-06)
 - [Phase 02]: Immersive default + 500ms locator debounce/flush; no 3s auto-hide — READ-04/D-24; optional auto-hide skipped per CONTEXT discretion
+- [Phase 02]: Font serve via pillow /fonts/{id} jailed under app_data/fonts; SQL metadata frontend-owned — READ-06/D-30; no font bytes over IPC
+- [Phase 02]: Search uses view.search whole book + buildSearchOpts without matchWholeWords — READ-07/D-31 CJK grapheme path
 
 ### Pending Todos
 
@@ -108,6 +112,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-15T13:32:29.079Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-07-15T13:39:26.000Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None

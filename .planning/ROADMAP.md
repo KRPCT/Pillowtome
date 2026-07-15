@@ -14,7 +14,7 @@
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Cross-Platform Skeleton** - Tauri v2 shell on desktop + real Android, storage-handle abstraction, DRM detect-and-refuse, 3 day-1 abstractions stubbed, key decisions locked
-- [ ] **Phase 2: EPUB Reading Core** - Immersive, themeable EPUB reading (Lithium-parity milestone): modes, typography knobs, themes, TOC, search, custom fonts
+- [x] **Phase 2: EPUB Reading Core** - Immersive, themeable EPUB reading (Lithium-parity milestone): modes, typography knobs, themes, TOC, search, custom fonts
 - [ ] **Phase 3: CJK Typography Differentiation** - The moat: punctuation compression, autospace, kinsoku, CJK defaults, bundled font + coverage-aware fallback
 - [ ] **Phase 4: Local Library** - SQLite library store with covers, metadata, sort/filter; real Publication trait + stable identity
 - [ ] **Phase 5: Annotations & Composite Locator** - Highlights, notes, bookmarks, precise cross-device position restore, change-log schema (sync-ready)
@@ -71,7 +71,7 @@ Plans:
 - [x] 02-01-PLAN.md — Reading chrome foundation + live paginate↔scroll (READ-01) + shadcn primitives [Wave 1, autonomous]
 - [x] 02-02-PLAN.md — Typography + day/night/sepia + SCHEMA_V2 prefs/fonts + debounced SQLite prefs (READ-02, READ-03) [Wave 2, autonomous]
 - [x] 02-03-PLAN.md — Immersive tap zones + TOC + locator persist/restore + desktop keys (READ-04, READ-05) [Wave 3, autonomous]
-- [ ] 02-04-PLAN.md — Custom fonts + pillow fonts/ serve + CJK search + torture soft-fail CI (READ-06, READ-07) [Wave 4, autonomous]
+- [x] 02-04-PLAN.md — Custom fonts + pillow fonts/ serve + CJK search + torture soft-fail CI (READ-06, READ-07) [Wave 4, autonomous]
 
 ### Phase 3: CJK Typography Differentiation
 
@@ -192,7 +192,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Cross-Platform Skeleton | 5/5 | Executed | 2026-07-10 |
-| 2. EPUB Reading Core | 4/5 | In Progress|  |
+| 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 0/TBD | Not started | - |
 | 4. Local Library | 0/TBD | Not started | - |
 | 5. Annotations & Composite Locator | 0/TBD | Not started | - |

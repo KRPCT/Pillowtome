@@ -27,8 +27,18 @@ export interface ContinuousScrollStreamProps {
   readingCss: string;
   className?: string;
   onTap?: () => void;
+  /**
+   * Progress within the primary section 0..1 (scroll offset / section height).
+   * Combined with spine index for resume (continuous mode has no CFI).
+   */
+  initialOffsetFraction?: number;
   /** Fired when the primary (most visible) section changes. */
   onPrimarySectionChange?: (spineIndex: number) => void;
+  /**
+   * Debounced progress while scrolling — spine index + fraction in section.
+   * Used to persist resume position without CFI in continuous mode.
+   */
+  onProgress?: (spineIndex: number, offsetFraction: number) => void;
 }
 
 const PRELOAD_PX = 600;
@@ -43,7 +53,9 @@ export function ContinuousScrollStream({
   readingCss,
   className,
   onTap,
+  initialOffsetFraction = 0,
   onPrimarySectionChange,
+  onProgress,
 }: ContinuousScrollStreamProps) {
   const linear = useMemo(
     () => allSections.filter((s) => s.linear !== "no"),
@@ -70,7 +82,13 @@ export function ContinuousScrollStream({
   const primaryRef = useRef<number>(startIdx);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const linearRef = useRef(linear);
+  const restoredRef = useRef(false);
+  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onProgressRef = useRef(onProgress);
+  const onPrimaryRef = useRef(onPrimarySectionChange);
   linearRef.current = linear;
+  onProgressRef.current = onProgress;
+  onPrimaryRef.current = onPrimarySectionChange;
 
   const ensureUrl = useCallback(async (linearIdx: number) => {
     if (urlsRef.current.has(linearIdx)) return urlsRef.current.get(linearIdx)!;
@@ -140,6 +158,46 @@ export function ContinuousScrollStream({
     });
   }, [readingCss, injectStyles, urlTick, loaded]);
 
+  /** Compute top offset of a linear index among currently known heights. */
+  const offsetOfLinear = useCallback((linearIdx: number, sorted: number[]) => {
+    let acc = 0;
+    for (const i of sorted) {
+      if (i >= linearIdx) break;
+      acc += heightsRef.current.get(i) ?? 0;
+    }
+    return acc;
+  }, []);
+
+  const reportProgress = useCallback(() => {
+    const el = scrollerRef.current;
+    const lin = linearRef.current;
+    if (!el || lin.length === 0) return;
+    const { scrollTop, clientHeight } = el;
+    const sorted = [...loaded].sort((a, b) => a - b);
+    let acc = 0;
+    let primary = primaryRef.current;
+    let within = 0;
+    const mid = scrollTop + clientHeight / 2;
+    for (const i of sorted) {
+      const h = Math.max(1, heightsRef.current.get(i) ?? clientHeight);
+      if (acc + h > mid) {
+        primary = i;
+        within = Math.max(0, Math.min(1, (mid - acc) / h));
+        break;
+      }
+      acc += h;
+      primary = i;
+      within = 1;
+    }
+    if (primary !== primaryRef.current) {
+      primaryRef.current = primary;
+      const spine = lin[primary]?.index;
+      if (spine != null) onPrimaryRef.current?.(spine);
+    }
+    const spine = lin[primary]?.index;
+    if (spine != null) onProgressRef.current?.(spine, within);
+  }, [loaded, offsetOfLinear]);
+
   const maybeLoadNeighbors = useCallback(() => {
     const el = scrollerRef.current;
     const lin = linearRef.current;
@@ -161,41 +219,44 @@ export function ContinuousScrollStream({
         next.add(minLoaded - 1);
         changed = true;
       }
-
-      // Primary section by midpoint — do not setState for this.
-      let acc = 0;
-      const mid = scrollTop + clientHeight / 2;
-      let primary = primaryRef.current;
-      const sorted = [...next].sort((a, b) => a - b);
-      for (const i of sorted) {
-        const h = heightsRef.current.get(i) ?? clientHeight;
-        if (acc + h > mid) {
-          primary = i;
-          break;
-        }
-        acc += h;
-        primary = i;
-      }
-      if (primary !== primaryRef.current) {
-        primaryRef.current = primary;
-        const spine = lin[primary]?.index;
-        if (spine != null) onPrimarySectionChange?.(spine);
-      }
-
       if (!changed) return prev;
-      return sorted;
+      return [...next].sort((a, b) => a - b);
     });
-  }, [onPrimarySectionChange]);
+
+    if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
+    progressTimerRef.current = setTimeout(() => {
+      progressTimerRef.current = null;
+      reportProgress();
+    }, 300);
+  }, [reportProgress]);
 
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
     const onScroll = () => maybeLoadNeighbors();
     el.addEventListener("scroll", onScroll, { passive: true });
-    // Initial neighbor check once
     maybeLoadNeighbors();
-    return () => el.removeEventListener("scroll", onScroll);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
+    };
   }, [maybeLoadNeighbors]);
+
+  // Restore scroll position once start section height is known.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (!urlsRef.current.has(startIdx)) return;
+    const h = heightsRef.current.get(startIdx);
+    if (!h || h <= 0) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    const sorted = [...loaded].sort((a, b) => a - b);
+    const base = offsetOfLinear(startIdx, sorted);
+    const frac = Math.max(0, Math.min(1, initialOffsetFraction));
+    el.scrollTop = base + frac * h * 0.95;
+    restoredRef.current = true;
+    primaryRef.current = startIdx;
+  }, [urlTick, loaded, startIdx, initialOffsetFraction, offsetOfLinear]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.isPrimary === false) return;

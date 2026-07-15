@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { onBackButtonPress } from "@tauri-apps/api/app";
 import "./App.css";
 import { FoliateView } from "./reader/FoliateView";
 import { ImportButton, type ImportedBook } from "./library/ImportButton";
@@ -13,13 +14,21 @@ import { ImportButton, type ImportedBook } from "./library/ImportButton";
  *
  * 注意（D-06）：书籍字节只经由 `pillow://` 自定义协议流式送达 WebView，
  * 绝不通过 Tauri IPC 传输。渲染前先经 `check_protection` 的 DRM 门（D-10）。
+ *
+ * Android 系统返回分层：
+ * 1) 阅读器内 sheet/chrome（FoliateView 处理）
+ * 2) 阅读器 → 书架（本组件）
+ * 3) 书架再返回 → 交给系统（退出/后台）
  */
 function App() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [imported, setImported] = useState<ImportedBook[]>([]);
+  const openIdRef = useRef<string | null>(null);
+  openIdRef.current = openId;
 
-  // 启动时拉取已导入书籍：Android 上包含从持久化 SAF 授权重建的条目，
-  // 因此强制停止并重启后，之前导入的书仍会出现在列表中（FND-03）。
+  // Reader registers a back consumer when mounted (sheets / chrome / close).
+  const readerBackRef = useRef<(() => boolean) | null>(null);
+
   async function refreshImported() {
     try {
       setImported(await invoke<ImportedBook[]>("imported_books"));
@@ -32,8 +41,51 @@ function App() {
     void refreshImported();
   }, []);
 
+  const closeReader = useCallback(() => {
+    setOpenId(null);
+  }, []);
+
+  const registerReaderBack = useCallback((handler: (() => boolean) | null) => {
+    readerBackRef.current = handler;
+  }, []);
+
+  // Android hardware / gesture back.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void onBackButtonPress(() => {
+      // 1) Reader-level: close sheet / hide chrome / leave book
+      if (readerBackRef.current) {
+        const consumed = readerBackRef.current();
+        if (consumed) return;
+      }
+      // 2) Still in reader without handler → library
+      if (openIdRef.current != null) {
+        setOpenId(null);
+        return;
+      }
+      // 3) Library: do nothing — let OS handle (minimize/exit).
+    })
+      .then((listener) => {
+        unlisten = () => {
+          void listener.unregister();
+        };
+      })
+      .catch((err) => {
+        console.debug("[App] onBackButtonPress unavailable", err);
+      });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   if (openId) {
-    return <FoliateView id={openId} onClose={() => setOpenId(null)} />;
+    return (
+      <FoliateView
+        id={openId}
+        onClose={closeReader}
+        registerBackHandler={registerReaderBack}
+      />
+    );
   }
 
   return (

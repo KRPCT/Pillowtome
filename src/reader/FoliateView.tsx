@@ -22,8 +22,10 @@ import {
 } from "./reading-prefs";
 import {
   LOCATOR_DEBOUNCE_MS,
+  continuousProgressToLocatorRow,
   ensureWorkRow,
   loadLocator,
+  parseScrollLocator,
   relocateToLocatorRow,
   upsertLocator,
 } from "./locator-store";
@@ -78,11 +80,20 @@ export interface FoliateViewProps {
   id?: string;
   /** Close reader → home shell. */
   onClose?: () => void;
+  /**
+   * Register a back handler with the shell (Android system back).
+   * Handler returns true if the event was consumed (sheet/chrome/close).
+   */
+  registerBackHandler?: (handler: (() => boolean) | null) => void;
 }
 
 type Status = "loading" | "reading" | "error";
 
-export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
+export function FoliateView({
+  id = "sample",
+  onClose,
+  registerBackHandler,
+}: FoliateViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<FoliateViewElement | null>(null);
   const fxlRef = useRef(false);
@@ -115,6 +126,7 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   >([]);
   const [continuousCss, setContinuousCss] = useState("");
   const continuousStartRef = useRef(0);
+  const continuousOffsetRef = useRef(0);
 
   prefsRef.current = prefs;
   locationRef.current = location;
@@ -537,7 +549,6 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         );
         setContinuousSections(continuous);
         setContinuousCss(buildCss(loaded));
-        continuousStartRef.current = 0;
 
         // Map registry id → work_id without blocking open (D-26).
         try {
@@ -551,29 +562,58 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         }
 
         // Restore locator or goToTextStart (D-25). Soft-fail invalid CFI.
+        // Continuous-scroll tokens: pillow-scroll:{spine}:{frac}
         const workId = workIdRef.current;
         let restored = false;
+        let scrollResume: { spineIndex: number; offsetFraction: number } | null =
+          null;
         if (workId) {
           try {
             const loc = await loadLocator(workId);
             if (loc?.cfi) {
-              try {
-                await view.goTo(loc.cfi);
-                restored = true;
-              } catch (err) {
-                console.warn("[FoliateView] goTo(cfi) failed; text start", err);
+              const scrollTok = parseScrollLocator(loc.cfi);
+              if (scrollTok) {
+                scrollResume = scrollTok;
+                // Map spine index → linear index for continuous stream start.
+                const linearIdx = continuous
+                  .map((s, i) => ({ s, i }))
+                  .filter(({ s }) => s.linear !== "no")
+                  .find(({ s }) => s.index === scrollTok.spineIndex)?.i;
+                continuousStartRef.current =
+                  typeof linearIdx === "number" ? linearIdx : 0;
+                // Paginated path still tries goTo if we switch modes later.
+                restored = loaded.mode === "scroll";
+              } else {
+                try {
+                  await view.goTo(loc.cfi);
+                  restored = true;
+                } catch (err) {
+                  console.warn("[FoliateView] goTo(cfi) failed; text start", err);
+                }
               }
+            }
+            if (loc?.progress_fraction != null) {
+              setLocation((prev) => ({
+                ...prev,
+                fraction: loc.progress_fraction ?? prev?.fraction,
+                cfi: loc.cfi ?? prev?.cfi,
+              }));
             }
           } catch (err) {
             console.warn("[FoliateView] loadLocator failed", err);
           }
         }
-        if (!restored) {
+        if (!restored && loaded.mode !== "scroll") {
           try {
             await view.goToTextStart();
           } catch (err) {
             console.warn("[FoliateView] goToTextStart failed", err);
           }
+        }
+        if (scrollResume) {
+          continuousOffsetRef.current = scrollResume.offsetFraction;
+        } else {
+          continuousOffsetRef.current = 0;
         }
 
         // Best-effort title from engine metadata when present.
@@ -631,6 +671,71 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
     });
   }, [flushLocator, onClose]);
 
+  /**
+   * Android system back stack inside reader:
+   * sheet → hide chrome → leave book (return true = consumed).
+   */
+  const handleSystemBack = useCallback((): boolean => {
+    if (searchOpen) {
+      setSearchOpen(false);
+      return true;
+    }
+    if (settingsOpen) {
+      setSettingsOpen(false);
+      return true;
+    }
+    if (tocOpen) {
+      setTocOpen(false);
+      return true;
+    }
+    if (chromeVisible) {
+      setChromeVisible(false);
+      return true;
+    }
+    // Leave reader → library
+    handleBack();
+    return true;
+  }, [
+    searchOpen,
+    settingsOpen,
+    tocOpen,
+    chromeVisible,
+    handleBack,
+  ]);
+
+  useEffect(() => {
+    if (!registerBackHandler) return;
+    registerBackHandler(handleSystemBack);
+    return () => registerBackHandler(null);
+  }, [registerBackHandler, handleSystemBack]);
+
+  /** Continuous-scroll progress → locator upsert (no real CFI). */
+  const handleContinuousProgress = useCallback(
+    (spineIndex: number, offsetFraction: number) => {
+      const workId = workIdRef.current;
+      if (!workId) return;
+      const row = continuousProgressToLocatorRow(
+        workId,
+        spineIndex,
+        offsetFraction,
+      );
+      pendingLocatorRef.current = row;
+      // Coarse UI fraction from spine position among continuous sections
+      const n = continuousSections.filter((s) => s.linear !== "no").length || 1;
+      const frac = Math.min(1, (spineIndex + offsetFraction) / n);
+      setLocation({
+        fraction: frac,
+        cfi: row.cfi ?? undefined,
+      });
+      if (locatorTimerRef.current) clearTimeout(locatorTimerRef.current);
+      locatorTimerRef.current = setTimeout(() => {
+        locatorTimerRef.current = null;
+        void flushLocator();
+      }, LOCATOR_DEBOUNCE_MS);
+    },
+    [continuousSections, flushLocator],
+  );
+
   if (status === "error") {
     return <ErrorCard message={message} onDismiss={onClose} />;
   }
@@ -669,10 +774,12 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
           <ContinuousScrollStream
             sections={continuousSections}
             initialLinearIndex={continuousStartRef.current}
+            initialOffsetFraction={continuousOffsetRef.current}
             readingCss={continuousCss}
             onTap={() => {
               if (!anySheetOpen) setChromeVisible((v) => !v);
             }}
+            onProgress={handleContinuousProgress}
           />
         ) : null}
         {status === "reading" && !useContinuousScroll ? (

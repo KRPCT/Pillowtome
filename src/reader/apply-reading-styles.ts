@@ -51,18 +51,29 @@ export function flowAttr(mode: ReadingMode): "paginated" | "scrolled" {
 
 /**
  * Foliate-js `margin` attribute is the **header/footer band height** (px),
- * not page padding. We keep it at 0 so short chapters don't float between
- * empty marginal rows. Page insets come from `buildReadingCss` body padding.
+ * not page padding. Page insets come from `buildReadingCss` body padding.
  *
  * `max-block-size` defaults to 1440px inside foliate — on tall phones that
  * caps the content row and the remaining height is split as equal `1fr`
- * rows above/below, producing a centered "card" (Android emulator bug).
- * Pass the host height (or a large floor) so the content row fills the view.
+ * rows above/below, producing a centered "card". We set max-block-size to
+ * host height so content fills the view, then use a small equal header/footer
+ * band (`margin` attr) for top/bottom breathing room without floating.
  */
-export const FOLIATE_MARGIN_ATTR = "0px";
-
 /** Floor when host height is not measurable yet. */
 export const FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX = 10000;
+
+/**
+ * Header/footer band for top+bottom air (px). Clamped so it never eats the
+ * whole viewport; independent of left/right body padding from prefs.
+ */
+export function foliateMarginBandPx(hostHeightPx?: number | null): number {
+  const h =
+    hostHeightPx != null && Number.isFinite(hostHeightPx) && hostHeightPx > 0
+      ? hostHeightPx
+      : 800;
+  // ~3% of height, clamp 16–48 so phones get air without huge empty bands.
+  return Math.max(16, Math.min(48, Math.round(h * 0.03)));
+}
 
 /**
  * Apply foliate layout attributes that control paginator grid geometry.
@@ -75,19 +86,22 @@ export function applyFoliateLayoutAttrs(
   hostHeightPx?: number | null,
 ): void {
   if (!renderer?.setAttribute) return;
-  renderer.setAttribute("margin", FOLIATE_MARGIN_ATTR);
+  const band = foliateMarginBandPx(hostHeightPx);
+  renderer.setAttribute("margin", `${band}px`);
   const h =
     hostHeightPx != null && Number.isFinite(hostHeightPx) && hostHeightPx > 0
       ? Math.ceil(hostHeightPx)
       : FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX;
+  // max-block-size = full host so content row can grow; margin bands add air.
   renderer.setAttribute("max-block-size", `${h}px`);
 }
 
 /**
  * Build CSS for `renderer.setStyles(...)`.
  *
- * Page margins use body padding (`prefs.marginPx`). Do **not** map this to
- * foliate's `margin` attribute — that attribute is header/footer band height.
+ * Horizontal page margins use body padding (`prefs.marginPx` left/right).
+ * Vertical air uses foliate's `margin` attribute (header/footer band) so
+ * short pages keep top/bottom breathing room without CSS padding double-count.
  */
 export function buildReadingCss(
   prefs: ReadingPrefs,
@@ -106,7 +120,7 @@ export function buildReadingCss(
       font-family: ${fontFamilyCss};
       font-size: ${prefs.fontSizePx}px;
       line-height: ${prefs.lineHeight};
-      padding: ${m}px !important;
+      padding: 0 ${m}px !important;
       box-sizing: border-box !important;
       margin: 0 !important;
     }

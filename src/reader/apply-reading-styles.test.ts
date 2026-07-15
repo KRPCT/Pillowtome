@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_PREFS,
-  FOLIATE_MARGIN_ATTR,
   FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX,
   PAGE_COLORS,
   SYSTEM_CJK_STACK,
   applyFoliateLayoutAttrs,
   buildReadingCss,
   flowAttr,
+  foliateMarginBandPx,
   type ReadingTheme,
 } from "./apply-reading-styles";
 
@@ -45,7 +45,7 @@ describe("buildReadingCss", () => {
   const themes: ReadingTheme[] = ["day", "night", "sepia"];
 
   for (const theme of themes) {
-    it(`includes font-size, line-height, page colors, and body padding for ${theme}`, () => {
+    it(`includes font-size, line-height, horizontal padding, page colors for ${theme}`, () => {
       const prefs = {
         ...DEFAULT_PREFS,
         theme,
@@ -59,7 +59,8 @@ describe("buildReadingCss", () => {
       expect(css).toContain("/* face */");
       expect(css).toContain("font-size: 20px");
       expect(css).toContain("line-height: 1.8");
-      expect(css).toContain("padding: 24px");
+      // Horizontal page inset only (vertical air via foliate margin band).
+      expect(css).toContain("padding: 0 24px");
       expect(css).toContain(colors.background);
       expect(css).toContain(colors.foreground);
       expect(css).toContain(SYSTEM_CJK_STACK);
@@ -68,11 +69,17 @@ describe("buildReadingCss", () => {
   }
 });
 
-describe("applyFoliateLayoutAttrs", () => {
-  it("sets margin=0px and max-block-size from host height", () => {
+describe("foliateMarginBandPx / applyFoliateLayoutAttrs", () => {
+  it("clamps band between 16 and 48", () => {
+    expect(foliateMarginBandPx(200)).toBe(16);
+    expect(foliateMarginBandPx(800)).toBe(24);
+    expect(foliateMarginBandPx(3000)).toBe(48);
+  });
+
+  it("sets margin band px and max-block-size from host height", () => {
     const setAttribute = vi.fn();
     applyFoliateLayoutAttrs({ setAttribute }, 800);
-    expect(setAttribute).toHaveBeenCalledWith("margin", FOLIATE_MARGIN_ATTR);
+    expect(setAttribute).toHaveBeenCalledWith("margin", "24px");
     expect(setAttribute).toHaveBeenCalledWith("max-block-size", "800px");
   });
 
@@ -83,5 +90,7 @@ describe("applyFoliateLayoutAttrs", () => {
       "max-block-size",
       `${FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX}px`,
     );
+    // band falls back to ~800 → 24px
+    expect(setAttribute).toHaveBeenCalledWith("margin", "24px");
   });
 });

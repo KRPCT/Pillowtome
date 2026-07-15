@@ -87,29 +87,39 @@ export async function upsertLocator(row: {
   text_exact: string | null;
   text_post: string | null;
 }): Promise<void> {
-  const db = await openDb();
-  const updatedAt = Date.now();
-  await db.execute(
-    `INSERT INTO locator (
-      work_id, cfi, progress_fraction, text_pre, text_exact, text_post, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-    ON CONFLICT(work_id) DO UPDATE SET
-      cfi = excluded.cfi,
-      progress_fraction = excluded.progress_fraction,
-      text_pre = excluded.text_pre,
-      text_exact = excluded.text_exact,
-      text_post = excluded.text_post,
-      updated_at = excluded.updated_at`,
-    [
-      row.work_id,
-      row.cfi,
-      row.progress_fraction,
-      row.text_pre,
-      row.text_exact,
-      row.text_post,
-      updatedAt,
-    ],
-  );
+  // Never write empty progress — would wipe a good resume point.
+  if (!row.cfi && row.progress_fraction == null) {
+    console.warn("[locator-store] skip empty upsert", row.work_id);
+    return;
+  }
+  try {
+    const db = await openDb();
+    const updatedAt = Date.now();
+    await db.execute(
+      `INSERT INTO locator (
+        work_id, cfi, progress_fraction, text_pre, text_exact, text_post, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT(work_id) DO UPDATE SET
+        cfi = excluded.cfi,
+        progress_fraction = excluded.progress_fraction,
+        text_pre = excluded.text_pre,
+        text_exact = excluded.text_exact,
+        text_post = excluded.text_post,
+        updated_at = excluded.updated_at`,
+      [
+        row.work_id,
+        row.cfi,
+        row.progress_fraction,
+        row.text_pre,
+        row.text_exact,
+        row.text_post,
+        updatedAt,
+      ],
+    );
+  } catch (err) {
+    console.warn("[locator-store] upsertLocator failed", err);
+    throw err;
+  }
 }
 
 /** Trim/window text_exact from a Range (or string); empty pre/post in P2. */

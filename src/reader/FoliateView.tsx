@@ -211,8 +211,13 @@ export function FoliateView({
   const scheduleLocatorUpsert = useCallback(
     (detail: RelocateDetail) => {
       const workId = workIdRef.current;
-      if (!workId) return;
+      if (!workId) {
+        console.warn("[FoliateView] relocate ignored — no workId yet");
+        return;
+      }
       const row = relocateToLocatorRow(workId, detail);
+      // Keep the best pending row even if CFI is momentarily missing.
+      if (!row.cfi && row.progress_fraction == null) return;
       pendingLocatorRef.current = row;
       if (locatorTimerRef.current) clearTimeout(locatorTimerRef.current);
       locatorTimerRef.current = setTimeout(() => {
@@ -535,6 +540,34 @@ export function FoliateView({
           return; // hard: do not call view.open
         }
 
+        // Identity + saved locator BEFORE open so early relocate events can save,
+        // and so we can restore after open (D-23..D-26).
+        try {
+          const ensured = await invoke<EnsureWorkResult>("ensure_work", { id });
+          if (!cancelled && ensured?.workId) {
+            workIdRef.current = ensured.workId;
+            await ensureWorkRow(ensured.workId, ensured.contentHash, "epub");
+          }
+        } catch (err) {
+          console.warn("[FoliateView] ensure_work failed; progress disabled", err);
+          // Last-resort stable id so progress still works for sample/import.
+          workIdRef.current = `work-${id}`;
+          try {
+            await ensureWorkRow(workIdRef.current, workIdRef.current, "epub");
+          } catch {
+            /* ignore */
+          }
+        }
+
+        let savedLoc: Awaited<ReturnType<typeof loadLocator>> = null;
+        if (workIdRef.current) {
+          try {
+            savedLoc = await loadLocator(workIdRef.current);
+          } catch (err) {
+            console.warn("[FoliateView] loadLocator failed", err);
+          }
+        }
+
         const host = hostRef.current;
         if (!host) return;
 
@@ -550,6 +583,7 @@ export function FoliateView({
         host.append(view);
 
         // relocate → progress UI + debounced locator upsert (D-23/D-24).
+        // workIdRef is already set so the first relocate is not dropped.
         view.addEventListener("relocate", (event) => {
           const detail = (event as CustomEvent<RelocateDetail>).detail ?? {};
           const next: RelocateDetail = {
@@ -579,9 +613,11 @@ export function FoliateView({
         setCustomFonts(fonts);
 
         // Live flow + layout + typography + theme + custom face (READ-01/02/03/06).
-        // Page margins via setStyles body padding; foliate margin attr is header band only.
         if (!isFxl) {
-          view.renderer?.setAttribute?.("flow", flowAttr(loaded.mode));
+          // Prefer paginated for engine path; continuous scroll uses stream UI.
+          const engineMode =
+            loaded.mode === "scroll" ? "paginate" : loaded.mode;
+          view.renderer?.setAttribute?.("flow", flowAttr(engineMode));
           applyFoliateLayoutAttrs(view.renderer, host.clientHeight);
           view.renderer?.setStyles?.(
             buildReadingCss(
@@ -608,83 +644,44 @@ export function FoliateView({
         setContinuousSections(continuous);
         setContinuousCss(buildCss(loaded));
 
-        // Map registry id → work_id without blocking open (D-26).
-        try {
-          const ensured = await invoke<EnsureWorkResult>("ensure_work", { id });
-          if (!cancelled && ensured?.workId) {
-            workIdRef.current = ensured.workId;
-            await ensureWorkRow(ensured.workId, ensured.contentHash, "epub");
-          }
-        } catch (err) {
-          console.warn("[FoliateView] ensure_work failed; progress disabled", err);
-        }
-
-        // Restore locator or goToTextStart (D-25). Soft-fail invalid CFI.
-        // Continuous-scroll tokens: pillow-scroll:{spine}:{frac}
-        const workId = workIdRef.current;
+        // Restore locator (D-25).
         let restored = false;
-        let scrollResume: { spineIndex: number; offsetFraction: number } | null =
-          null;
-        if (workId) {
-          try {
-            const loc = await loadLocator(workId);
-            if (loc?.cfi) {
-              const scrollTok = parseScrollLocator(loc.cfi);
-              if (scrollTok) {
-                scrollResume = scrollTok;
-                const linearList = continuous.filter((s) => s.linear !== "no");
-                const linearIdx = linearList.findIndex(
-                  (s) => s.index === scrollTok.spineIndex,
-                );
-                continuousStartRef.current =
-                  linearIdx >= 0 ? linearIdx : 0;
-                continuousOffsetRef.current = scrollTok.offsetFraction;
-                setScrollJumpSpine(scrollTok.spineIndex);
-                setScrollJumpKey((k) => k + 1);
-                if (loaded.mode === "scroll") {
-                  restored = true;
-                } else {
-                  // Paginate: open the same spine section via renderer index.
-                  try {
-                    await view.renderer?.goTo?.({
-                      index: scrollTok.spineIndex,
-                      anchor: scrollTok.offsetFraction,
-                    } as never);
-                    restored = true;
-                  } catch {
-                    try {
-                      const hrefGuess = continuous.find(
-                        (s) => s.index === scrollTok.spineIndex,
-                      );
-                      if (hrefGuess) {
-                        await view.goTo(String(scrollTok.spineIndex));
-                        restored = true;
-                      }
-                    } catch {
-                      /* fall through */
-                    }
-                  }
-                }
-              } else {
-                try {
-                  await view.goTo(loc.cfi);
-                  restored = true;
-                } catch (err) {
-                  console.warn("[FoliateView] goTo(cfi) failed; text start", err);
-                }
+        if (savedLoc?.cfi) {
+          const scrollTok = parseScrollLocator(savedLoc.cfi);
+          if (scrollTok) {
+            const linearList = continuous.filter((s) => s.linear !== "no");
+            const linearIdx = linearList.findIndex(
+              (s) => s.index === scrollTok.spineIndex,
+            );
+            continuousStartRef.current = linearIdx >= 0 ? linearIdx : 0;
+            continuousOffsetRef.current = scrollTok.offsetFraction;
+            setScrollJumpSpine(scrollTok.spineIndex);
+            setScrollJumpKey((k) => k + 1);
+            if (loaded.mode === "scroll") {
+              restored = true;
+            } else {
+              try {
+                await view.renderer?.goTo?.({
+                  index: scrollTok.spineIndex,
+                  anchor: scrollTok.offsetFraction,
+                });
+                restored = true;
+              } catch (err) {
+                console.warn("[FoliateView] resume spine goTo failed", err);
               }
             }
-            if (loc?.progress_fraction != null || loc?.cfi) {
-              setLocation((prev) => ({
-                ...prev,
-                fraction:
-                  loc.progress_fraction ?? prev?.fraction ?? undefined,
-                cfi: loc.cfi ?? prev?.cfi,
-              }));
+          } else {
+            try {
+              await view.goTo(savedLoc.cfi);
+              restored = true;
+            } catch (err) {
+              console.warn("[FoliateView] goTo(cfi) failed; text start", err);
             }
-          } catch (err) {
-            console.warn("[FoliateView] loadLocator failed", err);
           }
+          setLocation({
+            fraction: savedLoc.progress_fraction ?? undefined,
+            cfi: savedLoc.cfi ?? undefined,
+          });
         }
         if (!restored && loaded.mode !== "scroll") {
           try {
@@ -693,7 +690,7 @@ export function FoliateView({
             console.warn("[FoliateView] goToTextStart failed", err);
           }
         }
-        if (!scrollResume) {
+        if (!savedLoc?.cfi) {
           continuousOffsetRef.current = 0;
         }
 
@@ -747,10 +744,23 @@ export function FoliateView({
   // Also flush locator when parent closes via onClose path — onClose may unmount us;
   // wrap onBack to flush first.
   const handleBack = useCallback(() => {
-    void flushLocator().finally(() => {
-      onClose?.();
-    });
-  }, [flushLocator, onClose]);
+    // Always try to persist current engine location before leaving.
+    const view = viewRef.current;
+    const workId = workIdRef.current;
+    if (workId && view && !useContinuousScroll) {
+      const loc = locationRef.current;
+      if (loc?.cfi || loc?.fraction != null) {
+        pendingLocatorRef.current = relocateToLocatorRow(workId, loc);
+      }
+    }
+    void flushLocator()
+      .catch(() => {
+        /* still leave */
+      })
+      .finally(() => {
+        onClose?.();
+      });
+  }, [flushLocator, onClose, useContinuousScroll]);
 
   /**
    * Android system back stack inside reader:

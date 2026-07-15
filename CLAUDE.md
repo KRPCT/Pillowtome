@@ -23,6 +23,7 @@
   2. **禁止**只给 Radix `ScrollArea` 设 `max-height` 而不给 flex 父级 `min-h-0` + 明确高度约束——Viewport 是 `height:100%`，会随内容撑开、**永远不滚**（设置/目录/搜索 sheet 在 Android 上表现为“内容被裁但滑不动”）。
   3. 底部/侧栏 sheet 优先：`SheetContent` = `flex flex-col max-h-[…]`，固定 header `shrink-0`，body = `flex-1 min-h-0 overflow-y-auto` + `touch-action: pan-y` + `-webkit-overflow-scrolling: touch`（见 `.reader-sheet__body`）。
   4. 任何“可滚动列表/面板”改动后，必须在模拟器上 **手指竖滑** 验证（不仅是桌面滚轮）。
+  5. 大改 reader/sheet 依赖后若出现 **白屏**：先查 logcat `Uncaught ReferenceError` / Vite `Internal server error`（常见于 HMR 半更新）。必须以 `tsc`+`pnpm build` 绿为准，并在模拟器上 **force-stop 后冷启动** 再验，不要只靠 HMR。
 
 <!-- GSD:project-end -->
 

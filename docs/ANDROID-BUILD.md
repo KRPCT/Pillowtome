@@ -159,6 +159,7 @@ Skip only pure-Rust `core/` unit-test-only changes with no UI/protocol surface.
 | Full-screen transparent overlay with `pointer-events: auto` over content | Book / list cannot scroll or swipe | Only capture taps where needed; leave body free for pan-y |
 | Radix `ScrollArea` with only `max-h-*` on the root | Sheet content clipped, **no finger scroll** | Parent `flex flex-col max-h-[…]`; body `flex-1 min-h-0 overflow-y-auto` (see `.reader-sheet__body`) |
 | Missing `viewport-fit=cover` + safe-area floor | UI under system status bar | `index.html` viewport-fit + CSS `--safe-top: max(28px, env(...))` |
+| Vite HMR after removing an import (e.g. `ScrollArea`) while JSX still half-updated | **White screen** on open book (`ReferenceError: X is not defined`) | Finish the edit cleanly, `tsc`/`pnpm build` green, then **force-stop + restart** the app (do not trust partial HMR on Android) |
 
 These are **project constraints** (also in `CLAUDE.md`). Do not reintroduce.
 

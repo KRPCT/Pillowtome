@@ -19,8 +19,8 @@
 ### Reading Experience（阅读体验）
 
 - [x] **READ-01**: 用户可在分页与滚动两种阅读模式间实时切换
-- [ ] **READ-02**: 用户可调整字体、字号、行距、页边距
-- [ ] **READ-03**: 用户可在日间 / 夜间 / Sepia 主题间切换
+- [x] **READ-02**: 用户可调整字体、字号、行距、页边距
+- [x] **READ-03**: 用户可在日间 / 夜间 / Sepia 主题间切换
 - [ ] **READ-04**: 用户可进入沉浸式全屏阅读（隐藏界面 chrome、点触翻页区）
 - [ ] **READ-05**: 用户可通过目录（TOC）跳转到任意章节
 - [ ] **READ-06**: 用户可导入并在阅读中启用自定义字体
@@ -115,8 +115,8 @@
 | FND-03 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete (emulator per D-13) |
 | FND-04 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete |
 | READ-01 | Phase 2 — EPUB Reading Core | Complete |
-| READ-02 | Phase 2 — EPUB Reading Core | Pending |
-| READ-03 | Phase 2 — EPUB Reading Core | Pending |
+| READ-02 | Phase 2 — EPUB Reading Core | Complete |
+| READ-03 | Phase 2 — EPUB Reading Core | Complete |
 | READ-04 | Phase 2 — EPUB Reading Core | Pending |
 | READ-05 | Phase 2 — EPUB Reading Core | Pending |
 | READ-06 | Phase 2 — EPUB Reading Core | Pending |

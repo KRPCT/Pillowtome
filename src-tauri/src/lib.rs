@@ -106,6 +106,7 @@ pub fn run() {
         // imported-books list, and the platform flag. Never book bytes.
         .invoke_handler(tauri::generate_handler![
             commands::check_protection,
+            commands::ensure_work,
             commands::import,
             commands::imported_books,
             commands::is_android,

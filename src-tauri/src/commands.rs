@@ -15,6 +15,7 @@ use tauri::{AppHandle, State};
 
 use pillowtome_core::error::CoreError;
 use pillowtome_core::protection::{detect_protection, Protection};
+use pillowtome_core::publication::{EpubPublication, Publication};
 use pillowtome_core::source::BookSource;
 
 use crate::storage::{resolve_bytes, SourceRegistry};
@@ -81,6 +82,74 @@ pub fn check_protection(
     match resolve_bytes(&source, &app) {
         Ok(bytes) => decide(detect_protection(&bytes)),
         Err(_) => ProtectionDecision::refuse("无法读取书籍文件。"),
+    }
+}
+
+/// Result of [`ensure_work`]: stable `work_id` + blake3 `content_hash` for the
+/// frontend to `INSERT OR IGNORE` into `work` via plugin-sql.
+///
+/// **Never** carries book bytes (D-06 / T-02-ipc). Rust hashes in-process;
+/// only these two strings cross IPC.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnsureWorkResult {
+    pub work_id: String,
+    pub content_hash: String,
+}
+
+/// Derive a stable `work_id` from a blake3 content hash.
+///
+/// Choice (D-26): use the 64-char blake3 hex as `work_id` directly rather than
+/// UUID v5 (crate only enables `v4`). Same content → same id across devices;
+/// content-addressed identity matches schema v1 `content_hash` semantics.
+/// Fallback when hashing is impossible: `work-{registry_id}` (must not block open).
+pub fn work_id_from_hash(content_hash: &str) -> String {
+    content_hash.to_string()
+}
+
+/// Fallback work id when bytes cannot be hashed — still deterministic per registry id.
+pub fn work_id_fallback(registry_id: &str) -> String {
+    format!("work-{registry_id}")
+}
+
+/// Map a registered book id → stable `work_id` for locator rows (D-26).
+///
+/// Resolves only via [`SourceRegistry`] + [`resolve_bytes`] (T-02-path). Reads
+/// bytes in Rust, hashes with [`EpubPublication::from_bytes`], returns only
+/// `{ workId, contentHash }` — never book bytes (D-06). Soft-fails to a
+/// deterministic `work-{id}` fallback so open is never blocked.
+#[tauri::command]
+pub fn ensure_work(
+    id: String,
+    app: AppHandle,
+    registry: State<'_, SourceRegistry>,
+) -> Result<EnsureWorkResult, String> {
+    let Some(source) = registry.resolve(&id) else {
+        // Soft fallback — must not block open (D-26).
+        let work_id = work_id_fallback(&id);
+        return Ok(EnsureWorkResult {
+            content_hash: work_id.clone(),
+            work_id,
+        });
+    };
+
+    match resolve_bytes(&source, &app) {
+        Ok(bytes) => {
+            let pubn = EpubPublication::from_bytes(&bytes);
+            let content_hash = pubn.content_hash();
+            let work_id = work_id_from_hash(&content_hash);
+            Ok(EnsureWorkResult {
+                work_id,
+                content_hash,
+            })
+        }
+        Err(_) => {
+            let work_id = work_id_fallback(&id);
+            Ok(EnsureWorkResult {
+                content_hash: work_id.clone(),
+                work_id,
+            })
+        }
     }
 }
 
@@ -243,5 +312,31 @@ mod tests {
             assert!(!d.can_render);
             assert!(d.message.is_some());
         }
+    }
+
+    #[test]
+    fn work_id_is_content_hash_hex() {
+        let pubn = EpubPublication::from_bytes(b"PK\x03\x04 ensure_work fixture");
+        let hash = pubn.content_hash();
+        assert_eq!(work_id_from_hash(&hash), hash);
+        assert_eq!(hash.len(), 64);
+    }
+
+    #[test]
+    fn work_id_fallback_is_deterministic() {
+        assert_eq!(work_id_fallback("sample"), "work-sample");
+        assert_eq!(work_id_fallback("import-abc"), "work-import-abc");
+    }
+
+    #[test]
+    fn ensure_work_result_is_strings_only() {
+        let result = EnsureWorkResult {
+            work_id: "abc".into(),
+            content_hash: "def".into(),
+        };
+        // EnsureWorkResult carries only work_id + content_hash strings — never bytes (D-06).
+        assert_eq!(result.work_id, "abc");
+        assert_eq!(result.content_hash, "def");
+        assert_eq!(std::mem::size_of_val(&result.work_id), std::mem::size_of::<String>());
     }
 }

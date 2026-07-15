@@ -214,7 +214,9 @@ button {
   left: 0;
   right: 0;
   z-index: 10;
-  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 94%, transparent);
+  /* Solid-enough paper chrome so icons stay legible in night/sepia too */
+  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 96%, var(--reader-fg, #1c1915) 4%);
+  color: var(--reader-fg, #1c1915);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 1px 0 var(--reader-border, #e0d6c4);
@@ -239,6 +241,7 @@ button {
   align-items: center;
   gap: 4px;
   min-width: 0;
+  color: inherit;
 }
 
 .reader__toolbar-right {
@@ -253,6 +256,7 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--reader-fg, #1c1915);
 }
 
 .reader__progress-caption {
@@ -263,17 +267,72 @@ button {
   padding: 0 4px;
 }
 
-/* 44×44 min hit targets for toolbar icon buttons */
-.reader__icon-btn {
+/*
+ * 44×44 hit targets. Ghost Button uses shadcn text tokens which ignore
+ * reader data-theme — force icon + svg to --reader-fg so night mode is visible.
+ * Target both class and data-slot so Tailwind button variants cannot win.
+ */
+.reader__chrome .reader__icon-btn,
+.reader__chrome button.reader__icon-btn,
+.reader__chrome [data-slot="button"].reader__icon-btn {
   min-width: 44px;
   min-height: 44px;
   width: 44px;
   height: 44px;
-  color: var(--reader-fg, #1c1915);
+  color: var(--reader-fg, #1c1915) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  opacity: 1 !important;
 }
 
-.reader__icon-btn:hover {
-  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 70%, var(--reader-fg, #1c1915) 8%);
+.reader__chrome .reader__icon-btn svg,
+.reader__chrome .reader__icon-btn svg * {
+  color: var(--reader-fg, #1c1915) !important;
+  fill: none !important;
+  stroke: var(--reader-fg, #1c1915) !important;
+  width: 22px;
+  height: 22px;
+  opacity: 1 !important;
+}
+
+.reader__chrome .reader__icon-btn:hover,
+.reader__chrome .reader__icon-btn:focus-visible,
+.reader__chrome .reader__icon-btn[aria-expanded="true"],
+.reader__chrome .reader__icon-btn:active {
+  color: var(--reader-fg, #1c1915) !important;
+  background: color-mix(
+    in srgb,
+    var(--reader-fg, #1c1915) 14%,
+    var(--reader-chrome, #efe8db) 86%
+  ) !important;
+}
+
+/* Night: lift chrome bar + ensure near-white icons */
+.reader[data-theme="night"] .reader__chrome {
+  background: #2f2a24 !important;
+  color: #f5f0e8 !important;
+  box-shadow: 0 1px 0 #5a5246;
+}
+
+.reader[data-theme="night"] .reader__title,
+.reader[data-theme="night"] .reader__progress-caption {
+  color: #f5f0e8 !important;
+}
+
+.reader[data-theme="night"] .reader__progress-caption {
+  color: #cfc4b2 !important;
+}
+
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn,
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn svg,
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn svg * {
+  color: #f5f0e8 !important;
+  stroke: #f5f0e8 !important;
+}
+
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn:hover,
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn:focus-visible {
+  background: rgba(245, 240, 232, 0.14) !important;
 }
 
 /* 2px hairline progress under toolbar (still inside overlay chrome) */

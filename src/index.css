@@ -22,11 +22,12 @@
 
 .reader[data-theme="night"] {
   --reader-bg: #1a1814;
-  --reader-chrome: #252119;
-  --reader-accent: #c4a35a;
-  --reader-fg: #e8e2d6;
-  --reader-muted: #a89f8f;
-  --reader-border: #3a342c;
+  /* Slightly lighter than page so floating toolbar separates from text */
+  --reader-chrome: #2c2822;
+  --reader-accent: #d4b36a;
+  --reader-fg: #f0ebe3;
+  --reader-muted: #c2b8a6;
+  --reader-border: #4a4338;
   --page-bg: #12100e;
   --page-fg: #e8e2d6;
 }

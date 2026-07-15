@@ -150,41 +150,135 @@ button {
   text-align: left;
 }
 
-/* --- Reader slice (foliate-js render surface) --- */
+/* --- Reader shell (UI-SPEC layout contract) --- */
 .reader {
   position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
-  background-color: #ffffff;
+  background: var(--reader-bg, #f7f3eb);
+  color: var(--reader-fg, #1c1915);
+}
+
+.reader__chrome {
+  flex: 0 0 auto;
+  z-index: 10;
 }
 
 .reader__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75em;
-  padding: 0.5em 0.75em;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  flex: 0 0 auto;
+  gap: 8px;
+  height: 48px;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 0) 8px 0 max(8px, env(safe-area-inset-left, 0));
+  padding-right: max(8px, env(safe-area-inset-right, 0));
+  background: var(--reader-chrome, #efe8db);
+  border-bottom: 1px solid var(--reader-border, #e0d6c4);
+  color: var(--reader-fg, #1c1915);
 }
 
-.reader__progress {
-  font-size: 0.9em;
-  opacity: 0.7;
+.reader__toolbar-left,
+.reader__toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
-/* foliate-js paginates into this box, so it MUST have an explicit size or the
-   render surface collapses to zero height and the page shows blank. */
+.reader__toolbar-right {
+  flex-shrink: 0;
+}
+
+.reader__title {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader__progress-caption {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--reader-muted, #6b6458);
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+/* 44×44 min hit targets for toolbar icon buttons */
+.reader__icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  color: var(--reader-fg, #1c1915);
+}
+
+.reader__icon-btn:hover {
+  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 70%, var(--reader-fg, #1c1915) 8%);
+}
+
+/* 2px hairline progress under toolbar */
+.reader__progress-bar {
+  height: 2px;
+  width: 100%;
+  background: var(--reader-chrome, #efe8db);
+  overflow: hidden;
+}
+
+.reader__progress-bar-fill {
+  height: 100%;
+  background: var(--reader-accent, #8b6914);
+  transition: width 120ms linear;
+}
+
+.reader__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--reader-muted, #6b6458);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* foliate-js needs an explicit sized host (Phase 1 height lesson). */
 .reader__view {
   flex: 1 1 auto;
   min-height: 0;
+  position: relative;
 }
 
-.reader__view foliate-view {
+.reader__view foliate-view,
+foliate-view {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.reader-settings-sheet {
+  background: var(--reader-bg, #f7f3eb);
+  color: var(--reader-fg, #1c1915);
+  border-color: var(--reader-border, #e0d6c4);
+}
+
+.reader-settings-section__title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0 0 12px;
+}
+
+.reader-settings-section__hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--reader-muted, #6b6458);
 }
 
 /* --- DRM/damaged error card (D-10) --- */
@@ -234,11 +328,5 @@ button {
     background-color: #0f0f0f69;
   }
 
-  .reader {
-    background-color: #1e1e1e;
-  }
-
-  .reader__toolbar {
-    border-bottom-color: rgba(255, 255, 255, 0.12);
-  }
+  /* Reader theming is data-theme dual-layer (index.css), not OS dark mode. */
 }

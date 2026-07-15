@@ -1,46 +1,49 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "../vendor/foliate-js/view.js";
 import { pillowUrl } from "../lib/pillow";
 import { ErrorCard } from "./error-card";
+import { ReaderChrome } from "./ReaderChrome";
+import {
+  DEFAULT_PREFS,
+  flowAttr,
+  type ReadingMode,
+  type ReadingTheme,
+} from "./apply-reading-styles";
+import type {
+  FoliateViewElement,
+  RelocateDetail,
+} from "./foliate-types";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 /**
- * foliate-js 阅读视图（简体中文外壳）。
+ * foliate-js 阅读视图 + UI-SPEC chrome foundation (READ-01).
  *
- * 这是跨端阅读的最小切片：打开一本已捆绑的示例 EPUB、由 foliate-js 分页渲染
- * 一页可读内容、并支持翻一页。约束：
- * - 书籍字节只经 `fetch(pillow://...)` 送达 WebView，绝不通过 IPC（D-06）。
- * - 渲染前先调用 `check_protection` DRM 门；判定不可渲染时渲染错误卡片，
- *   不调用 `view.open`（D-10）。
- * - React 只负责外壳/控件，渲染交给 foliate-js（D-02）。
- *
- * 完整阅读体验（主题/目录/搜索/模式）属于 Phase 2，此处不实现。
+ * Constraints:
+ * - Book bytes only via `fetch(pillow://...)` — never IPC (D-06).
+ * - DRM gate via `check_protection` before `view.open` (D-10).
+ * - Flow applied only via `renderer.setAttribute("flow", flowAttr(mode))`.
+ * - Clean-room chrome from UI-SPEC; no Readest AGPL (T-02-agpl / DEC-001).
  */
 
-/** `check_protection` 命令返回的门控裁决（只有小结构体跨 IPC，D-06）。 */
+/** `check_protection` gate decision (small struct over IPC only). */
 interface ProtectionDecision {
   canRender: boolean;
   message?: string;
 }
 
-/** foliate-js `<foliate-view>` 暴露的最小接口（引擎为 JS，无类型声明）。 */
-interface FoliateRenderer {
-  next(distance?: number): Promise<void>;
-  prev(distance?: number): Promise<void>;
-}
-interface FoliateViewElement extends HTMLElement {
-  open(book: File | Blob | string): Promise<void>;
-  renderer?: FoliateRenderer;
-}
-interface RelocateDetail {
-  fraction?: number;
-  cfi?: string;
-}
-
 export interface FoliateViewProps {
-  /** 已在 SourceRegistry 注册的书籍 id（本阶段固定为 "sample"）。 */
+  /** Registered book id (SourceRegistry). */
   id?: string;
-  /** 关闭阅读视图、返回外壳。 */
+  /** Close reader → home shell. */
   onClose?: () => void;
 }
 
@@ -52,6 +55,16 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   const [status, setStatus] = useState<Status>("loading");
   const [message, setMessage] = useState<string>("");
   const [location, setLocation] = useState<RelocateDetail | null>(null);
+  const [mode, setMode] = useState<ReadingMode>(DEFAULT_PREFS.mode);
+  const [theme] = useState<ReadingTheme>(DEFAULT_PREFS.theme);
+  const [chromeVisible] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [fxlLocked, setFxlLocked] = useState(false);
+  const [bookTitle, setBookTitle] = useState("示例书籍");
+
+  const applyFlow = useCallback((next: ReadingMode) => {
+    viewRef.current?.renderer?.setAttribute?.("flow", flowAttr(next));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,19 +72,21 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
 
     async function load() {
       try {
-        // DRM/损坏门 —— 取任何字节之前先分类（D-10）。只有裁决跨 IPC。
-        const decision = await invoke<ProtectionDecision>("check_protection", { id });
+        // DRM/damage gate — classify before any book bytes (D-10).
+        const decision = await invoke<ProtectionDecision>("check_protection", {
+          id,
+        });
         if (cancelled) return;
         if (!decision.canRender) {
           setMessage(decision.message ?? "无法打开这本书。");
           setStatus("error");
-          return; // 关键：不调用 view.open。
+          return; // hard: do not call view.open
         }
 
         const host = hostRef.current;
         if (!host) return;
 
-        // 书籍字节只经自定义协议流式送达，绝不通过 IPC（D-06）。
+        // Book bytes stream only via custom protocol — never IPC (D-06).
         const res = await fetch(pillowUrl(id));
         if (!res.ok) throw new Error(`pillow fetch failed: ${res.status}`);
         const blob = await res.blob();
@@ -82,7 +97,7 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         viewRef.current = view;
         host.append(view);
 
-        // relocate 事件携带阅读进度，形状对齐 core::Locator（持久化属 Phase 5）。
+        // relocate carries progress; full locator persistence is 02-02/03.
         view.addEventListener("relocate", (event) => {
           const detail = (event as CustomEvent<RelocateDetail>).detail ?? {};
           setLocation({ fraction: detail.fraction ?? 0, cfi: detail.cfi });
@@ -90,12 +105,28 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
 
         await view.open(new File([blob], `${id}.epub`));
         if (cancelled) return;
-        // foliate 在首个 next() 时铺排首页——渲染第一页可读内容。
-        await view.renderer?.next();
+
+        const isFxl = view.book?.rendition?.layout === "pre-paginated";
+        setFxlLocked(Boolean(isFxl));
+
+        // Live flow from prefs; first open / no locator → text start (D-25).
+        if (!isFxl) {
+          view.renderer?.setAttribute?.("flow", flowAttr(DEFAULT_PREFS.mode));
+        }
+        await view.goToTextStart();
+
+        // Best-effort title from engine metadata when present.
+        const metaTitle = (
+          view.book as { metadata?: { title?: string } } | undefined
+        )?.metadata?.title;
+        if (typeof metaTitle === "string" && metaTitle.trim()) {
+          setBookTitle(metaTitle.trim());
+        }
+
         setStatus("reading");
       } catch (err) {
         if (cancelled) return;
-        console.error("[FoliateView] 打开示例书籍失败", err);
+        console.error("[FoliateView] 打开书籍失败", err);
         setMessage("文件已损坏或无法读取。");
         setStatus("error");
       }
@@ -109,12 +140,13 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
     };
   }, [id]);
 
-  async function turnPage() {
-    try {
-      await viewRef.current?.renderer?.next();
-    } catch (err) {
-      console.error("[FoliateView] 翻页失败", err);
-    }
+  function handleModeChange(value: string) {
+    if (!value || fxlLocked) return;
+    if (value !== "paginate" && value !== "scroll") return;
+    const next = value as ReadingMode;
+    setMode(next);
+    // READ-01: apply live without reopening the book.
+    applyFlow(next);
   }
 
   if (status === "error") {
@@ -122,23 +154,81 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   }
 
   return (
-    <div className="reader">
-      <div className="reader__toolbar">
-        <button type="button" onClick={onClose}>
-          关闭
-        </button>
-        <span className="reader__progress">
-          {location
-            ? `进度 ${Math.round((location.fraction ?? 0) * 100)}%`
-            : status === "loading"
-              ? "加载中…"
-              : ""}
-        </span>
-        <button type="button" onClick={turnPage} disabled={status !== "reading"}>
-          下一页
-        </button>
-      </div>
+    <div className="reader" data-theme={theme}>
+      <ReaderChrome
+        title={bookTitle}
+        fraction={location?.fraction ?? null}
+        chromeVisible={chromeVisible}
+        onBack={onClose}
+        onOpenToc={() => {
+          /* TOC sheet — plan 02-03 */
+        }}
+        onOpenSearch={() => {
+          /* Search sheet — plan 02-03 */
+        }}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+
+      {status === "loading" ? (
+        <div className="reader__loading" aria-live="polite">
+          加载中…
+        </div>
+      ) : null}
+
       <div ref={hostRef} className="reader__view" />
+
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent
+          side="bottom"
+          className="reader-settings-sheet max-h-[70vh]"
+          showCloseButton
+        >
+          <SheetHeader>
+            <SheetTitle className="text-lg font-semibold">显示设置</SheetTitle>
+            <SheetDescription className="sr-only">
+              调整阅读模式与显示选项
+            </SheetDescription>
+          </SheetHeader>
+
+          <section className="reader-settings-section px-4 pb-6">
+            <h3 className="reader-settings-section__title">阅读模式</h3>
+            <ToggleGroup
+              type="single"
+              value={mode}
+              onValueChange={handleModeChange}
+              variant="outline"
+              spacing={0}
+              disabled={fxlLocked || status !== "reading"}
+              aria-label="阅读模式"
+              className="w-full"
+            >
+              <ToggleGroupItem value="paginate" aria-label="分页" className="flex-1">
+                分页
+              </ToggleGroupItem>
+              <ToggleGroupItem value="scroll" aria-label="滚动" className="flex-1">
+                滚动
+              </ToggleGroupItem>
+            </ToggleGroup>
+            {fxlLocked ? (
+              <p className="reader-settings-section__hint">
+                固定版式书籍不支持切换阅读模式
+              </p>
+            ) : null}
+          </section>
+
+          {/* Placeholder sections for 02-02 — keep sheet extensible */}
+          <div className="px-4 pb-4">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={() => setSettingsOpen(false)}
+            >
+              关闭
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

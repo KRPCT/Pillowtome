@@ -5,9 +5,42 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Phase 2 will layer reading-theme tokens (day / night / sepia) on top of
-   the shadcn CSS variables written by `shadcn init`. Keep App.css styles
-   for the Phase-1 shell until they are migrated. */
+/* Dual-layer theming (UI-SPEC): home shell keeps :root/.dark below;
+   reader root uses data-theme paper-feel tokens. */
+
+/* Reader paper-feel tokens — applied only under .reader[data-theme] */
+.reader[data-theme="day"] {
+  --reader-bg: #f7f3eb;
+  --reader-chrome: #efe8db;
+  --reader-accent: #8b6914;
+  --reader-fg: #1c1915;
+  --reader-muted: #6b6458;
+  --reader-border: #e0d6c4;
+  --page-bg: #fffef9;
+  --page-fg: #1c1915;
+}
+
+.reader[data-theme="night"] {
+  --reader-bg: #1a1814;
+  --reader-chrome: #252119;
+  --reader-accent: #c4a35a;
+  --reader-fg: #e8e2d6;
+  --reader-muted: #a89f8f;
+  --reader-border: #3a342c;
+  --page-bg: #12100e;
+  --page-fg: #e8e2d6;
+}
+
+.reader[data-theme="sepia"] {
+  --reader-bg: #f0e6d2;
+  --reader-chrome: #e5d8c0;
+  --reader-accent: #9a6b2f;
+  --reader-fg: #3b2f1e;
+  --reader-muted: #7a6e5a;
+  --reader-border: #d4c6ae;
+  --page-bg: #f4ecd8;
+  --page-fg: #3b2f1e;
+}
 
 @theme inline {
     --font-heading: var(--font-sans);

@@ -28,12 +28,6 @@ import {
   upsertLocator,
 } from "./locator-store";
 import {
-  isScrolledAtSectionEnd,
-  isScrolledAtSectionStart,
-  isShortScrolledSection,
-  isTapGesture,
-} from "./scroll-mode";
-import {
   buildFontFaceCss,
   fontFamilyCssFor,
   importCustomFont,
@@ -42,10 +36,15 @@ import {
   type CustomFont,
 } from "./fonts";
 import type {
+  FoliateBookSection,
   FoliateViewElement,
   RelocateDetail,
 } from "./foliate-types";
 import type { TocItem } from "./toc";
+import {
+  ContinuousScrollStream,
+  type ContinuousSection,
+} from "./ContinuousScrollStream";
 
 /**
  * foliate-js 阅读视图 + immersive chrome + TOC + locator progress (READ-01..05).
@@ -110,47 +109,65 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
   const [fontStatus, setFontStatus] = useState<string | null>(null);
+  /** Linear spine for continuous scroll mode (foliate has no continuous scroll). */
+  const [continuousSections, setContinuousSections] = useState<
+    ContinuousSection[]
+  >([]);
+  const [continuousCss, setContinuousCss] = useState("");
+  const continuousStartRef = useRef(0);
 
   prefsRef.current = prefs;
   locationRef.current = location;
 
   const anySheetOpen = settingsOpen || tocOpen || searchOpen;
+  const useContinuousScroll =
+    prefs.mode === "scroll" && !fxlLocked && continuousSections.length > 0;
+
+  const buildCss = useCallback((next: ReadingPrefs) => {
+    return buildReadingCss(
+      next,
+      buildFontFaceCss(next.activeFontId),
+      fontFamilyCssFor(next.fontFamilyKey, next.activeFontId),
+    );
+  }, []);
 
   /** Apply flow + layout attrs + setStyles to the live renderer (READ-01/02/03/06). */
-  const applyPrefsToRenderer = useCallback((next: ReadingPrefs) => {
-    const view = viewRef.current;
-    const renderer = view?.renderer;
-    if (!renderer) return;
+  const applyPrefsToRenderer = useCallback(
+    (next: ReadingPrefs) => {
+      const css = buildCss(next);
+      setContinuousCss(css);
 
-    // FXL has no flow/setStyles — chrome theme still via data-theme on root.
-    if (fxlRef.current) return;
+      // Continuous scroll owns the surface — skip foliate flow while scrolled.
+      if (next.mode === "scroll" && !fxlRef.current) {
+        return;
+      }
 
-    const prevFlow = renderer.getAttribute?.("flow");
-    const nextFlow = flowAttr(next.mode);
-    renderer.setAttribute?.("flow", nextFlow);
-    // margin attr = header/footer band (not page padding); max-block-size fills tall screens.
-    applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
-    const fontFaceCss = buildFontFaceCss(next.activeFontId);
-    const familyCss = fontFamilyCssFor(next.fontFamilyKey, next.activeFontId);
-    const css = buildReadingCss(next, fontFaceCss, familyCss);
-    renderer.setStyles?.(css);
+      const view = viewRef.current;
+      const renderer = view?.renderer;
+      if (!renderer) return;
+      if (fxlRef.current) return;
 
-    // After paginate↔scroll, foliate re-renders the section. Re-apply styles and
-    // re-anchor to the current CFI so mid-book mode switches actually take effect
-    // (otherwise users can only switch near the initial position).
-    if (prevFlow !== nextFlow) {
-      const cfi = locationRef.current?.cfi;
-      requestAnimationFrame(() => {
-        applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
-        renderer.setStyles?.(css);
-        if (cfi && view) {
-          void view.goTo(cfi).catch(() => {
-            /* soft-fail: stay where engine landed */
-          });
-        }
-      });
-    }
-  }, []);
+      const prevFlow = renderer.getAttribute?.("flow");
+      const nextFlow = flowAttr(next.mode);
+      renderer.setAttribute?.("flow", nextFlow);
+      applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
+      renderer.setStyles?.(css);
+
+      if (prevFlow !== nextFlow) {
+        const cfi = locationRef.current?.cfi;
+        requestAnimationFrame(() => {
+          applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
+          renderer.setStyles?.(css);
+          if (cfi && view) {
+            void view.goTo(cfi).catch(() => {
+              /* soft-fail */
+            });
+          }
+        });
+      }
+    },
+    [buildCss],
+  );
 
   const scheduleSave = useCallback((next: ReadingPrefs) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -327,163 +344,35 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
     return () => ro.disconnect();
   }, [status, prefs.mode]);
 
-  /**
-   * Scroll mode: tap inside the book document toggles chrome (no overlay —
-   * overlays block pan-y). Also chain sections when the user reaches the
-   * end/start of the current spine item (foliate does not auto-advance on
-   * native scroll alone).
-   */
+  // When entering continuous scroll, hide the foliate host (stream covers it).
+  // When leaving, re-apply paginated flow on the engine.
   useEffect(() => {
     if (status !== "reading" || fxlRef.current) return;
-    if (prefs.mode !== "scroll") return;
     const view = viewRef.current;
-    const renderer = view?.renderer as
-      | (NonNullable<typeof viewRef.current>["renderer"] & EventTarget)
-      | undefined;
-    if (!view || !renderer) return;
+    const host = hostRef.current;
+    if (!view || !host) return;
 
-    const cleanups: Array<() => void> = [];
-    let sectionNavLock = false;
-
-    const attachDocTap = (doc: Document) => {
-      let start: { x: number; y: number } | null = null;
-      const onDown = (e: PointerEvent) => {
-        if (!e.isPrimary) return;
-        start = { x: e.clientX, y: e.clientY };
-      };
-      const onUp = (e: PointerEvent) => {
-        if (!start) return;
-        const dx = e.clientX - start.x;
-        const dy = e.clientY - start.y;
-        start = null;
-        if (!isTapGesture(dx, dy)) return;
-        // Don't steal link clicks.
-        const t = e.target as Element | null;
-        if (t?.closest?.("a[href]")) return;
-        if (anySheetOpen) return;
-
-        const win = doc.defaultView;
-        const h = win?.innerHeight ?? 0;
-        const y = e.clientY;
-        const rStart = Number(renderer.start ?? 0);
-        const rEnd = Number(renderer.end ?? 0);
-        const rView = Number(renderer.viewSize ?? 0);
-        const short = isShortScrolledSection(rStart, rEnd, rView);
-
-        // Short chapter (can't scroll): top/bottom thirds chain sections.
-        // Long chapter: any tap toggles chrome (scroll is primary nav).
-        if (short && h > 0) {
-          if (y > h * 0.72) {
-            void renderer.next?.();
-            return;
-          }
-          if (y < h * 0.28) {
-            void renderer.prev?.();
-            return;
-          }
-        }
-        setChromeVisible((v) => !v);
-      };
-      const onCancel = () => {
-        start = null;
-      };
-      doc.addEventListener("pointerdown", onDown, { passive: true });
-      doc.addEventListener("pointerup", onUp, { passive: true });
-      doc.addEventListener("pointercancel", onCancel, { passive: true });
-      cleanups.push(() => {
-        doc.removeEventListener("pointerdown", onDown);
-        doc.removeEventListener("pointerup", onUp);
-        doc.removeEventListener("pointercancel", onCancel);
-      });
-    };
-
-    // Current open document(s)
-    try {
-      const contents = (
-        renderer as { getContents?: () => Array<{ doc?: Document }> }
-      ).getContents?.();
-      for (const c of contents ?? []) {
-        if (c?.doc) attachDocTap(c.doc);
-      }
-    } catch {
-      /* ignore */
+    if (useContinuousScroll) {
+      view.style.visibility = "hidden";
+      view.style.pointerEvents = "none";
+      setContinuousCss(buildCss(prefsRef.current));
+      return;
     }
 
-    const onLoad = (event: Event) => {
-      const detail = (event as CustomEvent<{ doc?: Document }>).detail;
-      if (detail?.doc) attachDocTap(detail.doc);
-    };
-    view.addEventListener("load", onLoad);
-    cleanups.push(() => view.removeEventListener("load", onLoad));
-
-    // Section chaining at scroll edges (debounce to avoid double next()).
-    let edgeTimer: ReturnType<typeof setTimeout> | null = null;
-    const onScroll = () => {
-      if (edgeTimer) clearTimeout(edgeTimer);
-      edgeTimer = setTimeout(() => {
-        edgeTimer = null;
-        if (sectionNavLock) return;
-        const start = Number(renderer.start ?? 0);
-        const end = Number(renderer.end ?? 0);
-        const viewSize = Number(renderer.viewSize ?? 0);
-        if (isScrolledAtSectionEnd(start, end, viewSize)) {
-          sectionNavLock = true;
-          void Promise.resolve(renderer.next?.())
-            .catch(() => {
-              /* soft-fail */
-            })
-            .finally(() => {
-              // Unlock after layout settles so we don't skip chapters.
-              setTimeout(() => {
-                sectionNavLock = false;
-              }, 400);
-            });
-          return;
-        }
-        if (isScrolledAtSectionStart(start) && start === 0) {
-          // Only go prev when user is at absolute top (avoid bounce loops).
-          // Require a second scroll signal via wheel/touch overscroll — handled below.
-        }
-      }, 120);
-    };
-
-    // Wheel overscroll at edges → prev/next section (desktop + some Android pads).
-    const onWheel = (e: WheelEvent) => {
-      if (sectionNavLock) return;
-      const start = Number(renderer.start ?? 0);
-      const end = Number(renderer.end ?? 0);
-      const viewSize = Number(renderer.viewSize ?? 0);
-      if (e.deltaY > 0 && isScrolledAtSectionEnd(start, end, viewSize)) {
-        sectionNavLock = true;
-        void Promise.resolve(renderer.next?.()).finally(() => {
-          setTimeout(() => {
-            sectionNavLock = false;
-          }, 400);
-        });
-      } else if (e.deltaY < 0 && isScrolledAtSectionStart(start)) {
-        sectionNavLock = true;
-        void Promise.resolve(renderer.prev?.()).finally(() => {
-          setTimeout(() => {
-            sectionNavLock = false;
-          }, 400);
-        });
-      }
-    };
-
-    renderer.addEventListener("scroll", onScroll);
-    // Host wheel — foliate container may not bubble; also listen on host.
-    const host = hostRef.current;
-    host?.addEventListener("wheel", onWheel, { passive: true });
-    cleanups.push(() => {
-      renderer.removeEventListener("scroll", onScroll);
-      host?.removeEventListener("wheel", onWheel);
-      if (edgeTimer) clearTimeout(edgeTimer);
-    });
-
-    return () => {
-      for (const c of cleanups) c();
-    };
-  }, [status, prefs.mode, anySheetOpen]);
+    view.style.visibility = "";
+    view.style.pointerEvents = "";
+    const renderer = view.renderer;
+    if (!renderer) return;
+    renderer.setAttribute?.("flow", "paginated");
+    applyFoliateLayoutAttrs(renderer, host.clientHeight);
+    renderer.setStyles?.(buildCss(prefsRef.current));
+    const cfi = locationRef.current?.cfi;
+    if (cfi) {
+      void view.goTo(cfi).catch(() => {
+        /* soft-fail */
+      });
+    }
+  }, [status, useContinuousScroll, buildCss]);
 
   // Desktop keyboard: arrows/PageUp/Down page; Esc closes sheet; / Ctrl+F search (D-33).
   useEffect(() => {
@@ -636,6 +525,20 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         // TOC for sheet (READ-05)
         setTocItems(normalizeToc(view.book?.toc));
 
+        // Continuous scroll stream sections (linear spine only).
+        const rawSections = view.book?.sections ?? [];
+        const continuous: ContinuousSection[] = rawSections.map(
+          (s: FoliateBookSection, index: number) => ({
+            index,
+            load: () => s.load(),
+            unload: s.unload ? () => s.unload?.() : undefined,
+            linear: s.linear,
+          }),
+        );
+        setContinuousSections(continuous);
+        setContinuousCss(buildCss(loaded));
+        continuousStartRef.current = 0;
+
         // Map registry id → work_id without blocking open (D-26).
         try {
           const ensured = await invoke<EnsureWorkResult>("ensure_work", { id });
@@ -762,7 +665,17 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
       ) : null}
 
       <div ref={hostRef} className="reader__view">
-        {status === "reading" ? (
+        {status === "reading" && useContinuousScroll ? (
+          <ContinuousScrollStream
+            sections={continuousSections}
+            initialLinearIndex={continuousStartRef.current}
+            readingCss={continuousCss}
+            onTap={() => {
+              if (!anySheetOpen) setChromeVisible((v) => !v);
+            }}
+          />
+        ) : null}
+        {status === "reading" && !useContinuousScroll ? (
           <ReaderTapZones
             enabled={!anySheetOpen}
             mode={prefs.mode}

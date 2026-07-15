@@ -27,9 +27,18 @@ export interface FoliateBookTocItem {
   subitems?: FoliateBookTocItem[];
 }
 
+export interface FoliateBookSection {
+  load(): string | Promise<string>;
+  unload?(): void;
+  linear?: string;
+  cfi?: string;
+  id?: string;
+}
+
 export interface FoliateBook {
   toc?: FoliateBookTocItem[];
   rendition?: { layout?: string };
+  sections?: FoliateBookSection[];
 }
 
 export interface FoliateViewElement extends HTMLElement {

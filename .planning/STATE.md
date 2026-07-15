@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 2 planned; ready for execute
-stopped_at: Phase 2 plans written (02-00..02-04)
-last_updated: "2026-07-15T14:00:00.000Z"
-last_activity: 2026-07-15
+status: executing
+stopped_at: Completed 02-00-PLAN.md
+last_updated: "2026-07-15T13:20:47.926Z"
+last_activity: 2026-07-15 -- Phase 2 execution started
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 10
-  completed_plans: 5
+  completed_plans: 6
   percent: 14
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 2 (EPUB Reading Core) — plans ready; next: execute
-Plan: 0 of 5 (02-00..02-04)
-Status: Planned; ready for `/gsd-execute-phase 2`
-Last activity: 2026-07-15
+Phase: 2 (EPUB Reading Core) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-07-15 -- Phase 2 execution started
 
 Progress: [██░░░░░░░░] ~14% (Phase 1 complete; Phase 2 planned)
 
@@ -55,6 +55,7 @@ Progress: [██░░░░░░░░] ~14% (Phase 1 complete; Phase 2 plann
 | Phase 1 P01 | 27 | 3 tasks | 58 files |
 | Phase 01 P02 | 8 | 2 tasks | 10 files |
 | Phase 01 P03 | 7 | 3 tasks | 11 files |
+| Phase 02 P00 | 2 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [01-02] DRM detect-and-refuse (FND-04): pure-core detect_protection classifies clean/font-obfuscation/content-DRM three ways; never decrypts (D-10); corrupt zips soft-fail; zip-slip guarded on read path
 - [Phase 01]: [01-03] Three day-1 seams landed as serde stubs: Publication trait (EPUB-only impl), composite self-healing Locator (never a bare percentage), opaque BookSource storage-handle (D-05/07/08)
 - [Phase 01]: [01-03] Schema v1 (work/locator/change_log with UUID + blake3 content hash + per-device monotonic logical clock) migrates off-device via tauri-plugin-sql; single SQLite binding (Pitfall 6); present-but-unsynced so P5/P7 are additive (D-09)
+- [Phase 02]: Frontend unit tests use exact-pinned vitest 3.2.4 for pure reading helpers — Wave 0 Nyquist sampling before chrome/prefs land; engine E2E remains manual
+- [Phase 02]: SQL caps grant sql:default + sql:allow-execute only; Foliate types live in foliate-types.ts — Unblock prefs/locator SQL for 02-02 and prevent API inventing in later waves
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-15T14:00:00.000Z
-Stopped at: Phase 2 plans written (02-00..02-04)
-Resume file: .planning/phases/02-epub-reading-core/02-00-PLAN.md
+Last session: 2026-07-15T13:20:47.918Z
+Stopped at: Completed 02-00-PLAN.md
+Resume file: None

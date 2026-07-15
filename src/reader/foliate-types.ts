@@ -7,9 +7,18 @@
 export interface FoliateRenderer {
   next(distance?: number): Promise<void>;
   prev(distance?: number): Promise<void>;
+  nextSection?(): Promise<void>;
+  prevSection?(): Promise<void>;
   setAttribute?(name: string, value: string): void;
   getAttribute?(name: string): string | null;
   setStyles?(css: string | [string, string]): void;
+  /** True when flow="scrolled". */
+  scrolled?: boolean;
+  /** Scroll offset / extent (scrolled mode). */
+  start?: number;
+  end?: number;
+  viewSize?: number;
+  size?: number;
 }
 
 export interface FoliateBookTocItem {

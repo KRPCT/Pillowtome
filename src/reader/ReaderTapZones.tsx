@@ -3,8 +3,8 @@
  *
  * Paginate: full-area overlay — tap L/R page, center toggles chrome;
  *           horizontal swipe pages (finger left → next).
- * Scroll:   no capture layer — vertical pan goes entirely to foliate.
- *           Top edge strip only toggles chrome (does not cover body text).
+ * Scroll:   no overlay — chrome + chapter chain handled by FoliateView
+ *           (doc taps + scroll-edge section advance). Overlay would block pan-y.
  *
  * Clean-room from UI-SPEC (T-02-agpl).
  */
@@ -28,11 +28,10 @@ const SWIPE_MIN_DX = 48;
 const SWIPE_MAX_DY = 80;
 /** Max movement still counted as a tap. */
 const TAP_SLOP = 12;
-/** Top strip height for scroll-mode chrome toggle (below safe area already). */
-const SCROLL_CHROME_STRIP_PX = 40;
 
 /**
- * Absolute overlay for immersive gestures.
+ * Paginate-mode gesture overlay only.
+ * Scroll mode returns null so foliate owns all touch scrolling.
  */
 export function ReaderTapZones({
   enabled = true,
@@ -68,24 +67,12 @@ export function ReaderTapZones({
       const adx = Math.abs(dx);
       const ady = Math.abs(dy);
 
-      // Paginate: horizontal swipe → page (finger left = next).
-      if (
-        mode === "paginate" &&
-        adx >= SWIPE_MIN_DX &&
-        adx > ady &&
-        ady <= SWIPE_MAX_DY
-      ) {
+      if (adx >= SWIPE_MIN_DX && adx > ady && ady <= SWIPE_MAX_DY) {
         onAction(dx < 0 ? "next" : "prev");
         return;
       }
 
-      // Small movement = tap.
       if (adx > TAP_SLOP || ady > TAP_SLOP) return;
-
-      if (mode === "scroll") {
-        onAction("toggle-chrome");
-        return;
-      }
 
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -100,32 +87,7 @@ export function ReaderTapZones({
     startRef.current = null;
   }, []);
 
-  if (!enabled) return null;
-
-  // Scroll: only a thin top strip — body stays free for native pan-y into foliate.
-  if (mode === "scroll") {
-    return (
-      <div
-        className="reader__tap-zones reader__tap-zones--scroll-top"
-        aria-hidden="true"
-        data-enabled="true"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: SCROLL_CHROME_STRIP_PX,
-          zIndex: 4,
-          pointerEvents: "auto",
-          touchAction: "manipulation",
-          background: "transparent",
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-      />
-    );
-  }
+  if (!enabled || mode === "scroll") return null;
 
   return (
     <div

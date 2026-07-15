@@ -1,0 +1,59 @@
+import { describe, expect, it } from "vitest";
+import {
+  DEFAULT_PREFS,
+  PAGE_COLORS,
+  SYSTEM_CJK_STACK,
+  buildReadingCss,
+  flowAttr,
+  type ReadingTheme,
+} from "./apply-reading-styles";
+
+describe("flowAttr", () => {
+  it("maps paginate → paginated", () => {
+    expect(flowAttr("paginate")).toBe("paginated");
+  });
+
+  it("maps scroll → scrolled", () => {
+    expect(flowAttr("scroll")).toBe("scrolled");
+  });
+});
+
+describe("DEFAULT_PREFS / constants", () => {
+  it("matches UI-SPEC defaults", () => {
+    expect(DEFAULT_PREFS).toEqual({
+      mode: "paginate",
+      theme: "day",
+      fontFamilyKey: "system",
+      fontSizePx: 18,
+      lineHeight: 1.75,
+      marginPx: 24,
+      activeFontId: null,
+    });
+  });
+
+  it("exports system CJK stack", () => {
+    expect(SYSTEM_CJK_STACK).toBe(
+      'system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif',
+    );
+  });
+});
+
+describe("buildReadingCss", () => {
+  const themes: ReadingTheme[] = ["day", "night", "sepia"];
+
+  for (const theme of themes) {
+    it(`includes font-size, line-height, and page colors for ${theme}`, () => {
+      const prefs = { ...DEFAULT_PREFS, theme, fontSizePx: 20, lineHeight: 1.8 };
+      const css = buildReadingCss(prefs, "/* face */", SYSTEM_CJK_STACK);
+      const colors = PAGE_COLORS[theme];
+
+      expect(css).toContain("/* face */");
+      expect(css).toContain("font-size: 20px");
+      expect(css).toContain("line-height: 1.8");
+      expect(css).toContain(colors.background);
+      expect(css).toContain(colors.foreground);
+      expect(css).toContain(SYSTEM_CJK_STACK);
+      expect(css).not.toContain("Geist");
+    });
+  }
+});

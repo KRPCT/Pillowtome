@@ -127,6 +127,9 @@ export function FoliateView({
   const [continuousCss, setContinuousCss] = useState("");
   const continuousStartRef = useRef(0);
   const continuousOffsetRef = useRef(0);
+  /** Increment to force ContinuousScrollStream jump (TOC / resume). */
+  const [scrollJumpKey, setScrollJumpKey] = useState(0);
+  const [scrollJumpSpine, setScrollJumpSpine] = useState<number | null>(null);
 
   prefsRef.current = prefs;
   locationRef.current = location;
@@ -303,37 +306,92 @@ export function FoliateView({
     }
   }, []);
 
-  const handleTocNavigate = useCallback(async (href: string) => {
+  /** Resolve TOC/search target to spine index for continuous scroll. */
+  const resolveSpineIndex = useCallback((target: string): number | null => {
     const view = viewRef.current;
-    setTocOpen(false);
-    if (!view || !href) return;
+    if (!view || !target) return null;
     try {
-      await view.goTo(href);
-    } catch (err) {
-      console.warn("[FoliateView] TOC goTo failed", err);
-      try {
-        await view.goToTextStart();
-      } catch {
-        /* soft-fail */
+      const resolved =
+        view.resolveNavigation?.(target) ??
+        view.book?.resolveHref?.(target) ??
+        view.book?.resolveCFI?.(target);
+      if (resolved && typeof resolved.index === "number") {
+        return resolved.index;
       }
+    } catch (err) {
+      console.warn("[FoliateView] resolve spine failed", err);
     }
+    return null;
   }, []);
+
+  const jumpContinuousToSpine = useCallback((spineIndex: number) => {
+    continuousStartRef.current = (() => {
+      const linear = continuousSections.filter((s) => s.linear !== "no");
+      const li = linear.findIndex((s) => s.index === spineIndex);
+      return li >= 0 ? li : 0;
+    })();
+    continuousOffsetRef.current = 0;
+    setScrollJumpSpine(spineIndex);
+    setScrollJumpKey((k) => k + 1);
+  }, [continuousSections]);
+
+  const handleTocNavigate = useCallback(
+    async (href: string) => {
+      const view = viewRef.current;
+      setTocOpen(false);
+      if (!view || !href) return;
+
+      // Continuous scroll: jump inside stream (foliate host is hidden).
+      if (useContinuousScroll) {
+        const spine = resolveSpineIndex(href);
+        if (spine != null) {
+          jumpContinuousToSpine(spine);
+          return;
+        }
+        // Fallback: try goTo then re-hide (may still fail if host hidden)
+      }
+
+      try {
+        await view.goTo(href);
+      } catch (err) {
+        console.warn("[FoliateView] TOC goTo failed", err);
+        try {
+          await view.goToTextStart();
+        } catch {
+          /* soft-fail */
+        }
+      }
+    },
+    [useContinuousScroll, resolveSpineIndex, jumpContinuousToSpine],
+  );
 
   const openSearch = useCallback(() => {
     setChromeVisible(true);
     setSearchOpen(true);
   }, []);
 
-  const handleSearchJump = useCallback(async (cfi: string) => {
-    const view = viewRef.current;
-    setSearchOpen(false);
-    if (!view || !cfi) return;
-    try {
-      await view.goTo(cfi);
-    } catch (err) {
-      console.warn("[FoliateView] search goTo(cfi) failed", err);
-    }
-  }, []);
+  const handleSearchJump = useCallback(
+    async (cfi: string) => {
+      const view = viewRef.current;
+      setSearchOpen(false);
+      if (!view || !cfi) return;
+
+      if (useContinuousScroll) {
+        const spine = resolveSpineIndex(cfi);
+        if (spine != null) {
+          jumpContinuousToSpine(spine);
+          return;
+        }
+      }
+
+      try {
+        await view.goTo(cfi);
+      } catch (err) {
+        console.warn("[FoliateView] search goTo(cfi) failed", err);
+      }
+    },
+    [useContinuousScroll, resolveSpineIndex, jumpContinuousToSpine],
+  );
 
   // Keep max-block-size in sync with host height so short pages don't float on tall screens.
   useEffect(() => {
@@ -574,15 +632,39 @@ export function FoliateView({
               const scrollTok = parseScrollLocator(loc.cfi);
               if (scrollTok) {
                 scrollResume = scrollTok;
-                // Map spine index → linear index for continuous stream start.
-                const linearIdx = continuous
-                  .map((s, i) => ({ s, i }))
-                  .filter(({ s }) => s.linear !== "no")
-                  .find(({ s }) => s.index === scrollTok.spineIndex)?.i;
+                const linearList = continuous.filter((s) => s.linear !== "no");
+                const linearIdx = linearList.findIndex(
+                  (s) => s.index === scrollTok.spineIndex,
+                );
                 continuousStartRef.current =
-                  typeof linearIdx === "number" ? linearIdx : 0;
-                // Paginated path still tries goTo if we switch modes later.
-                restored = loaded.mode === "scroll";
+                  linearIdx >= 0 ? linearIdx : 0;
+                continuousOffsetRef.current = scrollTok.offsetFraction;
+                setScrollJumpSpine(scrollTok.spineIndex);
+                setScrollJumpKey((k) => k + 1);
+                if (loaded.mode === "scroll") {
+                  restored = true;
+                } else {
+                  // Paginate: open the same spine section via renderer index.
+                  try {
+                    await view.renderer?.goTo?.({
+                      index: scrollTok.spineIndex,
+                      anchor: scrollTok.offsetFraction,
+                    } as never);
+                    restored = true;
+                  } catch {
+                    try {
+                      const hrefGuess = continuous.find(
+                        (s) => s.index === scrollTok.spineIndex,
+                      );
+                      if (hrefGuess) {
+                        await view.goTo(String(scrollTok.spineIndex));
+                        restored = true;
+                      }
+                    } catch {
+                      /* fall through */
+                    }
+                  }
+                }
               } else {
                 try {
                   await view.goTo(loc.cfi);
@@ -592,10 +674,11 @@ export function FoliateView({
                 }
               }
             }
-            if (loc?.progress_fraction != null) {
+            if (loc?.progress_fraction != null || loc?.cfi) {
               setLocation((prev) => ({
                 ...prev,
-                fraction: loc.progress_fraction ?? prev?.fraction,
+                fraction:
+                  loc.progress_fraction ?? prev?.fraction ?? undefined,
                 cfi: loc.cfi ?? prev?.cfi,
               }));
             }
@@ -610,9 +693,7 @@ export function FoliateView({
             console.warn("[FoliateView] goToTextStart failed", err);
           }
         }
-        if (scrollResume) {
-          continuousOffsetRef.current = scrollResume.offsetFraction;
-        } else {
+        if (!scrollResume) {
           continuousOffsetRef.current = 0;
         }
 
@@ -714,15 +795,24 @@ export function FoliateView({
     (spineIndex: number, offsetFraction: number) => {
       const workId = workIdRef.current;
       if (!workId) return;
+      continuousStartRef.current = (() => {
+        const linear = continuousSections.filter((s) => s.linear !== "no");
+        const li = linear.findIndex((s) => s.index === spineIndex);
+        return li >= 0 ? li : continuousStartRef.current;
+      })();
+      continuousOffsetRef.current = offsetFraction;
       const row = continuousProgressToLocatorRow(
         workId,
         spineIndex,
         offsetFraction,
       );
       pendingLocatorRef.current = row;
-      // Coarse UI fraction from spine position among continuous sections
       const n = continuousSections.filter((s) => s.linear !== "no").length || 1;
-      const frac = Math.min(1, (spineIndex + offsetFraction) / n);
+      const linearPos =
+        continuousSections
+          .filter((s) => s.linear !== "no")
+          .findIndex((s) => s.index === spineIndex) ?? spineIndex;
+      const frac = Math.min(1, (Math.max(0, linearPos) + offsetFraction) / n);
       setLocation({
         fraction: frac,
         cfi: row.cfi ?? undefined,
@@ -730,7 +820,9 @@ export function FoliateView({
       if (locatorTimerRef.current) clearTimeout(locatorTimerRef.current);
       locatorTimerRef.current = setTimeout(() => {
         locatorTimerRef.current = null;
-        void flushLocator();
+        void flushLocator().catch((err) => {
+          console.warn("[FoliateView] continuous locator flush failed", err);
+        });
       }, LOCATOR_DEBOUNCE_MS);
     },
     [continuousSections, flushLocator],
@@ -772,9 +864,12 @@ export function FoliateView({
       <div ref={hostRef} className="reader__view">
         {status === "reading" && useContinuousScroll ? (
           <ContinuousScrollStream
+            key={`stream-${id}`}
             sections={continuousSections}
             initialLinearIndex={continuousStartRef.current}
             initialOffsetFraction={continuousOffsetRef.current}
+            jumpKey={scrollJumpKey}
+            targetSpineIndex={scrollJumpSpine}
             readingCss={continuousCss}
             onTap={() => {
               if (!anySheetOpen) setChromeVisible((v) => !v);

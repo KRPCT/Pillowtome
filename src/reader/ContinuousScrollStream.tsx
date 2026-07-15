@@ -23,37 +23,34 @@ export interface ContinuousScrollStreamProps {
   sections: ContinuousSection[];
   /** Start at this linear-list index (0-based into linear sections). */
   initialLinearIndex?: number;
-  /** Injected CSS for each section document (typography/theme). */
+  /** Progress within the start section 0..1. */
+  initialOffsetFraction?: number;
+  /**
+   * Bump to force jump to targetSpineIndex (TOC / resume).
+   * Parent should increment when user picks a chapter.
+   */
+  jumpKey?: number;
+  /** Spine index to jump to when jumpKey changes. */
+  targetSpineIndex?: number | null;
   readingCss: string;
   className?: string;
   onTap?: () => void;
-  /**
-   * Progress within the primary section 0..1 (scroll offset / section height).
-   * Combined with spine index for resume (continuous mode has no CFI).
-   */
-  initialOffsetFraction?: number;
-  /** Fired when the primary (most visible) section changes. */
   onPrimarySectionChange?: (spineIndex: number) => void;
-  /**
-   * Debounced progress while scrolling — spine index + fraction in section.
-   * Used to persist resume position without CFI in continuous mode.
-   */
   onProgress?: (spineIndex: number, offsetFraction: number) => void;
 }
 
-const PRELOAD_PX = 600;
+const PRELOAD_PX = 800;
 const TAP_SLOP = 12;
 
-/**
- * Vertical stack of section iframes. Loads neighbors as the user scrolls.
- */
 export function ContinuousScrollStream({
   sections: allSections,
   initialLinearIndex = 0,
+  initialOffsetFraction = 0,
+  jumpKey = 0,
+  targetSpineIndex = null,
   readingCss,
   className,
   onTap,
-  initialOffsetFraction = 0,
   onPrimarySectionChange,
   onProgress,
 }: ContinuousScrollStreamProps) {
@@ -61,6 +58,12 @@ export function ContinuousScrollStream({
     () => allSections.filter((s) => s.linear !== "no"),
     [allSections],
   );
+
+  const spineToLinear = useMemo(() => {
+    const m = new Map<number, number>();
+    linear.forEach((s, i) => m.set(s.index, i));
+    return m;
+  }, [linear]);
 
   const startIdx = Math.max(
     0,
@@ -74,7 +77,6 @@ export function ContinuousScrollStream({
     if (startIdx < linear.length - 1) set.add(startIdx + 1);
     return [...set].sort((a, b) => a - b);
   });
-  // Bump when a URL becomes available so iframes remount with src.
   const [urlTick, setUrlTick] = useState(0);
   const urlsRef = useRef<Map<number, string>>(new Map());
   const heightsRef = useRef<Map<number, number>>(new Map());
@@ -82,10 +84,15 @@ export function ContinuousScrollStream({
   const primaryRef = useRef<number>(startIdx);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const linearRef = useRef(linear);
-  const restoredRef = useRef(false);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onProgressRef = useRef(onProgress);
   const onPrimaryRef = useRef(onPrimarySectionChange);
+  const pendingJumpRef = useRef<{
+    linearIdx: number;
+    offsetFraction: number;
+  } | null>({ linearIdx: startIdx, offsetFraction: initialOffsetFraction });
+  const lastJumpKeyRef = useRef(jumpKey);
+
   linearRef.current = linear;
   onProgressRef.current = onProgress;
   onPrimaryRef.current = onPrimarySectionChange;
@@ -109,15 +116,34 @@ export function ContinuousScrollStream({
     }
   }, []);
 
-  // Load URLs for currently loaded indices (once per new index).
+  // Ensure target range is in loaded set (for TOC jumps).
+  const ensureLoadedAround = useCallback((linearIdx: number) => {
+    setLoaded((prev) => {
+      const next = new Set(prev);
+      next.add(linearIdx);
+      if (linearIdx > 0) next.add(linearIdx - 1);
+      if (linearIdx < linearRef.current.length - 1) next.add(linearIdx + 1);
+      // Also load all indices from 0..target so offsets can be measured.
+      // Cap to avoid loading entire book at once for huge spines.
+      const from = Math.max(0, linearIdx - 2);
+      for (let i = from; i <= linearIdx; i++) next.add(i);
+      const sorted = [...next].sort((a, b) => a - b);
+      if (
+        sorted.length === prev.length &&
+        sorted.every((v, i) => v === prev[i])
+      ) {
+        return prev;
+      }
+      return sorted;
+    });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       for (const i of loaded) {
         if (cancelled) return;
-        if (!urlsRef.current.has(i)) {
-          await ensureUrl(i);
-        }
+        if (!urlsRef.current.has(i)) await ensureUrl(i);
       }
     })();
     return () => {
@@ -158,7 +184,6 @@ export function ContinuousScrollStream({
     });
   }, [readingCss, injectStyles, urlTick, loaded]);
 
-  /** Compute top offset of a linear index among currently known heights. */
   const offsetOfLinear = useCallback((linearIdx: number, sorted: number[]) => {
     let acc = 0;
     for (const i of sorted) {
@@ -167,6 +192,42 @@ export function ContinuousScrollStream({
     }
     return acc;
   }, []);
+
+  /** Apply pending jump when heights for target (and predecessors) exist. */
+  const tryApplyJump = useCallback(() => {
+    const jump = pendingJumpRef.current;
+    if (!jump) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    const sorted = [...loaded].sort((a, b) => a - b);
+    // Need target loaded and all lower indices measured (or at least target height).
+    if (!heightsRef.current.has(jump.linearIdx)) return;
+    for (const i of sorted) {
+      if (i >= jump.linearIdx) break;
+      if (!heightsRef.current.has(i)) return;
+    }
+    const base = offsetOfLinear(jump.linearIdx, sorted);
+    const h = heightsRef.current.get(jump.linearIdx) ?? 0;
+    const frac = Math.max(0, Math.min(1, jump.offsetFraction));
+    el.scrollTop = base + frac * Math.max(0, h - el.clientHeight * 0.05);
+    primaryRef.current = jump.linearIdx;
+    pendingJumpRef.current = null;
+  }, [loaded, offsetOfLinear]);
+
+  useEffect(() => {
+    tryApplyJump();
+  }, [tryApplyJump, urlTick, loaded]);
+
+  // External TOC / resume jump
+  useEffect(() => {
+    if (jumpKey === lastJumpKeyRef.current && targetSpineIndex == null) return;
+    lastJumpKeyRef.current = jumpKey;
+    if (targetSpineIndex == null) return;
+    const linearIdx = spineToLinear.get(targetSpineIndex);
+    if (linearIdx == null) return;
+    pendingJumpRef.current = { linearIdx, offsetFraction: 0 };
+    ensureLoadedAround(linearIdx);
+  }, [jumpKey, targetSpineIndex, spineToLinear, ensureLoadedAround]);
 
   const reportProgress = useCallback(() => {
     const el = scrollerRef.current;
@@ -196,7 +257,7 @@ export function ContinuousScrollStream({
     }
     const spine = lin[primary]?.index;
     if (spine != null) onProgressRef.current?.(spine, within);
-  }, [loaded, offsetOfLinear]);
+  }, [loaded]);
 
   const maybeLoadNeighbors = useCallback(() => {
     const el = scrollerRef.current;
@@ -213,6 +274,7 @@ export function ContinuousScrollStream({
       const minLoaded = Math.min(...prev);
       if (nearBottom && maxLoaded < lin.length - 1) {
         next.add(maxLoaded + 1);
+        if (maxLoaded + 2 < lin.length) next.add(maxLoaded + 2);
         changed = true;
       }
       if (nearTop && minLoaded > 0) {
@@ -227,7 +289,7 @@ export function ContinuousScrollStream({
     progressTimerRef.current = setTimeout(() => {
       progressTimerRef.current = null;
       reportProgress();
-    }, 300);
+    }, 250);
   }, [reportProgress]);
 
   useEffect(() => {
@@ -241,22 +303,6 @@ export function ContinuousScrollStream({
       if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
     };
   }, [maybeLoadNeighbors]);
-
-  // Restore scroll position once start section height is known.
-  useEffect(() => {
-    if (restoredRef.current) return;
-    if (!urlsRef.current.has(startIdx)) return;
-    const h = heightsRef.current.get(startIdx);
-    if (!h || h <= 0) return;
-    const el = scrollerRef.current;
-    if (!el) return;
-    const sorted = [...loaded].sort((a, b) => a - b);
-    const base = offsetOfLinear(startIdx, sorted);
-    const frac = Math.max(0, Math.min(1, initialOffsetFraction));
-    el.scrollTop = base + frac * h * 0.95;
-    restoredRef.current = true;
-    primaryRef.current = startIdx;
-  }, [urlTick, loaded, startIdx, initialOffsetFraction, offsetOfLinear]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.isPrimary === false) return;
@@ -344,10 +390,14 @@ export function ContinuousScrollStream({
                     };
                     doc.addEventListener("pointerdown", down, { passive: true });
                     doc.addEventListener("pointerup", up, { passive: true });
-                    void doc.fonts?.ready?.then(() => injectStyles(iframe));
+                    void doc.fonts?.ready?.then(() => {
+                      injectStyles(iframe);
+                      tryApplyJump();
+                    });
                   } catch {
                     /* ignore */
                   }
+                  tryApplyJump();
                   maybeLoadNeighbors();
                 }}
               />

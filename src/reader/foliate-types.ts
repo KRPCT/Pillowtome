@@ -9,6 +9,10 @@ export interface FoliateRenderer {
   prev(distance?: number): Promise<void>;
   nextSection?(): Promise<void>;
   prevSection?(): Promise<void>;
+  goTo?(target: {
+    index: number;
+    anchor?: number | (() => number) | unknown;
+  }): Promise<void>;
   setAttribute?(name: string, value: string): void;
   getAttribute?(name: string): string | null;
   setStyles?(css: string | [string, string]): void;
@@ -39,6 +43,12 @@ export interface FoliateBook {
   toc?: FoliateBookTocItem[];
   rendition?: { layout?: string };
   sections?: FoliateBookSection[];
+  resolveHref?(
+    href: string,
+  ): { index: number; anchor?: unknown } | null | undefined;
+  resolveCFI?(
+    cfi: string,
+  ): { index: number; anchor?: unknown } | null | undefined;
 }
 
 export interface FoliateViewElement extends HTMLElement {
@@ -50,6 +60,8 @@ export interface FoliateViewElement extends HTMLElement {
   goToTextStart(): Promise<unknown>;
   goLeft(): Promise<unknown>;
   goRight(): Promise<unknown>;
+  /** Resolve href/CFI to spine index without navigating (when available). */
+  resolveNavigation?(target: string): { index?: number } | null | undefined;
   search(opts: {
     query: string;
     index?: number;

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-07-15T12:53:11.099Z"
-last_activity: 2026-07-09
+status: UI design contract approved; ready for `/gsd-discuss-phase 2` or `/gsd-plan-phase 2`
+stopped_at: Phase 2 context gathered
+last_updated: "2026-07-15T13:02:13.111Z"
+last_activity: 2026-07-15
 progress:
   total_phases: 7
   completed_phases: 1
@@ -95,6 +95,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-15T12:53:11.092Z
-Stopped at: Phase 2 UI-SPEC approved
-Resume file: .planning/phases/02-epub-reading-core/02-UI-SPEC.md
+Last session: 2026-07-15T13:02:13.100Z
+Stopped at: Phase 2 context gathered
+Resume file: .planning/phases/02-epub-reading-core/02-CONTEXT.md

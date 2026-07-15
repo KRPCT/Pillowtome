@@ -61,12 +61,22 @@ describe("buildReadingCss", () => {
       expect(css).toContain("line-height: 1.8");
       // Sides from prefs; extra top air; bottom via foliate margin band.
       expect(css).toContain("padding: 28px 24px 0 24px");
+      // Body must force author bg (e.g. MarkdownPad #fff) off.
+      expect(css).toMatch(/body\s*\{[^}]*background-color:\s*[^;]+!important/s);
       expect(css).toContain(colors.background);
       expect(css).toContain(colors.foreground);
       expect(css).toContain(SYSTEM_CJK_STACK);
       expect(css).not.toContain("Geist");
     });
   }
+
+  it("overrides author white body background (安达-style MarkdownPad CSS)", () => {
+    const css = buildReadingCss(DEFAULT_PREFS, "", SYSTEM_CJK_STACK);
+    // Day page bg from UI-SPEC
+    expect(css).toContain("background-color: #FFFEF9 !important");
+    // Both html and body get the paint
+    expect(css.indexOf("html")).toBeLessThan(css.indexOf("body"));
+  });
 });
 
 describe("foliateMarginBandPx / applyFoliateLayoutAttrs", () => {

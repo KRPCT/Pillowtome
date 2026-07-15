@@ -325,7 +325,20 @@ foliate-view {
  * ::part(filter) is the full-bleed background layer — match page color.
  */
 .reader__view foliate-view::part(filter) {
-  background: var(--page-bg, #fffef9);
+  background: var(--page-bg, #fffef9) !important;
+}
+
+/* Continuous scroll stream surface + section frames match page theme */
+.reader-continuous-scroll {
+  background: var(--page-bg, #fffef9) !important;
+}
+
+.reader-continuous-scroll__section {
+  background: var(--page-bg, #fffef9) !important;
+}
+
+.reader-continuous-scroll iframe {
+  background: var(--page-bg, #fffef9) !important;
 }
 
 /* Immersive tap-zone overlay (paginate only) sits above foliate-view host */

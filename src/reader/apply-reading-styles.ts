@@ -116,6 +116,12 @@ export function applyFoliateLayoutAttrs(
  * Horizontal page margins use body padding (`prefs.marginPx` left/right).
  * Vertical air uses foliate's `margin` attribute (header/footer band) so
  * short pages keep top/bottom breathing room without CSS padding double-count.
+ *
+ * Theme paint MUST override author stylesheets. Many Chinese EPUBs (e.g.
+ * MarkdownPad GitHub CSS) set `body { background-color: #fff; color: #333 }`
+ * which wins over `html { background }` alone — leaving white patches /
+ * mismatched chrome vs page. Force html+body (+ common wrappers) with
+ * !important and both `background` / `background-color`.
  */
 export function buildReadingCss(
   prefs: ReadingPrefs,
@@ -125,23 +131,44 @@ export function buildReadingCss(
   const colors = PAGE_COLORS[prefs.theme];
   const m = prefs.marginPx;
   const top = PAGE_TOP_EXTRA_PX;
+  const bg = colors.background;
+  const fg = colors.foreground;
   return `
     ${fontFaceCss}
     html {
-      background: ${colors.background} !important;
-      color: ${colors.foreground} !important;
+      background: ${bg} !important;
+      background-color: ${bg} !important;
+      color: ${fg} !important;
     }
     body {
-      font-family: ${fontFamilyCss};
-      font-size: ${prefs.fontSizePx}px;
-      line-height: ${prefs.lineHeight};
+      font-family: ${fontFamilyCss} !important;
+      font-size: ${prefs.fontSizePx}px !important;
+      line-height: ${prefs.lineHeight} !important;
+      color: ${fg} !important;
+      background: ${bg} !important;
+      background-color: ${bg} !important;
       /* Extra top air; sides from prefs; bottom 0 (band handles bottom air) */
       padding: ${top}px ${m}px 0 ${m}px !important;
       box-sizing: border-box !important;
-      margin: 0 !important;
+      margin: 0 auto !important;
+      max-width: none !important;
+      min-height: 100% !important;
     }
-    p, li, blockquote, dd {
-      line-height: ${prefs.lineHeight};
+    /* Author themes often paint wrappers / first blocks white */
+    body > div, body > section, body > article, body > main {
+      background: transparent !important;
+      background-color: transparent !important;
+      color: inherit !important;
+    }
+    p, li, blockquote, dd, td, th {
+      line-height: ${prefs.lineHeight} !important;
+      color: inherit !important;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      color: inherit !important;
+    }
+    a {
+      color: inherit !important;
     }
   `;
 }

@@ -49,15 +49,60 @@ CREATE TABLE change_log (
 );
 "#;
 
+/// Schema v2 DDL — reading prefs, custom fonts metadata, locator uniqueness.
+///
+/// Append-only: never rewrite [`SCHEMA_V1`]. Global prefs are a single-row table
+/// (`id = 'global'`, D-20/D-21). `custom_font` is metadata-only for 02-04 import.
+/// `idx_locator_work_id` enables one progress row per work for P2 upsert (D-23).
+pub const SCHEMA_V2: &str = r#"
+CREATE TABLE reading_prefs (
+    id              TEXT    PRIMARY KEY,   -- 'global' (D-20/D-21)
+    mode            TEXT    NOT NULL,      -- paginate | scroll
+    theme           TEXT    NOT NULL,      -- day | night | sepia
+    font_family_key TEXT    NOT NULL,      -- system | custom id
+    font_size_px    REAL    NOT NULL,
+    line_height     REAL    NOT NULL,
+    margin_px       REAL    NOT NULL,
+    active_font_id  TEXT,                  -- nullable → custom_font.id
+    updated_at      INTEGER NOT NULL
+);
+
+CREATE TABLE custom_font (
+    id          TEXT    PRIMARY KEY,
+    family_name TEXT    NOT NULL,
+    file_name   TEXT    NOT NULL,          -- relative under app_data/fonts/
+    byte_size   INTEGER NOT NULL,
+    created_at  INTEGER NOT NULL
+);
+
+-- One progress locator per work for P2 upsert (annotations use separate tables in P5).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_locator_work_id ON locator(work_id);
+
+-- Seed global defaults: paginate / day / system / 18px / 1.75 / 24px (D-22 / UI-SPEC).
+INSERT INTO reading_prefs (
+    id, mode, theme, font_family_key, font_size_px, line_height, margin_px, active_font_id, updated_at
+) VALUES (
+    'global', 'paginate', 'day', 'system', 18, 1.75, 24, NULL, 0
+);
+"#;
+
 /// The migration set applied to `sqlite:pillow.db` at startup.
 ///
-/// Exactly one migration in P1: schema v1 `seed_stub_schema` (Up). Later phases
-/// append higher-versioned migrations; they never rewrite v1.
+/// Schema v1 seeds identity tables; schema v2 appends prefs/fonts + locator unique
+/// index. Later phases append higher versions; they never rewrite v1.
 pub fn migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "seed_stub_schema",
-        sql: SCHEMA_V1,
-        kind: MigrationKind::Up,
-    }]
+    vec![
+        Migration {
+            version: 1,
+            description: "seed_stub_schema",
+            sql: SCHEMA_V1,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "reading_prefs_and_custom_fonts",
+            sql: SCHEMA_V2,
+            kind: MigrationKind::Up,
+        },
+    ]
 }

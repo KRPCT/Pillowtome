@@ -1,15 +1,15 @@
-//! Off-device migration smoke test for schema v1 (D-09).
+//! Off-device migration smoke test for schema v1 + v2 (D-09 / D-20).
 //!
-//! Proves "the DB migrates to schema v1" without booting the app or a device:
-//! open an in-memory SQLite, apply [`SCHEMA_V1`], and assert the identity /
-//! composite-locator / change-log tables and their key D-09 columns exist. Uses
-//! the SAME sqlx binding tauri-plugin-sql resolves (single SQLite binding,
-//! Pitfall 6), so this also guards against a second `libsqlite3-sys` sneaking in.
+//! Proves the DB migrates without booting the app: open an in-memory SQLite,
+//! apply [`SCHEMA_V1`] then [`SCHEMA_V2`], and assert identity / locator /
+//! change-log / reading_prefs / custom_font tables, seed row, and the locator
+//! UNIQUE index. Uses the SAME sqlx binding tauri-plugin-sql resolves (single
+//! SQLite binding, Pitfall 6).
 
-use pillowtome_lib::migrations::{migrations, SCHEMA_V1};
+use pillowtome_lib::migrations::{migrations, SCHEMA_V1, SCHEMA_V2};
 use sqlx::{Connection, Row, SqliteConnection};
 
-async fn fresh_db() -> SqliteConnection {
+async fn fresh_db_v1() -> SqliteConnection {
     let mut conn = SqliteConnection::connect("sqlite::memory:")
         .await
         .expect("open in-memory sqlite");
@@ -17,6 +17,15 @@ async fn fresh_db() -> SqliteConnection {
         .execute(&mut conn)
         .await
         .expect("apply SCHEMA_V1");
+    conn
+}
+
+async fn fresh_db_v2() -> SqliteConnection {
+    let mut conn = fresh_db_v1().await;
+    sqlx::raw_sql(SCHEMA_V2)
+        .execute(&mut conn)
+        .await
+        .expect("apply SCHEMA_V2");
     conn
 }
 
@@ -39,9 +48,19 @@ async fn has_column(conn: &mut SqliteConnection, table: &str, col: &str) -> bool
         .any(|r| r.get::<String, _>("name") == col)
 }
 
+async fn index_names(conn: &mut SqliteConnection) -> Vec<String> {
+    sqlx::query("SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name")
+        .fetch_all(conn)
+        .await
+        .expect("read sqlite_master indexes")
+        .iter()
+        .map(|r| r.get::<String, _>("name"))
+        .collect()
+}
+
 #[tokio::test]
 async fn schema_v1_creates_identity_locator_and_change_log_tables() {
-    let mut conn = fresh_db().await;
+    let mut conn = fresh_db_v1().await;
     let names = table_names(&mut conn).await;
     for expected in ["work", "locator", "change_log"] {
         assert!(
@@ -53,7 +72,7 @@ async fn schema_v1_creates_identity_locator_and_change_log_tables() {
 
 #[tokio::test]
 async fn schema_v1_carries_the_d09_identity_and_merge_columns() {
-    let mut conn = fresh_db().await;
+    let mut conn = fresh_db_v1().await;
     // Stable identity: work_id (UUID) + content_hash (blake3).
     assert!(has_column(&mut conn, "work", "content_hash").await);
     // Composite self-healing locator: progress_fraction always present (D-08).
@@ -63,14 +82,93 @@ async fn schema_v1_carries_the_d09_identity_and_merge_columns() {
     assert!(has_column(&mut conn, "change_log", "device_id").await);
 }
 
+#[tokio::test]
+async fn schema_v2_creates_reading_prefs_and_custom_font_tables() {
+    let mut conn = fresh_db_v2().await;
+    let names = table_names(&mut conn).await;
+    for expected in ["reading_prefs", "custom_font"] {
+        assert!(
+            names.iter().any(|n| n == expected),
+            "schema v2 missing table `{expected}`; found {names:?}"
+        );
+    }
+    // Key columns for global prefs + font metadata stub.
+    assert!(has_column(&mut conn, "reading_prefs", "mode").await);
+    assert!(has_column(&mut conn, "reading_prefs", "theme").await);
+    assert!(has_column(&mut conn, "reading_prefs", "font_size_px").await);
+    assert!(has_column(&mut conn, "reading_prefs", "active_font_id").await);
+    assert!(has_column(&mut conn, "custom_font", "family_name").await);
+    assert!(has_column(&mut conn, "custom_font", "file_name").await);
+}
+
+#[tokio::test]
+async fn schema_v2_seeds_global_prefs_row() {
+    let mut conn = fresh_db_v2().await;
+    let row = sqlx::query(
+        "SELECT id, mode, theme, font_family_key, font_size_px, line_height, margin_px \
+         FROM reading_prefs WHERE id = 'global'",
+    )
+    .fetch_optional(&mut conn)
+    .await
+    .expect("select global prefs")
+    .expect("seed row id=global must exist");
+
+    assert_eq!(row.get::<String, _>("id"), "global");
+    assert_eq!(row.get::<String, _>("mode"), "paginate");
+    assert_eq!(row.get::<String, _>("theme"), "day");
+    assert_eq!(row.get::<String, _>("font_family_key"), "system");
+    assert!((row.get::<f64, _>("font_size_px") - 18.0).abs() < f64::EPSILON);
+    assert!((row.get::<f64, _>("line_height") - 1.75).abs() < f64::EPSILON);
+    assert!((row.get::<f64, _>("margin_px") - 24.0).abs() < f64::EPSILON);
+}
+
+#[tokio::test]
+async fn schema_v2_creates_unique_index_on_locator_work_id() {
+    let mut conn = fresh_db_v2().await;
+    let indexes = index_names(&mut conn).await;
+    assert!(
+        indexes.iter().any(|n| n == "idx_locator_work_id"),
+        "missing idx_locator_work_id; found {indexes:?}"
+    );
+
+    // Unique: second insert for same work_id must fail.
+    sqlx::query(
+        "INSERT INTO work (work_id, content_hash, format, created_at) VALUES ('w1', 'h', 'epub', 0)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("seed work");
+    sqlx::query(
+        "INSERT INTO locator (work_id, cfi, progress_fraction, text_pre, text_exact, text_post, updated_at) \
+         VALUES ('w1', 'epubcfi(/6/2)', 0.1, NULL, NULL, NULL, 0)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("first locator insert");
+    let dup = sqlx::query(
+        "INSERT INTO locator (work_id, cfi, progress_fraction, text_pre, text_exact, text_post, updated_at) \
+         VALUES ('w1', 'epubcfi(/6/4)', 0.2, NULL, NULL, NULL, 1)",
+    )
+    .execute(&mut conn)
+    .await;
+    assert!(dup.is_err(), "duplicate work_id locator should violate UNIQUE");
+}
+
 #[test]
-fn migration_set_is_a_single_v1_up() {
+fn migration_set_is_v1_then_v2_up() {
     let set = migrations();
-    assert_eq!(set.len(), 1, "exactly one migration in P1");
-    let m = &set[0];
-    assert_eq!(m.version, 1);
-    assert_eq!(m.description, "seed_stub_schema");
-    // Schema is defined once, in the migration — the change_log is its heart.
-    assert!(m.sql.contains("change_log"));
-    assert_eq!(m.sql, SCHEMA_V1, "the migration's SQL is SCHEMA_V1 (one source of truth)");
+    assert_eq!(set.len(), 2, "exactly two migrations (v1 + v2)");
+    assert_eq!(set[0].version, 1);
+    assert_eq!(set[0].description, "seed_stub_schema");
+    assert_eq!(set[0].sql, SCHEMA_V1, "v1 SQL is SCHEMA_V1 (one source of truth)");
+    assert!(set[0].sql.contains("change_log"));
+    assert!(set[0].sql.contains("work"));
+    assert!(set[0].sql.contains("locator"));
+
+    assert_eq!(set[1].version, 2);
+    assert_eq!(set[1].description, "reading_prefs_and_custom_fonts");
+    assert_eq!(set[1].sql, SCHEMA_V2, "v2 SQL is SCHEMA_V2 (one source of truth)");
+    assert!(set[1].sql.contains("reading_prefs"));
+    assert!(set[1].sql.contains("custom_font"));
+    assert!(set[1].sql.contains("idx_locator_work_id"));
 }

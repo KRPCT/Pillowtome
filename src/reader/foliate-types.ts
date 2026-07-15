@@ -32,8 +32,12 @@ export interface FoliateViewElement extends HTMLElement {
   goToTextStart(): Promise<unknown>;
   goLeft(): Promise<unknown>;
   goRight(): Promise<unknown>;
-  search(opts: { query: string; index?: number }): AsyncGenerator<unknown>;
-  clearSearch(): void;
+  search(opts: {
+    query: string;
+    index?: number;
+    matchWholeWords?: boolean;
+  }): AsyncGenerator<unknown>;
+  clearSearch?(): void;
 }
 
 export interface RelocateDetail {

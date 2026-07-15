@@ -6,6 +6,7 @@ import { ErrorCard } from "./error-card";
 import { ReaderChrome } from "./ReaderChrome";
 import { ReaderTapZones, type TapZoneAction } from "./ReaderTapZones";
 import { SettingsSheet } from "./SettingsSheet";
+import { SearchSheet } from "./SearchSheet";
 import { TocSheet, normalizeToc } from "./TocSheet";
 import {
   DEFAULT_PREFS,
@@ -96,6 +97,7 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   const [chromeVisible, setChromeVisible] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [fxlLocked, setFxlLocked] = useState(false);
   const [bookTitle, setBookTitle] = useState("示例书籍");
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
@@ -105,7 +107,7 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   prefsRef.current = prefs;
   locationRef.current = location;
 
-  const anySheetOpen = settingsOpen || tocOpen;
+  const anySheetOpen = settingsOpen || tocOpen || searchOpen;
 
   /** Apply flow + margin + setStyles to the live renderer (READ-01/02/03/06). */
   const applyPrefsToRenderer = useCallback((next: ReadingPrefs) => {
@@ -260,24 +262,41 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
     }
   }, []);
 
-  // Desktop keyboard: arrows/PageUp/Down page; Esc closes sheet or shows chrome (D-33).
+  const openSearch = useCallback(() => {
+    setChromeVisible(true);
+    setSearchOpen(true);
+  }, []);
+
+  const handleSearchJump = useCallback(async (cfi: string) => {
+    const view = viewRef.current;
+    setSearchOpen(false);
+    if (!view || !cfi) return;
+    try {
+      await view.goTo(cfi);
+    } catch (err) {
+      console.warn("[FoliateView] search goTo(cfi) failed", err);
+    }
+  }, []);
+
+  // Desktop keyboard: arrows/PageUp/Down page; Esc closes sheet; / Ctrl+F search (D-33).
   useEffect(() => {
     if (status !== "reading") return;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      // Ignore when typing in inputs (search will use this in 02-04).
       const t = e.target as HTMLElement | null;
-      if (
+      const typing =
         t &&
         (t.tagName === "INPUT" ||
           t.tagName === "TEXTAREA" ||
-          t.isContentEditable)
-      ) {
-        return;
-      }
+          t.isContentEditable);
 
+      // Esc always closes topmost sheet first (even from search input).
       if (e.key === "Escape") {
         e.preventDefault();
+        if (searchOpen) {
+          setSearchOpen(false);
+          return;
+        }
         if (settingsOpen) {
           setSettingsOpen(false);
           return;
@@ -286,13 +305,28 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
           setTocOpen(false);
           return;
         }
-        // Else show chrome if immersive
         if (!chromeVisible) setChromeVisible(true);
         return;
       }
 
+      // Ctrl+F / Cmd+F opens search even from inputs (standard browser chord).
+      if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        openSearch();
+        return;
+      }
+
+      if (typing) return;
+
+      // `/` opens search when not typing (D-33).
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        openSearch();
+        return;
+      }
+
       // Page keys only when no sheet is open
-      if (settingsOpen || tocOpen) return;
+      if (settingsOpen || tocOpen || searchOpen) return;
 
       const view = viewRef.current;
       if (!view) return;
@@ -312,7 +346,7 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [status, settingsOpen, tocOpen, chromeVisible]);
+  }, [status, settingsOpen, tocOpen, searchOpen, chromeVisible, openSearch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -509,9 +543,7 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
           setChromeVisible(true);
           setTocOpen(true);
         }}
-        onOpenSearch={() => {
-          /* Search sheet — plan 02-04 */
-        }}
+        onOpenSearch={openSearch}
         onOpenSettings={() => {
           setChromeVisible(true);
           setSettingsOpen(true);
@@ -559,6 +591,13 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         items={tocItems}
         activeLabel={activeTocLabel}
         onNavigate={handleTocNavigate}
+      />
+
+      <SearchSheet
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        view={viewRef.current}
+        onJump={handleSearchJump}
       />
     </div>
   );

@@ -339,4 +339,37 @@ mod tests {
         assert_eq!(result.content_hash, "def");
         assert_eq!(std::mem::size_of_val(&result.work_id), std::mem::size_of::<String>());
     }
+
+    /// Torture soft-fail matrix (02-04): corrupt / DRM / font-obfuscated / random
+    /// bytes must never panic through [`decide`] + [`detect_protection`].
+    /// FXL is a layout concern (UI disables reflow knobs); protection path still
+    /// must soft-fail on unreadable bytes rather than abort the process.
+    #[test]
+    fn torture_soft_fail_decide_matrix() {
+        // (1) corrupt → can_render false, soft 简体中文 message
+        let corrupt = decide(Err(CoreError::Corrupt));
+        assert!(!corrupt.can_render);
+        assert_eq!(corrupt.message.as_deref(), Some("文件已损坏，无法打开。"));
+
+        // (2) content DRM refuse
+        let drm = decide(Ok(Protection::ContentDrm("Adobe ADEPT")));
+        assert!(!drm.can_render);
+        assert_eq!(drm.message.as_deref(), Some("无法打开：不支持的加密书籍。"));
+
+        // (3) font-obfuscated still can_render true
+        assert!(decide(Ok(Protection::FontObfuscationOnly)).can_render);
+
+        // (4) random / garbage bytes: detect never panics; decide soft-fails
+        let random = b"\x00\xff not-an-epub \x7f\x80 random-bytes-for-soft-fail";
+        let detected = detect_protection(random);
+        let decision = decide(detected);
+        assert!(!decision.can_render);
+        assert!(decision.message.is_some());
+
+        // Truncated PK zip prefix also soft-fails without panic.
+        let truncated = b"PK\x03\x04 truncated";
+        let decision2 = decide(detect_protection(truncated));
+        assert!(!decision2.can_render);
+        assert!(decision2.message.is_some());
+    }
 }

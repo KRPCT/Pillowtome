@@ -8,7 +8,7 @@
  * Clean-room — no Readest source.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export interface ContinuousSection {
   /** Spine index in book.sections */
@@ -34,10 +34,6 @@ export interface ContinuousScrollStreamProps {
 const PRELOAD_PX = 600;
 const TAP_SLOP = 12;
 
-function linearSections(all: ContinuousSection[]): ContinuousSection[] {
-  return all.filter((s) => s.linear !== "no");
-}
-
 /**
  * Vertical stack of section iframes. Loads neighbors as the user scrolls.
  */
@@ -49,30 +45,43 @@ export function ContinuousScrollStream({
   onTap,
   onPrimarySectionChange,
 }: ContinuousScrollStreamProps) {
-  const linear = linearSections(allSections);
+  const linear = useMemo(
+    () => allSections.filter((s) => s.linear !== "no"),
+    [allSections],
+  );
+
+  const startIdx = Math.max(
+    0,
+    Math.min(initialLinearIndex, Math.max(0, linear.length - 1)),
+  );
+
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState<number[]>(() => {
-    const start = Math.max(0, Math.min(initialLinearIndex, Math.max(0, linear.length - 1)));
-    const set = new Set<number>([start]);
-    if (start > 0) set.add(start - 1);
-    if (start < linear.length - 1) set.add(start + 1);
+    const set = new Set<number>([startIdx]);
+    if (startIdx > 0) set.add(startIdx - 1);
+    if (startIdx < linear.length - 1) set.add(startIdx + 1);
     return [...set].sort((a, b) => a - b);
   });
+  // Bump when a URL becomes available so iframes remount with src.
+  const [urlTick, setUrlTick] = useState(0);
   const urlsRef = useRef<Map<number, string>>(new Map());
   const heightsRef = useRef<Map<number, number>>(new Map());
   const loadingRef = useRef<Set<number>>(new Set());
-  const primaryRef = useRef<number>(initialLinearIndex);
+  const primaryRef = useRef<number>(startIdx);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const linearRef = useRef(linear);
+  linearRef.current = linear;
 
   const ensureUrl = useCallback(async (linearIdx: number) => {
     if (urlsRef.current.has(linearIdx)) return urlsRef.current.get(linearIdx)!;
     if (loadingRef.current.has(linearIdx)) return null;
-    const sec = linear[linearIdx];
+    const sec = linearRef.current[linearIdx];
     if (!sec) return null;
     loadingRef.current.add(linearIdx);
     try {
       const url = await Promise.resolve(sec.load());
       urlsRef.current.set(linearIdx, url);
+      setUrlTick((t) => t + 1);
       return url;
     } catch (err) {
       console.warn("[ContinuousScrollStream] load failed", linearIdx, err);
@@ -80,18 +89,16 @@ export function ContinuousScrollStream({
     } finally {
       loadingRef.current.delete(linearIdx);
     }
-  }, [linear]);
+  }, []);
 
-  // Ensure URLs for currently loaded indices
+  // Load URLs for currently loaded indices (once per new index).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       for (const i of loaded) {
         if (cancelled) return;
-        const url = await ensureUrl(i);
-        if (url && !cancelled) {
-          // trigger re-render when URL first available
-          setLoaded((prev) => [...prev]);
+        if (!urlsRef.current.has(i)) {
+          await ensureUrl(i);
         }
       }
     })();
@@ -104,14 +111,15 @@ export function ContinuousScrollStream({
     (iframe: HTMLIFrameElement) => {
       const doc = iframe.contentDocument;
       if (!doc?.head) return;
-      let style = doc.getElementById("pillow-reading-css") as HTMLStyleElement | null;
+      let style = doc.getElementById(
+        "pillow-reading-css",
+      ) as HTMLStyleElement | null;
       if (!style) {
         style = doc.createElement("style");
         style.id = "pillow-reading-css";
         doc.head.appendChild(style);
       }
       style.textContent = readingCss;
-      // Expand iframe to content height
       const h = Math.max(
         doc.documentElement?.scrollHeight ?? 0,
         doc.body?.scrollHeight ?? 0,
@@ -124,18 +132,18 @@ export function ContinuousScrollStream({
     [readingCss],
   );
 
-  // Re-apply CSS when readingCss changes
   useEffect(() => {
     const root = scrollerRef.current;
     if (!root) return;
     root.querySelectorAll("iframe[data-linear-index]").forEach((node) => {
       injectStyles(node as HTMLIFrameElement);
     });
-  }, [readingCss, injectStyles, loaded]);
+  }, [readingCss, injectStyles, urlTick, loaded]);
 
   const maybeLoadNeighbors = useCallback(() => {
     const el = scrollerRef.current;
-    if (!el || linear.length === 0) return;
+    const lin = linearRef.current;
+    if (!el || lin.length === 0) return;
     const { scrollTop, clientHeight, scrollHeight } = el;
     const nearBottom = scrollTop + clientHeight >= scrollHeight - PRELOAD_PX;
     const nearTop = scrollTop <= PRELOAD_PX;
@@ -145,7 +153,7 @@ export function ContinuousScrollStream({
       let changed = false;
       const maxLoaded = Math.max(...prev);
       const minLoaded = Math.min(...prev);
-      if (nearBottom && maxLoaded < linear.length - 1) {
+      if (nearBottom && maxLoaded < lin.length - 1) {
         next.add(maxLoaded + 1);
         changed = true;
       }
@@ -153,11 +161,13 @@ export function ContinuousScrollStream({
         next.add(minLoaded - 1);
         changed = true;
       }
-      // Primary section by midpoint
+
+      // Primary section by midpoint — do not setState for this.
       let acc = 0;
       const mid = scrollTop + clientHeight / 2;
       let primary = primaryRef.current;
-      for (const i of [...next].sort((a, b) => a - b)) {
+      const sorted = [...next].sort((a, b) => a - b);
+      for (const i of sorted) {
         const h = heightsRef.current.get(i) ?? clientHeight;
         if (acc + h > mid) {
           primary = i;
@@ -168,23 +178,25 @@ export function ContinuousScrollStream({
       }
       if (primary !== primaryRef.current) {
         primaryRef.current = primary;
-        const spine = linear[primary]?.index;
+        const spine = lin[primary]?.index;
         if (spine != null) onPrimarySectionChange?.(spine);
       }
-      return changed ? [...next].sort((a, b) => a - b) : prev;
+
+      if (!changed) return prev;
+      return sorted;
     });
-  }, [linear, onPrimarySectionChange]);
+  }, [onPrimarySectionChange]);
 
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
     const onScroll = () => maybeLoadNeighbors();
     el.addEventListener("scroll", onScroll, { passive: true });
+    // Initial neighbor check once
     maybeLoadNeighbors();
     return () => el.removeEventListener("scroll", onScroll);
-  }, [maybeLoadNeighbors, loaded]);
+  }, [maybeLoadNeighbors]);
 
-  // Tap on scroller chrome (outside iframes) — rare; iframe docs handle their own
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.isPrimary === false) return;
     pointerStartRef.current = { x: e.clientX, y: e.clientY };
@@ -193,10 +205,12 @@ export function ContinuousScrollStream({
     const s = pointerStartRef.current;
     pointerStartRef.current = null;
     if (!s) return;
-    if (Math.abs(e.clientX - s.x) > TAP_SLOP || Math.abs(e.clientY - s.y) > TAP_SLOP) {
+    if (
+      Math.abs(e.clientX - s.x) > TAP_SLOP ||
+      Math.abs(e.clientY - s.y) > TAP_SLOP
+    ) {
       return;
     }
-    // Only if target is the scroller itself (gaps between sections)
     if (e.target === scrollerRef.current) onTap?.();
   };
 
@@ -235,7 +249,6 @@ export function ContinuousScrollStream({
                 title={`section-${sec.index}`}
                 src={url}
                 data-linear-index={linearIdx}
-                // sandbox: allow same-origin so we can inject CSS + measure height
                 sandbox="allow-same-origin allow-popups"
                 referrerPolicy="no-referrer"
                 style={{
@@ -248,7 +261,6 @@ export function ContinuousScrollStream({
                 onLoad={(e) => {
                   const iframe = e.currentTarget;
                   injectStyles(iframe);
-                  // Tap inside iframe doc → chrome toggle
                   try {
                     const doc = iframe.contentDocument;
                     if (!doc) return;
@@ -262,17 +274,18 @@ export function ContinuousScrollStream({
                       const dx = ev.clientX - ps.x;
                       const dy = ev.clientY - ps.y;
                       ps = null;
-                      if (Math.abs(dx) > TAP_SLOP || Math.abs(dy) > TAP_SLOP) return;
+                      if (Math.abs(dx) > TAP_SLOP || Math.abs(dy) > TAP_SLOP) {
+                        return;
+                      }
                       const t = ev.target as Element | null;
                       if (t?.closest?.("a[href]")) return;
                       onTap?.();
                     };
                     doc.addEventListener("pointerdown", down, { passive: true });
                     doc.addEventListener("pointerup", up, { passive: true });
-                    // Resize with fonts
-                    doc.fonts?.ready?.then(() => injectStyles(iframe));
+                    void doc.fonts?.ready?.then(() => injectStyles(iframe));
                   } catch {
-                    /* cross-origin shouldn't happen for blob/same-origin URLs */
+                    /* ignore */
                   }
                   maybeLoadNeighbors();
                 }}

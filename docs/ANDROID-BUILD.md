@@ -135,6 +135,7 @@ denial, foliate-js paginator centering short pages as a floating card on tall sc
 Any change that touches:
 
 - `src/reader/**` (chrome, themes, typography, TOC, search, fonts, immersive)
+- `src/components/ui/**` used by sheets / scroll areas
 - `src/lib/pillow.ts` or `pillow://` protocol / CSP
 - Import / SAF / storage-handle paths
 - Anything that ships UI or book bytes to the WebView
@@ -145,9 +146,21 @@ Any change that touches:
 2. `pnpm tauri android dev` installs and launches `com.pillowtome.app` (on Windows: **Developer Mode
    ON** or run elevated so `jniLibs` symlinks work — trap 1).
 3. Manual or screenshot review of the affected surface (open sample EPUB is the minimum).
-4. Note any residual device-only risk in the plan SUMMARY / VERIFICATION.
+4. **If the surface scrolls** (settings sheet, TOC, search results, scroll reading mode): **finger
+   pan-y** on the device — desktop mouse wheel is not enough.
+5. Note any residual device-only risk in the plan SUMMARY / VERIFICATION.
 
 Skip only pure-Rust `core/` unit-test-only changes with no UI/protocol surface.
+
+### Touch / scroll pitfalls (global)
+
+| Anti-pattern | Symptom on Android | Fix |
+|--------------|--------------------|-----|
+| Full-screen transparent overlay with `pointer-events: auto` over content | Book / list cannot scroll or swipe | Only capture taps where needed; leave body free for pan-y |
+| Radix `ScrollArea` with only `max-h-*` on the root | Sheet content clipped, **no finger scroll** | Parent `flex flex-col max-h-[…]`; body `flex-1 min-h-0 overflow-y-auto` (see `.reader-sheet__body`) |
+| Missing `viewport-fit=cover` + safe-area floor | UI under system status bar | `index.html` viewport-fit + CSS `--safe-top: max(28px, env(...))` |
+
+These are **project constraints** (also in `CLAUDE.md`). Do not reintroduce.
 
 ### Quick start (this machine)
 

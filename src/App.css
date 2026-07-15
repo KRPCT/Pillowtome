@@ -354,8 +354,22 @@ foliate-view {
 .reader-toc-sheet__list {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: min(70vh, 560px);
+  /* Height comes from flex parent (.reader-sheet); do not use max-height alone. */
   padding: 0 0 16px;
+}
+
+/* Shared sheet body: native overflow for Android WebView (see CLAUDE.md touch/scroll gate). */
+.reader-sheet {
+  overscroll-behavior: contain;
+}
+
+.reader-sheet__body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .reader-toc-sheet__ul {

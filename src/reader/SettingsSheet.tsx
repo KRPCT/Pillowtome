@@ -5,7 +5,6 @@
  */
 
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
@@ -63,17 +62,22 @@ export function SettingsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="reader-settings-sheet max-h-[70vh] gap-0 p-0"
+        className="reader-settings-sheet reader-sheet flex max-h-[min(85vh,720px)] flex-col gap-0 p-0"
         showCloseButton
       >
-        <SheetHeader className="px-4 pt-4 pb-2">
+        <SheetHeader className="reader-sheet__header shrink-0 px-4 pt-4 pb-2">
           <SheetTitle className="text-lg font-semibold">显示设置</SheetTitle>
           <SheetDescription className="sr-only">
             调整阅读模式、主题与排版选项
           </SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className="max-h-[calc(70vh-4rem)] px-0">
+        {/*
+          Native overflow body (not only max-h on ScrollArea root).
+          Radix ScrollArea viewport is height:100% — without a flex-constrained
+          parent it grows with content and never scrolls on Android WebView.
+        */}
+        <div className="reader-sheet__body min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
           <div className="flex flex-col gap-8 px-4 pb-8">
             {/* 1. 阅读模式 */}
             <section className="reader-settings-section">
@@ -282,7 +286,7 @@ export function SettingsSheet({
               />
             </section>
           </div>
-        </ScrollArea>
+        </div>
       </SheetContent>
     </Sheet>
   );

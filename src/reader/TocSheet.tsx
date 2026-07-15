@@ -5,7 +5,6 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -79,12 +78,12 @@ export function TocSheet({
         side={isDesktop ? "left" : "bottom"}
         className={
           isDesktop
-            ? "reader-toc-sheet reader-toc-sheet--drawer w-[min(360px,85vw)] sm:max-w-sm"
-            : "reader-toc-sheet reader-toc-sheet--bottom max-h-[90vh]"
+            ? "reader-toc-sheet reader-toc-sheet--drawer reader-sheet flex h-full w-[min(360px,85vw)] flex-col gap-0 p-0 sm:max-w-sm"
+            : "reader-toc-sheet reader-toc-sheet--bottom reader-sheet flex max-h-[min(90vh,720px)] flex-col gap-0 p-0"
         }
         showCloseButton
       >
-        <SheetHeader>
+        <SheetHeader className="reader-sheet__header shrink-0 px-4 pt-4 pb-2">
           <SheetTitle className="reader-toc-sheet__title">目录</SheetTitle>
           <SheetDescription className="sr-only">
             选择章节跳转到对应位置
@@ -99,7 +98,7 @@ export function TocSheet({
             </p>
           </div>
         ) : (
-          <ScrollArea className="reader-toc-sheet__list">
+          <div className="reader-sheet__body reader-toc-sheet__list min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 pb-4 [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
             <ul className="reader-toc-sheet__ul" role="list">
               {flat.map((item, idx) => {
                 const isActive =
@@ -131,7 +130,7 @@ export function TocSheet({
                 );
               })}
             </ul>
-          </ScrollArea>
+          </div>
         )}
       </SheetContent>
     </Sheet>

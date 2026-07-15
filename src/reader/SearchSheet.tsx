@@ -6,7 +6,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -197,17 +196,17 @@ export function SearchSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="reader-search-sheet max-h-[80vh] gap-0 p-0"
+        className="reader-search-sheet reader-sheet flex max-h-[min(85vh,720px)] flex-col gap-0 p-0"
         showCloseButton
       >
-        <SheetHeader className="px-4 pt-4 pb-2">
+        <SheetHeader className="reader-sheet__header shrink-0 px-4 pt-4 pb-2">
           <SheetTitle className="text-lg font-semibold">搜索</SheetTitle>
           <SheetDescription className="sr-only">
             在书中搜索关键词并跳转到匹配位置
           </SheetDescription>
         </SheetHeader>
 
-        <div className="reader-search-sheet__sticky px-4 pb-3">
+        <div className="reader-search-sheet__sticky reader-sheet__header shrink-0 px-4 pb-3">
           <Input
             ref={inputRef}
             value={query}
@@ -220,7 +219,7 @@ export function SearchSheet({
           />
         </div>
 
-        <ScrollArea className="max-h-[calc(80vh-8rem)] px-0">
+        <div className="reader-sheet__body min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
           {searching && hits.length === 0 ? (
             <p className="reader-search-sheet__status" role="status">
               搜索中…
@@ -263,7 +262,7 @@ export function SearchSheet({
               ))}
             </ul>
           ) : null}
-        </ScrollArea>
+        </div>
       </SheetContent>
     </Sheet>
   );

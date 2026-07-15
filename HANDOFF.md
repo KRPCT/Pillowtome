@@ -47,8 +47,10 @@ Full detail in **`docs/ANDROID-BUILD.md`**. The traps that cost real time:
 ### Three bugs Phase 1 hit — all "works on desktop ≠ correct" (context for reviewers)
 Missing CORS on `pillow://`, `BaseDirectory::Resource` unreadable inside the APK, and a hand-rolled per-platform URL that sent Android to `https://`. None were caught by unit tests — only by device/browser gates. Lesson baked into ANDROID-BUILD.md "Platform behaviours"; keep device gates for anything platform-shaped.
 
-### Phase 2 layout bug (same class)
-foliate-js paginator defaults (`max-block-size: 1440px` + equal `1fr` header/footer rows) **centered short chapters as a floating card** on tall phone viewports; we also mis-mapped UI “页边距” to foliate’s `margin` attribute (which is header/footer band height, not page padding). Fixed via `applyFoliateLayoutAttrs` + body padding in `setStyles`. **Mandatory:** any future reader UI change must pass the Android emulator gate in `docs/ANDROID-BUILD.md` § Device gate (also listed in `CLAUDE.md` Constraints).
+### Phase 2 layout / gesture bugs (same class — keep re-checking on emulator)
+1. foliate-js paginator defaults (`max-block-size: 1440px` + equal `1fr` header/footer rows) **centered short chapters as a floating card** on tall phones; UI “页边距” was mis-bound to foliate `margin` (header/footer band). Fix: `applyFoliateLayoutAttrs` + body padding.
+2. Full-screen tap overlay swallowed **all** pan gestures (scroll mode / mid-book mode switch issues). Fix: paginate overlay + swipe; scroll = top strip only; re-`goTo(cfi)` after flow change.
+3. **Settings / TOC / search sheets could not finger-scroll** — Radix `ScrollArea` with only `max-height` never constrains the `height:100%` viewport. Fix: flex sheet + native `overflow-y-auto` body (`.reader-sheet__body`). **Global rule:** see `CLAUDE.md` Touch/scroll gate + `docs/ANDROID-BUILD.md` Device gate — always re-test pan-y on emulator after sheet/scroll UI changes.
 
 ## Next: Phase 2 — EPUB Reading Core (READ-01..07)
 

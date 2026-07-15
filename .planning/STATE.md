@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 1 executed: 5/5 plans, FND-01..04 all verified. Next: code-review + verifier."
-last_updated: "2026-07-09T18:15:36.115Z"
+stopped_at: Phase 2 UI-SPEC approved
+last_updated: "2026-07-15T12:53:11.099Z"
 last_activity: 2026-07-09
 progress:
   total_phases: 7
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-09)
 
 **Core value:** 在任意一端打开书，都能以干净、舒适的中文排版稳定阅读，并与自托管（WebDAV）书库/进度状态可靠互通。
-**Current focus:** Phase 1 — Foundation & Cross-Platform Skeleton
+**Current focus:** Phase 2 — EPUB Reading Core
 
 ## Current Position
 
-Phase: 1 (Foundation & Cross-Platform Skeleton) — EXECUTING
-Plan: 4 of 5
-Status: Ready to execute
-Last activity: 2026-07-09
+Phase: 2 (EPUB Reading Core) — UI-SPEC approved; next: discuss/plan
+Plan: 0 of TBD
+Status: UI design contract approved; ready for `/gsd-discuss-phase 2` or `/gsd-plan-phase 2`
+Last activity: 2026-07-15
 
-Progress: [██████████] 100%
+Progress: [██░░░░░░░░] ~14% (Phase 1 complete)
 
 ## Performance Metrics
 
@@ -95,6 +95,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-09T18:15:36.108Z
-Stopped at: Phase 1 executed: 5/5 plans, FND-01..04 all verified. Next: code-review + verifier.
-Resume file: .planning/phases/01-foundation-cross-platform-skeleton/01-05-SUMMARY.md
+Last session: 2026-07-15T12:53:11.092Z
+Stopped at: Phase 2 UI-SPEC approved
+Resume file: .planning/phases/02-epub-reading-core/02-UI-SPEC.md

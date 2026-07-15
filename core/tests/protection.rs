@@ -59,6 +59,18 @@ fn zip_slip_entry_is_rejected() {
     assert!(matches!(detect_protection(&bytes), Err(CoreError::Corrupt)));
 }
 
+#[test]
+fn oversized_encryption_xml_soft_fails() {
+    // A decompression bomb: the entry is a few KB on disk but inflates far past the
+    // control-file cap. `zip` bounds only the compressed input, so an unbounded read
+    // would allocate the whole decompressed size — an OOM abort that no `Result` can
+    // catch. Must soft-fail like any other malformed archive (Pitfall 5).
+    let bomb = vec![b'A'; 4 * 1024 * 1024];
+    let bytes = deflated_zip(&[("META-INF/container.xml", b"<container/>"), ("META-INF/encryption.xml", &bomb)]);
+    assert!(bytes.len() < 64 * 1024, "fixture should stay small on disk");
+    assert!(matches!(detect_protection(&bytes), Err(CoreError::Corrupt)));
+}
+
 /// Build a minimal in-memory zip containing a single entry with the given name.
 fn zip_with_entry(name: &str, data: &[u8]) -> Vec<u8> {
     use std::io::Write;
@@ -69,6 +81,23 @@ fn zip_with_entry(name: &str, data: &[u8]) -> Vec<u8> {
             .compression_method(zip::CompressionMethod::Stored);
         zw.start_file(name, opts).expect("start entry");
         zw.write_all(data).expect("write entry");
+        zw.finish().expect("finish zip");
+    }
+    buf.into_inner()
+}
+
+/// Build an in-memory DEFLATE zip, so highly compressible entries stay tiny on disk.
+fn deflated_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    use std::io::Write;
+    let mut buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut zw = zip::ZipWriter::new(&mut buf);
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, data) in entries {
+            zw.start_file(*name, opts).expect("start entry");
+            zw.write_all(data).expect("write entry");
+        }
         zw.finish().expect("finish zip");
     }
     buf.into_inner()

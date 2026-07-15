@@ -86,17 +86,36 @@ pub fn detect_protection(epub_bytes: &[u8]) -> Result<Protection, CoreError> {
     }
 }
 
+/// Cap the decompressed size of the tiny control files we inspect.
+///
+/// A real `META-INF/encryption.xml` is a few hundred bytes. `zip` bounds only the
+/// *compressed* input it reads, not the decompressed output, so a small DEFLATE
+/// entry can inflate ~1000:1 into gigabytes. An allocation abort is not a
+/// `Result` — it kills the process — which would defeat this module's soft-fail
+/// contract. Anything past this cap is treated as malformed.
+const MAX_CONTROL_FILE_BYTES: u64 = 1 << 20; // 1 MiB
+
 /// Read a named archive entry into an owned `String`, or `None` if it is absent.
 /// Returning an owned value releases the archive borrow at the call site.
+///
+/// The read is bounded by [`MAX_CONTROL_FILE_BYTES`]; an oversized (or non-UTF-8)
+/// entry soft-fails as [`CoreError::Corrupt`] rather than exhausting memory.
 fn read_entry<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     name: &str,
 ) -> Result<Option<String>, CoreError> {
     match zip.by_name(name) {
         Err(_) => Ok(None),
-        Ok(mut f) => {
+        Ok(f) => {
             let mut s = String::new();
-            f.read_to_string(&mut s).map_err(|_| CoreError::Corrupt)?;
+            // Read one byte past the cap so an exactly-at-cap file still passes
+            // while anything larger is detectable without allocating it.
+            f.take(MAX_CONTROL_FILE_BYTES + 1)
+                .read_to_string(&mut s)
+                .map_err(|_| CoreError::Corrupt)?;
+            if s.len() as u64 > MAX_CONTROL_FILE_BYTES {
+                return Err(CoreError::Corrupt);
+            }
             Ok(Some(s))
         }
     }
@@ -133,21 +152,52 @@ fn classify_encryption(xml: &str) -> Protection {
     }
 }
 
-/// Collect every `key="value"` attribute value for `key` via a small, dependency-
+/// Collect every `key=value` attribute value for `key` via a small, dependency-
 /// free scan (we deliberately add no XML parser to keep the crate lean and the
 /// supply-chain surface minimal — the markers we read are simple attributes).
+///
+/// XML permits either quote character as the delimiter and whitespace around
+/// `=`. An earlier version only matched `key="`, so a spec-valid
+/// font-obfuscation `encryption.xml` written with single quotes produced no
+/// algorithms, fell through to [`Protection::Unknown`], and a perfectly readable
+/// book was refused — a D-10 violation. Attribute-name boundaries are checked so
+/// `Algorithm` does not match inside `FooAlgorithm`.
 fn attr_values(xml: &str, key: &str) -> Vec<String> {
-    let needle = format!("{key}=\"");
+    let bytes = xml.as_bytes();
     let mut out = Vec::new();
-    let mut rest = xml;
-    while let Some(start) = rest.find(&needle) {
-        let after = &rest[start + needle.len()..];
-        if let Some(end) = after.find('"') {
-            out.push(after[..end].to_string());
-            rest = &after[end + 1..];
-        } else {
-            break;
+    let mut i = 0;
+
+    while let Some(rel) = xml[i..].find(key) {
+        let start = i + rel;
+        i = start + key.len();
+
+        let name_char = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b':' | b'.');
+        if start > 0 && name_char(bytes[start - 1]) {
+            continue; // matched inside a longer attribute name
         }
+
+        let mut j = i;
+        while bytes.get(j).is_some_and(|b| b.is_ascii_whitespace()) {
+            j += 1;
+        }
+        if bytes.get(j) != Some(&b'=') {
+            continue;
+        }
+        j += 1;
+        while bytes.get(j).is_some_and(|b| b.is_ascii_whitespace()) {
+            j += 1;
+        }
+
+        let quote = match bytes.get(j) {
+            Some(&q @ (b'"' | b'\'')) => q as char,
+            _ => continue,
+        };
+        j += 1;
+        let Some(end) = xml[j..].find(quote) else {
+            break; // unterminated attribute value
+        };
+        out.push(xml[j..j + end].to_string());
+        i = j + end + 1;
     }
     out
 }
@@ -207,5 +257,25 @@ mod tests {
     #[test]
     fn empty_encryption_is_unknown() {
         assert_eq!(classify_encryption("<encryption/>"), Protection::Unknown);
+    }
+
+    #[test]
+    fn single_quoted_and_spaced_attrs_parse() {
+        // XML permits either quote char and whitespace around '='. Matching only
+        // `key="` refused spec-valid font-obfuscation books (D-10 violation).
+        let xml = r#"<encryption><EncryptionMethod Algorithm = 'http://www.idpf.org/2008/embedding'/>
+            <CipherReference URI='OEBPS/fonts/x.ttf'/></encryption>"#;
+        assert_eq!(classify_encryption(xml), Protection::FontObfuscationOnly);
+    }
+
+    #[test]
+    fn attr_name_boundary_is_respected() {
+        assert!(attr_values(r#"<M FooAlgorithm="x"/>"#, "Algorithm").is_empty());
+        assert_eq!(attr_values(r#"<M Algorithm="x"/>"#, "Algorithm"), ["x"]);
+    }
+
+    #[test]
+    fn unterminated_attr_does_not_hang() {
+        assert!(attr_values(r#"<M Algorithm="oops"#, "Algorithm").is_empty());
     }
 }

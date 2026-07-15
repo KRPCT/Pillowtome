@@ -31,7 +31,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": ["assets/sample/*"],
     "android": {
       "minSdkVersion": 26
     },

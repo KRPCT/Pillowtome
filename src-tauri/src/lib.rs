@@ -6,6 +6,7 @@
 //! resolves the moment Plan 04 drops the file.
 
 pub mod commands;
+pub mod fonts;
 pub mod migrations;
 pub mod protocol;
 pub mod storage;
@@ -87,6 +88,16 @@ pub fn run() {
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
 
+            // Custom fonts: `pillow://…/fonts/{id}` confined under app_data/fonts
+            // (D-30 / T-02-path). Not SourceRegistry — separate allowlist.
+            if let Some(font_id) = protocol::parse_font_path(&path) {
+                let fonts_dir = fonts::fonts_dir(app).ok();
+                let response =
+                    protocol::serve_font(fonts_dir.as_deref(), &font_id, range.as_deref());
+                responder.respond(response);
+                return;
+            }
+
             #[cfg(target_os = "android")]
             {
                 use pillowtome_core::source::BookSource;
@@ -102,14 +113,17 @@ pub fn run() {
             let response = protocol::serve(&registry, &path, range.as_deref());
             responder.respond(response);
         })
-        // Small structured IPC only (D-06): DRM verdict, import id/name, the
-        // imported-books list, and the platform flag. Never book bytes.
+        // Small structured IPC only (D-06): DRM verdict, import id/name, font
+        // metadata, the imported-books list, and the platform flag. Never book
+        // or font file bytes (T-02-ipc).
         .invoke_handler(tauri::generate_handler![
             commands::check_protection,
             commands::ensure_work,
             commands::import,
             commands::imported_books,
             commands::is_android,
+            fonts::import_font,
+            fonts::remove_font,
         ])
         .setup(|app| {
             // Materialize the embedded sample to a real filesystem path and

@@ -409,6 +409,17 @@ foliate-view {
   gap: 4px;
 }
 
+.reader-font-list__row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.reader-font-list__row .reader-font-list__item {
+  flex: 1;
+  min-width: 0;
+}
+
 .reader-font-list__item {
   display: block;
   width: 100%;
@@ -435,6 +446,29 @@ foliate-view {
   border-color: var(--reader-accent, #8b6914);
   color: var(--reader-accent, #8b6914);
   box-shadow: inset 2px 0 0 var(--reader-accent, #8b6914);
+}
+
+.reader-font-list__remove {
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--reader-muted, #6b6458);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reader-font-list__remove:hover {
+  color: var(--reader-fg, #1c1915);
+  background: color-mix(
+    in srgb,
+    var(--reader-chrome, #efe8db) 70%,
+    var(--reader-fg, #1c1915) 6%
+  );
 }
 
 /* --- DRM/damaged error card (D-10) --- */

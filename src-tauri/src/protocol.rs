@@ -15,6 +15,7 @@ use std::io::{Read, Seek, SeekFrom};
 use pillowtome_core::source::BookSource;
 use tauri::http::{header, HeaderValue, Response, StatusCode};
 
+use crate::fonts::{font_content_type, resolve_font_path};
 use crate::storage::{sanitize_id, SourceRegistry};
 
 /// Cap each served range at 1 MiB, matching `examples/streaming` upstream.
@@ -115,11 +116,80 @@ pub fn parse_range(header: Option<&str>, total_len: u64) -> RangeResolution {
     RangeResolution::Partial { start, end, total: total_len }
 }
 
+/// Parse a fonts path: `/fonts/{id}` or `fonts/{id}` → font id (D-30 / T-02-path).
+///
+/// Rejects nested paths, empty ids, and anything that is not exactly one segment
+/// under `fonts/`. Does **not** resolve the file — only extracts the id token.
+pub fn parse_font_path(raw_path: &str) -> Option<String> {
+    let path = raw_path.trim_start_matches('/');
+    let rest = path.strip_prefix("fonts/")?;
+    // Exactly one segment; reject `fonts/`, `fonts/a/b`, separators, `..`.
+    if rest.is_empty() || rest.contains('/') || rest.contains('\\') || rest.contains("..") {
+        return None;
+    }
+    // Strip accidental extension in the URL (`fonts/{id}.ttf`) — id is stem only.
+    let id = rest.split('.').next().unwrap_or(rest);
+    if id.is_empty() || id.contains("..") {
+        return None;
+    }
+    Some(id.to_string())
+}
+
+/// Serve a custom font from `app_data_dir/fonts` only (D-30, T-02-path).
+///
+/// Does **not** use [`SourceRegistry`]. Path is confined via
+/// [`resolve_font_path`] (canonicalize under fonts_dir). CORS + font Content-Type.
+pub fn serve_font(
+    fonts_dir: Option<&std::path::Path>,
+    font_id: &str,
+    range_header: Option<&str>,
+) -> Response<Vec<u8>> {
+    let Some(dir) = fonts_dir else {
+        return status_only(StatusCode::NOT_FOUND);
+    };
+    let Some(path) = resolve_font_path(dir, font_id) else {
+        return status_only(StatusCode::NOT_FOUND);
+    };
+    let Ok(mut file) = File::open(&path) else {
+        return status_only(StatusCode::NOT_FOUND);
+    };
+    let total_len = match file.metadata() {
+        Ok(m) => m.len(),
+        Err(_) => return status_only(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    let ctype = font_content_type(ext);
+
+    cors(match parse_range(range_header, total_len) {
+        RangeResolution::Full { len } => {
+            let mut buf = Vec::with_capacity(len as usize);
+            if file.read_to_end(&mut buf).is_err() {
+                return status_only(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            full_response_typed(buf, ctype)
+        }
+        RangeResolution::Partial { start, end, total } => {
+            let count = end - start + 1;
+            let mut buf = vec![0u8; count as usize];
+            if file.seek(SeekFrom::Start(start)).is_err() || file.read_exact(&mut buf).is_err() {
+                return status_only(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            partial_response_typed(buf, start, end, total, ctype)
+        }
+        RangeResolution::Unsatisfiable { total } => unsatisfiable_response(total),
+    })
+}
+
 /// Build the HTTP response for `raw_path` given an optional `Range` header,
 /// reading only the requested slice from disk.
 ///
 /// Resolves ids **only** through `registry` (never a caller-supplied path) — the
 /// scope guard for threat T-01-01. Unknown ids and rejected paths return `404`.
+///
+/// Font requests (`/fonts/{id}`) are handled separately by [`serve_font`].
 pub fn serve(
     registry: &SourceRegistry,
     raw_path: &str,
@@ -197,10 +267,14 @@ pub fn serve_content_uri<R: tauri::Runtime>(
 }
 
 fn full_response(body: Vec<u8>) -> Response<Vec<u8>> {
+    full_response_typed(body, "application/octet-stream")
+}
+
+fn full_response_typed(body: Vec<u8>, content_type: &str) -> Response<Vec<u8>> {
     let len = body.len() as u64;
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CONTENT_TYPE, content_type)
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CONTENT_LENGTH, len)
         .body(body)
@@ -208,10 +282,20 @@ fn full_response(body: Vec<u8>) -> Response<Vec<u8>> {
 }
 
 fn partial_response(body: Vec<u8>, start: u64, end: u64, total: u64) -> Response<Vec<u8>> {
+    partial_response_typed(body, start, end, total, "application/octet-stream")
+}
+
+fn partial_response_typed(
+    body: Vec<u8>,
+    start: u64,
+    end: u64,
+    total: u64,
+    content_type: &str,
+) -> Response<Vec<u8>> {
     let count = end - start + 1;
     Response::builder()
         .status(StatusCode::PARTIAL_CONTENT)
-        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CONTENT_TYPE, content_type)
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CONTENT_RANGE, format!("bytes {start}-{end}/{total}"))
         .header(header::CONTENT_LENGTH, count)
@@ -265,5 +349,33 @@ mod tests {
 
         let unsat = serve_bytes(data, Some("bytes=500-600"));
         assert_eq!(unsat.status().as_u16(), 416);
+    }
+
+    #[test]
+    fn parse_font_path_accepts_flat_id() {
+        assert_eq!(parse_font_path("/fonts/fabc"), Some("fabc".into()));
+        assert_eq!(parse_font_path("fonts/fabc"), Some("fabc".into()));
+        assert_eq!(parse_font_path("/fonts/fabc.ttf"), Some("fabc".into()));
+    }
+
+    #[test]
+    fn parse_font_path_rejects_traversal() {
+        assert_eq!(parse_font_path("/fonts/../etc"), None);
+        assert_eq!(parse_font_path("/fonts/a/b"), None);
+        assert_eq!(parse_font_path("/fonts/"), None);
+        assert_eq!(parse_font_path("/sample"), None);
+        assert_eq!(parse_font_path("/fonts/a\\b"), None);
+    }
+
+    #[test]
+    fn serve_font_missing_is_404_with_cors() {
+        let resp = serve_font(None, "missing", None);
+        assert_eq!(resp.status().as_u16(), 404);
+        assert_eq!(
+            resp.headers()
+                .get("access-control-allow-origin")
+                .and_then(|v| v.to_str().ok()),
+            Some("*")
+        );
     }
 }

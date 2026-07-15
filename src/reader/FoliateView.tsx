@@ -9,7 +9,6 @@ import { SettingsSheet } from "./SettingsSheet";
 import { TocSheet, normalizeToc } from "./TocSheet";
 import {
   DEFAULT_PREFS,
-  SYSTEM_CJK_STACK,
   buildReadingCss,
   flowAttr,
   type ReadingPrefs,
@@ -26,6 +25,14 @@ import {
   relocateToLocatorRow,
   upsertLocator,
 } from "./locator-store";
+import {
+  buildFontFaceCss,
+  fontFamilyCssFor,
+  importCustomFont,
+  listCustomFonts,
+  removeCustomFont,
+  type CustomFont,
+} from "./fonts";
 import type {
   FoliateViewElement,
   RelocateDetail,
@@ -68,15 +75,6 @@ export interface FoliateViewProps {
 
 type Status = "loading" | "reading" | "error";
 
-/** Resolve body font CSS for setStyles (custom faces land in 02-04). */
-function fontFamilyCssFor(prefs: ReadingPrefs): string {
-  // Until 02-04, only system CJK stack is available.
-  if (prefs.fontFamilyKey === "system" || !prefs.activeFontId) {
-    return SYSTEM_CJK_STACK;
-  }
-  return SYSTEM_CJK_STACK;
-}
-
 export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<FoliateViewElement | null>(null);
@@ -101,13 +99,15 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   const [fxlLocked, setFxlLocked] = useState(false);
   const [bookTitle, setBookTitle] = useState("示例书籍");
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
+  const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
+  const [fontStatus, setFontStatus] = useState<string | null>(null);
 
   prefsRef.current = prefs;
   locationRef.current = location;
 
   const anySheetOpen = settingsOpen || tocOpen;
 
-  /** Apply flow + margin + setStyles to the live renderer (READ-01/02/03). */
+  /** Apply flow + margin + setStyles to the live renderer (READ-01/02/03/06). */
   const applyPrefsToRenderer = useCallback((next: ReadingPrefs) => {
     const renderer = viewRef.current?.renderer;
     if (!renderer) return;
@@ -117,10 +117,9 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
 
     renderer.setAttribute?.("flow", flowAttr(next.mode));
     renderer.setAttribute?.("margin", String(next.marginPx));
-    const fontFaceCss = ""; // 02-04
-    renderer.setStyles?.(
-      buildReadingCss(next, fontFaceCss, fontFamilyCssFor(next)),
-    );
+    const fontFaceCss = buildFontFaceCss(next.activeFontId);
+    const familyCss = fontFamilyCssFor(next.fontFamilyKey, next.activeFontId);
+    renderer.setStyles?.(buildReadingCss(next, fontFaceCss, familyCss));
   }, []);
 
   const scheduleSave = useCallback((next: ReadingPrefs) => {
@@ -170,6 +169,61 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
       scheduleSave(next);
     },
     [applyPrefsToRenderer, scheduleSave],
+  );
+
+  const refreshFonts = useCallback(async () => {
+    try {
+      setCustomFonts(await listCustomFonts());
+    } catch (err) {
+      console.warn("[FoliateView] list fonts failed", err);
+    }
+  }, []);
+
+  const handleImportFont = useCallback(async () => {
+    setFontStatus(null);
+    try {
+      const font = await importCustomFont();
+      await refreshFonts();
+      setFontStatus(`已导入「${font.familyName}」`);
+    } catch (err) {
+      const msg = String(err);
+      if (msg.includes("已取消")) return;
+      // Surface server-side limit / validation messages when present.
+      const clean = msg
+        .replace(/^Error:\s*/i, "")
+        .replace(/^.*error:\s*/i, "")
+        .trim();
+      setFontStatus(
+        clean && clean.length < 80
+          ? clean
+          : "导入失败，请确认格式为 TTF / OTF / WOFF 且未超限。",
+      );
+    }
+  }, [refreshFonts]);
+
+  const handleRemoveFont = useCallback(
+    async (fontId: string, familyName: string) => {
+      const ok = window.confirm(
+        `确认移除「${familyName}」？此操作不会删除设备上的原文件。`,
+      );
+      if (!ok) return;
+      try {
+        await removeCustomFont(fontId);
+        await refreshFonts();
+        setFontStatus(null);
+        // If removed font was active → fall back to system (D-29).
+        if (prefsRef.current.activeFontId === fontId) {
+          handlePrefsChange({
+            fontFamilyKey: "system",
+            activeFontId: null,
+          });
+        }
+      } catch (err) {
+        console.warn("[FoliateView] remove font failed", err);
+        setFontStatus("移除字体失败，请重试。");
+      }
+    },
+    [handlePrefsChange, refreshFonts],
   );
 
   const handleTapAction = useCallback((action: TapZoneAction) => {
@@ -266,8 +320,9 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
 
     async function load() {
       try {
-        // Prefs load in parallel with DRM/open (D-20). Fail-soft → defaults.
+        // Prefs + fonts load in parallel with DRM/open (D-20). Fail-soft → defaults.
         const prefsPromise = loadReadingPrefs();
+        const fontsPromise = listCustomFonts();
 
         // DRM/damage gate — classify before any book bytes (D-10).
         const decision = await invoke<ProtectionDecision>("check_protection", {
@@ -317,11 +372,13 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         setFxlLocked(Boolean(isFxl));
 
         const loaded = await prefsPromise;
+        const fonts = await fontsPromise;
         if (cancelled) return;
         setPrefs(loaded);
         prefsRef.current = loaded;
+        setCustomFonts(fonts);
 
-        // Live flow + typography + theme from prefs (READ-01/02/03).
+        // Live flow + typography + theme + custom face from prefs (READ-01/02/03/06).
         if (!isFxl) {
           view.renderer?.setAttribute?.("flow", flowAttr(loaded.mode));
           view.renderer?.setAttribute?.(
@@ -329,7 +386,11 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
             String(loaded.marginPx),
           );
           view.renderer?.setStyles?.(
-            buildReadingCss(loaded, "", fontFamilyCssFor(loaded)),
+            buildReadingCss(
+              loaded,
+              buildFontFaceCss(loaded.activeFontId),
+              fontFamilyCssFor(loaded.fontFamilyKey, loaded.activeFontId),
+            ),
           );
         }
 
@@ -479,8 +540,17 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         prefs={prefs}
         onPrefsChange={handlePrefsChange}
         modeLocked={fxlLocked || status !== "reading"}
-        fonts={[]}
-        /* onImportFont omitted → disabled stub until 02-04 */
+        fonts={customFonts.map((f) => ({
+          id: f.id,
+          familyName: f.familyName,
+        }))}
+        onImportFont={() => {
+          void handleImportFont();
+        }}
+        onRemoveFont={(fontId, familyName) => {
+          void handleRemoveFont(fontId, familyName);
+        }}
+        fontStatus={fontStatus}
       />
 
       <TocSheet

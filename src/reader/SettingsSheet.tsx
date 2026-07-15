@@ -33,6 +33,9 @@ export interface SettingsSheetProps {
   modeLocked?: boolean;
   fonts?: CustomFontListItem[];
   onImportFont?: () => void;
+  onRemoveFont?: (id: string, familyName: string) => void;
+  /** Inline caption under font list (import success / limit). */
+  fontStatus?: string | null;
 }
 
 function formatLineHeight(v: number): string {
@@ -48,6 +51,8 @@ export function SettingsSheet({
   modeLocked = false,
   fonts = [],
   onImportFont,
+  onRemoveFont,
+  fontStatus = null,
 }: SettingsSheetProps) {
   const selectedFont =
     prefs.fontFamilyKey === "system" || !prefs.activeFontId
@@ -154,7 +159,7 @@ export function SettingsSheet({
                   </button>
                 </li>
                 {fonts.map((f) => (
-                  <li key={f.id}>
+                  <li key={f.id} className="reader-font-list__row">
                     <button
                       type="button"
                       role="option"
@@ -173,6 +178,19 @@ export function SettingsSheet({
                     >
                       {f.familyName}
                     </button>
+                    {onRemoveFont ? (
+                      <button
+                        type="button"
+                        className="reader-font-list__remove"
+                        aria-label={`移除字体 ${f.familyName}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveFont(f.id, f.familyName);
+                        }}
+                      >
+                        移除
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -186,6 +204,11 @@ export function SettingsSheet({
                 导入字体
               </Button>
               <p className="reader-settings-section__hint">仅支持 TTF、OTF、WOFF</p>
+              {fontStatus ? (
+                <p className="reader-settings-section__hint" role="status">
+                  {fontStatus}
+                </p>
+              ) : null}
             </section>
 
             <Separator />

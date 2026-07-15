@@ -47,6 +47,9 @@ Full detail in **`docs/ANDROID-BUILD.md`**. The traps that cost real time:
 ### Three bugs Phase 1 hit — all "works on desktop ≠ correct" (context for reviewers)
 Missing CORS on `pillow://`, `BaseDirectory::Resource` unreadable inside the APK, and a hand-rolled per-platform URL that sent Android to `https://`. None were caught by unit tests — only by device/browser gates. Lesson baked into ANDROID-BUILD.md "Platform behaviours"; keep device gates for anything platform-shaped.
 
+### Phase 2 layout bug (same class)
+foliate-js paginator defaults (`max-block-size: 1440px` + equal `1fr` header/footer rows) **centered short chapters as a floating card** on tall phone viewports; we also mis-mapped UI “页边距” to foliate’s `margin` attribute (which is header/footer band height, not page padding). Fixed via `applyFoliateLayoutAttrs` + body padding in `setStyles`. **Mandatory:** any future reader UI change must pass the Android emulator gate in `docs/ANDROID-BUILD.md` § Device gate (also listed in `CLAUDE.md` Constraints).
+
 ## Next: Phase 2 — EPUB Reading Core (READ-01..07)
 
 Immersive themeable reading: pagination↔scroll, font/size/line-height/margins, day/night/sepia, TOC nav, in-book search (CJK-aware), custom fonts. Builds on the proven `pillow://`→foliate-js slice.

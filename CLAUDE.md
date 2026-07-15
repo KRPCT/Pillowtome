@@ -17,6 +17,7 @@
 - **Architecture**：多格式 + 同步从设计日起纳入边界，避免 Lithium 式后期硬拆
 - **Tech stack**：待研究锁定；优先可维护的跨端方案，避免无必要的双写 UI
 - **License**：待定（若借鉴 AGPL 组件如 foliate-js 周边需审许可证传染面）
+- **Android emulator gate (mandatory)**：任何改动阅读壳层 / `pillow://` / 导入 / 主题 / 排版 / 字体 / 搜索 / 协议的任务，在声称完成前 **必须** 在 AVD `Medium_Phone_API_36.1`（或物理机）上跑通 `pnpm tauri android dev` 并人工/截图验收。桌面绿 + unit 绿 **不等于** Android 正确（Phase 1/2 已多次踩坑：CORS、Resource/APK、symlink、foliate 分页器在高屏上居中成「悬浮卡片」）。详见 `docs/ANDROID-BUILD.md` § Device gate。
 
 <!-- GSD:project-end -->
 

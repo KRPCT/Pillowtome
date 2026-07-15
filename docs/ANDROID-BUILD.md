@@ -124,6 +124,47 @@ gen/android/gradlew --stop
 
 ---
 
+## Device gate (mandatory for agents)
+
+**Desktop green + unit tests green ≠ Android correct.** Phase 1 and Phase 2 both shipped bugs that only
+showed on the emulator (CORS, APK resource paths, hand-rolled `pillow://` URLs, Windows symlink
+denial, foliate-js paginator centering short pages as a floating card on tall screens).
+
+### When the gate applies
+
+Any change that touches:
+
+- `src/reader/**` (chrome, themes, typography, TOC, search, fonts, immersive)
+- `src/lib/pillow.ts` or `pillow://` protocol / CSP
+- Import / SAF / storage-handle paths
+- Anything that ships UI or book bytes to the WebView
+
+**must** complete this checklist before claiming done:
+
+1. AVD `Medium_Phone_API_36.1` running (`adb devices` shows `device`).
+2. `pnpm tauri android dev` installs and launches `com.pillowtome.app` (on Windows: **Developer Mode
+   ON** or run elevated so `jniLibs` symlinks work — trap 1).
+3. Manual or screenshot review of the affected surface (open sample EPUB is the minimum).
+4. Note any residual device-only risk in the plan SUMMARY / VERIFICATION.
+
+Skip only pure-Rust `core/` unit-test-only changes with no UI/protocol surface.
+
+### Quick start (this machine)
+
+```bash
+export ANDROID_HOME="/c/Users/Administrator/AppData/Local/Android/Sdk"
+export NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
+export JAVA_HOME="D:/JDK/JDK21"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+
+"$ANDROID_HOME/emulator/emulator" -avd Medium_Phone_API_36.1 &
+adb wait-for-device
+# Windows without permanent Developer Mode: elevate the shell, then:
+pnpm tauri android dev
+```
+
+Capture a screenshot: `adb exec-out screencap -p > pillowtome-android-review.png`
+
 ## Platform behaviours worth remembering
 
 These are not bugs to fix; they are properties of the platform that the code now accounts for.
@@ -139,6 +180,9 @@ These are not bugs to fix; they are properties of the platform that the code now
 - **The WebView never shares an origin with a custom protocol**, in dev (Vite dev server) or in release
   (`tauri.localhost`). Custom-protocol responses must carry `Access-Control-Allow-Origin`, or `fetch`
   fails before the response status is observable.
+- **foliate-js `margin` is header/footer band height (`px`), not page padding.** Page insets belong in
+  `setStyles` body CSS. Default `max-block-size: 1440px` centers short content on tall phones — set
+  `max-block-size` to the host height (see `applyFoliateLayoutAttrs`).
 
 ## Windows desktop note (not Android-specific)
 

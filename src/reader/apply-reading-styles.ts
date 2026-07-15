@@ -50,10 +50,44 @@ export function flowAttr(mode: ReadingMode): "paginated" | "scrolled" {
 }
 
 /**
+ * Foliate-js `margin` attribute is the **header/footer band height** (px),
+ * not page padding. We keep it at 0 so short chapters don't float between
+ * empty marginal rows. Page insets come from `buildReadingCss` body padding.
+ *
+ * `max-block-size` defaults to 1440px inside foliate — on tall phones that
+ * caps the content row and the remaining height is split as equal `1fr`
+ * rows above/below, producing a centered "card" (Android emulator bug).
+ * Pass the host height (or a large floor) so the content row fills the view.
+ */
+export const FOLIATE_MARGIN_ATTR = "0px";
+
+/** Floor when host height is not measurable yet. */
+export const FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX = 10000;
+
+/**
+ * Apply foliate layout attributes that control paginator grid geometry.
+ * Call after open and whenever the host resizes / prefs change.
+ */
+export function applyFoliateLayoutAttrs(
+  renderer: {
+    setAttribute?: (name: string, value: string) => void;
+  } | null | undefined,
+  hostHeightPx?: number | null,
+): void {
+  if (!renderer?.setAttribute) return;
+  renderer.setAttribute("margin", FOLIATE_MARGIN_ATTR);
+  const h =
+    hostHeightPx != null && Number.isFinite(hostHeightPx) && hostHeightPx > 0
+      ? Math.ceil(hostHeightPx)
+      : FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX;
+  renderer.setAttribute("max-block-size", `${h}px`);
+}
+
+/**
  * Build CSS for `renderer.setStyles(...)`.
  *
- * Page margins are **not** body padding here — apply via
- * `renderer.setAttribute("margin", String(prefs.marginPx))` (Pattern 1).
+ * Page margins use body padding (`prefs.marginPx`). Do **not** map this to
+ * foliate's `margin` attribute — that attribute is header/footer band height.
  */
 export function buildReadingCss(
   prefs: ReadingPrefs,
@@ -61,6 +95,7 @@ export function buildReadingCss(
   fontFamilyCss: string,
 ): string {
   const colors = PAGE_COLORS[prefs.theme];
+  const m = prefs.marginPx;
   return `
     ${fontFaceCss}
     html {
@@ -71,6 +106,9 @@ export function buildReadingCss(
       font-family: ${fontFamilyCss};
       font-size: ${prefs.fontSizePx}px;
       line-height: ${prefs.lineHeight};
+      padding: ${m}px !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
     }
     p, li, blockquote, dd {
       line-height: ${prefs.lineHeight};

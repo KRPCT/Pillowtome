@@ -10,6 +10,7 @@ import { SearchSheet } from "./SearchSheet";
 import { TocSheet, normalizeToc } from "./TocSheet";
 import {
   DEFAULT_PREFS,
+  applyFoliateLayoutAttrs,
   buildReadingCss,
   flowAttr,
   type ReadingPrefs,
@@ -109,7 +110,7 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
 
   const anySheetOpen = settingsOpen || tocOpen || searchOpen;
 
-  /** Apply flow + margin + setStyles to the live renderer (READ-01/02/03/06). */
+  /** Apply flow + layout attrs + setStyles to the live renderer (READ-01/02/03/06). */
   const applyPrefsToRenderer = useCallback((next: ReadingPrefs) => {
     const renderer = viewRef.current?.renderer;
     if (!renderer) return;
@@ -118,7 +119,8 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
     if (fxlRef.current) return;
 
     renderer.setAttribute?.("flow", flowAttr(next.mode));
-    renderer.setAttribute?.("margin", String(next.marginPx));
+    // margin attr = header/footer band (not page padding); max-block-size fills tall screens.
+    applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
     const fontFaceCss = buildFontFaceCss(next.activeFontId);
     const familyCss = fontFamilyCssFor(next.fontFamilyKey, next.activeFontId);
     renderer.setStyles?.(buildReadingCss(next, fontFaceCss, familyCss));
@@ -278,6 +280,27 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
     }
   }, []);
 
+  // Keep max-block-size in sync with host height so short pages don't float on tall screens.
+  useEffect(() => {
+    if (status !== "reading" || fxlRef.current) return;
+    const host = hostRef.current;
+    const renderer = viewRef.current?.renderer;
+    if (!host || !renderer) return;
+
+    const sync = () => {
+      applyFoliateLayoutAttrs(renderer, host.clientHeight);
+    };
+    sync();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", sync);
+      return () => window.removeEventListener("resize", sync);
+    }
+    const ro = new ResizeObserver(() => sync());
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [status, prefs.mode]);
+
   // Desktop keyboard: arrows/PageUp/Down page; Esc closes sheet; / Ctrl+F search (D-33).
   useEffect(() => {
     if (status !== "reading") return;
@@ -412,13 +435,11 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         prefsRef.current = loaded;
         setCustomFonts(fonts);
 
-        // Live flow + typography + theme + custom face from prefs (READ-01/02/03/06).
+        // Live flow + layout + typography + theme + custom face (READ-01/02/03/06).
+        // Page margins via setStyles body padding; foliate margin attr is header band only.
         if (!isFxl) {
           view.renderer?.setAttribute?.("flow", flowAttr(loaded.mode));
-          view.renderer?.setAttribute?.(
-            "margin",
-            String(loaded.marginPx),
-          );
+          applyFoliateLayoutAttrs(view.renderer, host.clientHeight);
           view.renderer?.setStyles?.(
             buildReadingCss(
               loaded,

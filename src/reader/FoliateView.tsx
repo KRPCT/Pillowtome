@@ -4,7 +4,9 @@ import "../vendor/foliate-js/view.js";
 import { pillowUrl } from "../lib/pillow";
 import { ErrorCard } from "./error-card";
 import { ReaderChrome } from "./ReaderChrome";
+import { ReaderTapZones, type TapZoneAction } from "./ReaderTapZones";
 import { SettingsSheet } from "./SettingsSheet";
+import { TocSheet, normalizeToc } from "./TocSheet";
 import {
   DEFAULT_PREFS,
   SYSTEM_CJK_STACK,
@@ -17,13 +19,21 @@ import {
   loadReadingPrefs,
   saveReadingPrefs,
 } from "./reading-prefs";
+import {
+  LOCATOR_DEBOUNCE_MS,
+  ensureWorkRow,
+  loadLocator,
+  relocateToLocatorRow,
+  upsertLocator,
+} from "./locator-store";
 import type {
   FoliateViewElement,
   RelocateDetail,
 } from "./foliate-types";
+import type { TocItem } from "./toc";
 
 /**
- * foliate-js 阅读视图 + UI-SPEC chrome + typography/theme prefs (READ-01/02/03).
+ * foliate-js 阅读视图 + immersive chrome + TOC + locator progress (READ-01..05).
  *
  * Constraints:
  * - Book bytes only via `fetch(pillow://...)` — never IPC (D-06).
@@ -31,6 +41,9 @@ import type {
  * - Flow via `renderer.setAttribute("flow", flowAttr(mode))`.
  * - Typography/theme via `setStyles` + `margin` attribute + `data-theme` (D-22).
  * - Prefs: SQLite global only — never localStorage (D-20).
+ * - Locator: CFI + fraction + text; debounced relocate + unmount flush (D-23..25).
+ * - work_id via ensure_work (hash only over IPC, D-26).
+ * - Immersive default + tap zones + desktop keys (READ-04, D-33).
  * - Clean-room chrome from UI-SPEC; no Readest AGPL (T-02-agpl / DEC-001).
  */
 
@@ -38,6 +51,12 @@ import type {
 interface ProtectionDecision {
   canRender: boolean;
   message?: string;
+}
+
+/** `ensure_work` result — workId + contentHash only, never bytes (D-06). */
+interface EnsureWorkResult {
+  workId: string;
+  contentHash: string;
 }
 
 export interface FoliateViewProps {
@@ -63,18 +82,30 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
   const viewRef = useRef<FoliateViewElement | null>(null);
   const fxlRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const locatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefsRef = useRef<ReadingPrefs>(DEFAULT_PREFS);
+  const workIdRef = useRef<string | null>(null);
+  const pendingLocatorRef = useRef<ReturnType<typeof relocateToLocatorRow> | null>(
+    null,
+  );
+  const locationRef = useRef<RelocateDetail | null>(null);
 
   const [status, setStatus] = useState<Status>("loading");
   const [message, setMessage] = useState<string>("");
   const [location, setLocation] = useState<RelocateDetail | null>(null);
   const [prefs, setPrefs] = useState<ReadingPrefs>(DEFAULT_PREFS);
-  const [chromeVisible] = useState(true);
+  // Immersive default when reading (READ-04); starts true only during load chrome.
+  const [chromeVisible, setChromeVisible] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [tocOpen, setTocOpen] = useState(false);
   const [fxlLocked, setFxlLocked] = useState(false);
   const [bookTitle, setBookTitle] = useState("示例书籍");
+  const [tocItems, setTocItems] = useState<TocItem[]>([]);
 
   prefsRef.current = prefs;
+  locationRef.current = location;
+
+  const anySheetOpen = settingsOpen || tocOpen;
 
   /** Apply flow + margin + setStyles to the live renderer (READ-01/02/03). */
   const applyPrefsToRenderer = useCallback((next: ReadingPrefs) => {
@@ -101,6 +132,36 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
     }, PREFS_SAVE_DEBOUNCE_MS);
   }, []);
 
+  const flushLocator = useCallback(async () => {
+    if (locatorTimerRef.current) {
+      clearTimeout(locatorTimerRef.current);
+      locatorTimerRef.current = null;
+    }
+    const pending = pendingLocatorRef.current;
+    if (!pending) return;
+    pendingLocatorRef.current = null;
+    try {
+      await upsertLocator(pending);
+    } catch (err) {
+      console.warn("[FoliateView] locator flush failed", err);
+    }
+  }, []);
+
+  const scheduleLocatorUpsert = useCallback(
+    (detail: RelocateDetail) => {
+      const workId = workIdRef.current;
+      if (!workId) return;
+      const row = relocateToLocatorRow(workId, detail);
+      pendingLocatorRef.current = row;
+      if (locatorTimerRef.current) clearTimeout(locatorTimerRef.current);
+      locatorTimerRef.current = setTimeout(() => {
+        locatorTimerRef.current = null;
+        void flushLocator();
+      }, LOCATOR_DEBOUNCE_MS);
+    },
+    [flushLocator],
+  );
+
   const handlePrefsChange = useCallback(
     (partial: Partial<ReadingPrefs> | ReadingPrefs) => {
       const next: ReadingPrefs = { ...prefsRef.current, ...partial };
@@ -110,6 +171,94 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
     },
     [applyPrefsToRenderer, scheduleSave],
   );
+
+  const handleTapAction = useCallback((action: TapZoneAction) => {
+    const view = viewRef.current;
+    if (action === "toggle-chrome") {
+      setChromeVisible((v) => !v);
+      return;
+    }
+    if (!view) return;
+    if (action === "prev") {
+      void view.goLeft?.().catch(() => {
+        void view.renderer?.prev?.();
+      });
+    } else if (action === "next") {
+      void view.goRight?.().catch(() => {
+        void view.renderer?.next?.();
+      });
+    }
+  }, []);
+
+  const handleTocNavigate = useCallback(async (href: string) => {
+    const view = viewRef.current;
+    setTocOpen(false);
+    if (!view || !href) return;
+    try {
+      await view.goTo(href);
+    } catch (err) {
+      console.warn("[FoliateView] TOC goTo failed", err);
+      try {
+        await view.goToTextStart();
+      } catch {
+        /* soft-fail */
+      }
+    }
+  }, []);
+
+  // Desktop keyboard: arrows/PageUp/Down page; Esc closes sheet or shows chrome (D-33).
+  useEffect(() => {
+    if (status !== "reading") return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Ignore when typing in inputs (search will use this in 02-04).
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (settingsOpen) {
+          setSettingsOpen(false);
+          return;
+        }
+        if (tocOpen) {
+          setTocOpen(false);
+          return;
+        }
+        // Else show chrome if immersive
+        if (!chromeVisible) setChromeVisible(true);
+        return;
+      }
+
+      // Page keys only when no sheet is open
+      if (settingsOpen || tocOpen) return;
+
+      const view = viewRef.current;
+      if (!view) return;
+
+      if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault();
+        void view.goLeft?.().catch(() => {
+          void view.renderer?.prev?.();
+        });
+      } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        void view.goRight?.().catch(() => {
+          void view.renderer?.next?.();
+        });
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [status, settingsOpen, tocOpen, chromeVisible]);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,10 +294,19 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         viewRef.current = view;
         host.append(view);
 
-        // relocate carries progress; full locator persistence is 02-03.
+        // relocate → progress UI + debounced locator upsert (D-23/D-24).
         view.addEventListener("relocate", (event) => {
           const detail = (event as CustomEvent<RelocateDetail>).detail ?? {};
-          setLocation({ fraction: detail.fraction ?? 0, cfi: detail.cfi });
+          const next: RelocateDetail = {
+            fraction: detail.fraction ?? 0,
+            cfi: detail.cfi,
+            range: detail.range,
+            tocItem: detail.tocItem,
+            section: detail.section,
+            location: detail.location,
+          };
+          setLocation(next);
+          scheduleLocatorUpsert(next);
         });
 
         await view.open(new File([blob], `${id}.epub`));
@@ -175,8 +333,45 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
           );
         }
 
-        // First open / no locator → text start (D-25); full restore in 02-03.
-        await view.goToTextStart();
+        // TOC for sheet (READ-05)
+        setTocItems(normalizeToc(view.book?.toc));
+
+        // Map registry id → work_id without blocking open (D-26).
+        try {
+          const ensured = await invoke<EnsureWorkResult>("ensure_work", { id });
+          if (!cancelled && ensured?.workId) {
+            workIdRef.current = ensured.workId;
+            await ensureWorkRow(ensured.workId, ensured.contentHash, "epub");
+          }
+        } catch (err) {
+          console.warn("[FoliateView] ensure_work failed; progress disabled", err);
+        }
+
+        // Restore locator or goToTextStart (D-25). Soft-fail invalid CFI.
+        const workId = workIdRef.current;
+        let restored = false;
+        if (workId) {
+          try {
+            const loc = await loadLocator(workId);
+            if (loc?.cfi) {
+              try {
+                await view.goTo(loc.cfi);
+                restored = true;
+              } catch (err) {
+                console.warn("[FoliateView] goTo(cfi) failed; text start", err);
+              }
+            }
+          } catch (err) {
+            console.warn("[FoliateView] loadLocator failed", err);
+          }
+        }
+        if (!restored) {
+          try {
+            await view.goToTextStart();
+          } catch (err) {
+            console.warn("[FoliateView] goToTextStart failed", err);
+          }
+        }
 
         // Best-effort title from engine metadata when present.
         const metaTitle = (
@@ -186,6 +381,8 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
           setBookTitle(metaTitle.trim());
         }
 
+        // Immersive default when status becomes reading (READ-04).
+        setChromeVisible(false);
         setStatus("reading");
       } catch (err) {
         if (cancelled) return;
@@ -206,14 +403,39 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         });
         saveTimerRef.current = null;
       }
+      // Force flush pending locator write (D-24).
+      if (locatorTimerRef.current) {
+        clearTimeout(locatorTimerRef.current);
+        locatorTimerRef.current = null;
+      }
+      const pending = pendingLocatorRef.current;
+      if (pending) {
+        pendingLocatorRef.current = null;
+        void upsertLocator(pending).catch(() => {
+          /* ignore on teardown */
+        });
+      }
       created?.remove();
       viewRef.current = null;
     };
-  }, [id]);
+  }, [id, scheduleLocatorUpsert]);
+
+  // Also flush locator when parent closes via onClose path — onClose may unmount us;
+  // wrap onBack to flush first.
+  const handleBack = useCallback(() => {
+    void flushLocator().finally(() => {
+      onClose?.();
+    });
+  }, [flushLocator, onClose]);
 
   if (status === "error") {
     return <ErrorCard message={message} onDismiss={onClose} />;
   }
+
+  const activeTocLabel =
+    typeof location?.tocItem?.label === "string"
+      ? location.tocItem.label
+      : null;
 
   return (
     <div className="reader" data-theme={prefs.theme}>
@@ -221,14 +443,18 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         title={bookTitle}
         fraction={location?.fraction ?? null}
         chromeVisible={chromeVisible}
-        onBack={onClose}
+        onBack={handleBack}
         onOpenToc={() => {
-          /* TOC sheet — plan 02-03 */
+          setChromeVisible(true);
+          setTocOpen(true);
         }}
         onOpenSearch={() => {
-          /* Search sheet — plan 02-03 */
+          /* Search sheet — plan 02-04 */
         }}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => {
+          setChromeVisible(true);
+          setSettingsOpen(true);
+        }}
       />
 
       {status === "loading" ? (
@@ -237,7 +463,15 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         </div>
       ) : null}
 
-      <div ref={hostRef} className="reader__view" />
+      <div ref={hostRef} className="reader__view">
+        {status === "reading" ? (
+          <ReaderTapZones
+            enabled={!anySheetOpen}
+            mode={prefs.mode}
+            onAction={handleTapAction}
+          />
+        ) : null}
+      </div>
 
       <SettingsSheet
         open={settingsOpen}
@@ -247,6 +481,14 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         modeLocked={fxlLocked || status !== "reading"}
         fonts={[]}
         /* onImportFont omitted → disabled stub until 02-04 */
+      />
+
+      <TocSheet
+        open={tocOpen}
+        onOpenChange={setTocOpen}
+        items={tocItems}
+        activeLabel={activeTocLabel}
+        onNavigate={handleTocNavigate}
       />
     </div>
   );

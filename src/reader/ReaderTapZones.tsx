@@ -3,8 +3,8 @@
  *
  * Paginate: full-area overlay — tap L/R page, center toggles chrome;
  *           horizontal swipe pages (finger left → next).
- * Scroll:   only a center strip captures taps (toggle chrome); left/right
- *           stay clear so foliate can receive vertical scroll.
+ * Scroll:   no capture layer — vertical pan goes entirely to foliate.
+ *           Top edge strip only toggles chrome (does not cover body text).
  *
  * Clean-room from UI-SPEC (T-02-agpl).
  */
@@ -28,10 +28,11 @@ const SWIPE_MIN_DX = 48;
 const SWIPE_MAX_DY = 80;
 /** Max movement still counted as a tap. */
 const TAP_SLOP = 12;
+/** Top strip height for scroll-mode chrome toggle (below safe area already). */
+const SCROLL_CHROME_STRIP_PX = 40;
 
 /**
  * Absolute overlay for immersive gestures.
- * Scroll mode uses a center-only strip so sides don't block pan-y into foliate.
  */
 export function ReaderTapZones({
   enabled = true,
@@ -82,7 +83,6 @@ export function ReaderTapZones({
       if (adx > TAP_SLOP || ady > TAP_SLOP) return;
 
       if (mode === "scroll") {
-        // Center strip only exists for toggle-chrome.
         onAction("toggle-chrome");
         return;
       }
@@ -102,19 +102,19 @@ export function ReaderTapZones({
 
   if (!enabled) return null;
 
-  // Scroll: center strip only — sides pass through to foliate for pan-y.
+  // Scroll: only a thin top strip — body stays free for native pan-y into foliate.
   if (mode === "scroll") {
     return (
       <div
-        className="reader__tap-zones reader__tap-zones--scroll-center"
+        className="reader__tap-zones reader__tap-zones--scroll-top"
         aria-hidden="true"
         data-enabled="true"
         style={{
           position: "absolute",
           top: 0,
-          bottom: 0,
-          left: "33%",
-          width: "34%",
+          left: 0,
+          right: 0,
+          height: SCROLL_CHROME_STRIP_PX,
           zIndex: 4,
           pointerEvents: "auto",
           touchAction: "manipulation",
@@ -137,8 +137,6 @@ export function ReaderTapZones({
         inset: 0,
         zIndex: 4,
         pointerEvents: "auto",
-        // Allow vertical pans to not be claimed as our exclusive gesture;
-        // horizontal swipe is resolved on pointerup.
         touchAction: "pan-y",
         background: "transparent",
       }}

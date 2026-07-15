@@ -72,12 +72,22 @@ export function foliateMarginBandPx(hostHeightPx?: number | null): number {
     hostHeightPx != null && Number.isFinite(hostHeightPx) && hostHeightPx > 0
       ? hostHeightPx
       : 800;
-  // ~5.5% of height, clamp 28–64 — more breathing room under status bar.
-  return Math.max(28, Math.min(64, Math.round(h * 0.055)));
+  // ~7% of height, clamp 40–80 — room for status bar + chrome overlay zone.
+  return Math.max(40, Math.min(80, Math.round(h * 0.07)));
 }
 
-/** Extra top inset on the page body (px), on top of the foliate margin band. */
-export const PAGE_TOP_EXTRA_PX = 12;
+/**
+ * Extra top inset on the page body (px), on top of the foliate margin band.
+ * Sized so floating toolbar (~48px + safe area) sits in empty air and does not
+ * cover the first line of text when chrome is shown.
+ */
+export const PAGE_TOP_EXTRA_PX = 28;
+
+/**
+ * Android often reports env(safe-area-inset-*) as 0. Floor for status-bar gap.
+ * Combined with env() via CSS max().
+ */
+export const STATUS_BAR_FLOOR_PX = 28;
 
 /**
  * Apply foliate layout attributes that control paginator grid geometry.

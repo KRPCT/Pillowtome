@@ -60,7 +60,7 @@ describe("buildReadingCss", () => {
       expect(css).toContain("font-size: 20px");
       expect(css).toContain("line-height: 1.8");
       // Sides from prefs; extra top air; bottom via foliate margin band.
-      expect(css).toContain("padding: 12px 24px 0 24px");
+      expect(css).toContain("padding: 28px 24px 0 24px");
       expect(css).toContain(colors.background);
       expect(css).toContain(colors.foreground);
       expect(css).toContain(SYSTEM_CJK_STACK);
@@ -70,16 +70,16 @@ describe("buildReadingCss", () => {
 });
 
 describe("foliateMarginBandPx / applyFoliateLayoutAttrs", () => {
-  it("clamps band between 28 and 64", () => {
-    expect(foliateMarginBandPx(200)).toBe(28);
-    expect(foliateMarginBandPx(800)).toBe(44); // 800 * 0.055 = 44
-    expect(foliateMarginBandPx(3000)).toBe(64);
+  it("clamps band between 40 and 80", () => {
+    expect(foliateMarginBandPx(200)).toBe(40);
+    expect(foliateMarginBandPx(800)).toBe(56); // 800 * 0.07 = 56
+    expect(foliateMarginBandPx(3000)).toBe(80);
   });
 
   it("sets margin band px and max-block-size from host height", () => {
     const setAttribute = vi.fn();
     applyFoliateLayoutAttrs({ setAttribute }, 800);
-    expect(setAttribute).toHaveBeenCalledWith("margin", "44px");
+    expect(setAttribute).toHaveBeenCalledWith("margin", "56px");
     expect(setAttribute).toHaveBeenCalledWith("max-block-size", "800px");
   });
 
@@ -90,7 +90,7 @@ describe("foliateMarginBandPx / applyFoliateLayoutAttrs", () => {
       "max-block-size",
       `${FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX}px`,
     );
-    // band falls back to ~800 → 44px
-    expect(setAttribute).toHaveBeenCalledWith("margin", "44px");
+    // band falls back to ~800 → 56px
+    expect(setAttribute).toHaveBeenCalledWith("margin", "56px");
   });
 });

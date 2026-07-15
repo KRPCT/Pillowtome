@@ -112,18 +112,38 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
 
   /** Apply flow + layout attrs + setStyles to the live renderer (READ-01/02/03/06). */
   const applyPrefsToRenderer = useCallback((next: ReadingPrefs) => {
-    const renderer = viewRef.current?.renderer;
+    const view = viewRef.current;
+    const renderer = view?.renderer;
     if (!renderer) return;
 
     // FXL has no flow/setStyles — chrome theme still via data-theme on root.
     if (fxlRef.current) return;
 
-    renderer.setAttribute?.("flow", flowAttr(next.mode));
+    const prevFlow = renderer.getAttribute?.("flow");
+    const nextFlow = flowAttr(next.mode);
+    renderer.setAttribute?.("flow", nextFlow);
     // margin attr = header/footer band (not page padding); max-block-size fills tall screens.
     applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
     const fontFaceCss = buildFontFaceCss(next.activeFontId);
     const familyCss = fontFamilyCssFor(next.fontFamilyKey, next.activeFontId);
-    renderer.setStyles?.(buildReadingCss(next, fontFaceCss, familyCss));
+    const css = buildReadingCss(next, fontFaceCss, familyCss);
+    renderer.setStyles?.(css);
+
+    // After paginate↔scroll, foliate re-renders the section. Re-apply styles and
+    // re-anchor to the current CFI so mid-book mode switches actually take effect
+    // (otherwise users can only switch near the initial position).
+    if (prevFlow !== nextFlow) {
+      const cfi = locationRef.current?.cfi;
+      requestAnimationFrame(() => {
+        applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
+        renderer.setStyles?.(css);
+        if (cfi && view) {
+          void view.goTo(cfi).catch(() => {
+            /* soft-fail: stay where engine landed */
+          });
+        }
+      });
+    }
   }, []);
 
   const scheduleSave = useCallback((next: ReadingPrefs) => {
@@ -592,7 +612,7 @@ export function FoliateView({ id = "sample", onClose }: FoliateViewProps) {
         onOpenChange={setSettingsOpen}
         prefs={prefs}
         onPrefsChange={handlePrefsChange}
-        modeLocked={fxlLocked || status !== "reading"}
+        modeLocked={fxlLocked}
         fonts={customFonts.map((f) => ({
           id: f.id,
           familyName: f.familyName,

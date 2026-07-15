@@ -19,15 +19,40 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+
+  /*
+   * Safe area: env() works on notched iOS; Android WebView often returns 0.
+   * Floor keeps content below the system status bar (approx 24–28dp).
+   */
+  --safe-top: max(28px, env(safe-area-inset-top, 0px));
+  --safe-right: max(0px, env(safe-area-inset-right, 0px));
+  --safe-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+  --safe-left: max(0px, env(safe-area-inset-left, 0px));
+  /* Toolbar row height (icons); total chrome = this + --safe-top */
+  --reader-toolbar-row: 48px;
+  --reader-chrome-height: calc(var(--safe-top) + var(--reader-toolbar-row) + 2px);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
 }
 
 .container {
   margin: 0;
-  padding-top: 10vh;
+  /* Keep home shell clear of the Android status bar */
+  padding-top: max(10vh, calc(var(--safe-top) + 24px));
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
   display: flex;
   flex-direction: column;
   justify-content: center;
   text-align: center;
+  box-sizing: border-box;
+  min-height: 100%;
 }
 
 .logo {
@@ -153,18 +178,35 @@ button {
 /* --- Reader shell (UI-SPEC layout contract) --- */
 .reader {
   position: fixed;
-  inset: 0;
+  /* Sit below the system status bar; never draw under it */
+  top: var(--safe-top);
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
+  left: var(--safe-left);
   display: flex;
   flex-direction: column;
   background: var(--reader-bg, #f7f3eb);
   color: var(--reader-fg, #1c1915);
-  /* Full-bleed reading surface — no outer page chrome on phone */
   overflow: hidden;
+}
+
+/* Paint status-bar region with page color so it matches the reader */
+.reader::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--safe-top);
+  background: var(--page-bg, var(--reader-bg, #f7f3eb));
+  z-index: 20;
+  pointer-events: none;
 }
 
 /*
  * Toolbar overlays the page — never participates in flex height.
  * Showing/hiding chrome must not resize .reader__view (avoids reflow / re-pagination).
+ * Top page air is sized so the first line sits below this bar when it appears.
  */
 .reader__chrome {
   position: absolute;
@@ -172,10 +214,9 @@ button {
   left: 0;
   right: 0;
   z-index: 10;
-  /* Solid paper chrome so controls stay legible over text */
-  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 92%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 94%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 1px 0 var(--reader-border, #e0d6c4);
 }
 
@@ -184,12 +225,9 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 48px;
+  height: var(--reader-toolbar-row);
   box-sizing: border-box;
-  padding: env(safe-area-inset-top, 0) 8px 0 max(8px, env(safe-area-inset-left, 0));
-  padding-right: max(8px, env(safe-area-inset-right, 0));
-  /* height already accounts for safe-area via padding-top; grow if needed */
-  min-height: calc(48px + env(safe-area-inset-top, 0px));
+  padding: 0 8px;
   background: transparent;
   border-bottom: none;
   color: var(--reader-fg, #1c1915);

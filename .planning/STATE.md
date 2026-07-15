@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: UI design contract approved; ready for `/gsd-discuss-phase 2` or `/gsd-plan-phase 2`
+status: Phase 2 context gathered; ready for plan
 stopped_at: Phase 2 context gathered
 last_updated: "2026-07-15T13:02:13.111Z"
 last_activity: 2026-07-15
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 2 (EPUB Reading Core) — UI-SPEC approved; next: discuss/plan
+Phase: 2 (EPUB Reading Core) — UI-SPEC + CONTEXT ready; next: plan
 Plan: 0 of TBD
-Status: UI design contract approved; ready for `/gsd-discuss-phase 2` or `/gsd-plan-phase 2`
+Status: Context gathered; ready for `/gsd-plan-phase 2`
 Last activity: 2026-07-15
 
 Progress: [██░░░░░░░░] ~14% (Phase 1 complete)

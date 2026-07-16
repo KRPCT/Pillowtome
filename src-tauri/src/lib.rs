@@ -6,6 +6,7 @@
 //! resolves the moment Plan 04 drops the file.
 
 pub mod commands;
+pub mod covers;
 pub mod fonts;
 pub mod migrations;
 pub mod protocol;

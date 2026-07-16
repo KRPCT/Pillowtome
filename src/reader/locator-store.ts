@@ -6,6 +6,7 @@
 
 import Database from "@tauri-apps/plugin-sql";
 import type { RelocateDetail } from "./foliate-types";
+import { touchLastRead } from "../library/library-store";
 
 /** Debounced relocate → upsert delay (D-24). */
 export const LOCATOR_DEBOUNCE_MS = 500;
@@ -116,6 +117,8 @@ export async function upsertLocator(row: {
         updatedAt,
       ],
     );
+    // D-65: refresh library last_read alongside locator (soft-fail).
+    void touchLastRead(row.work_id, updatedAt);
   } catch (err) {
     console.warn("[locator-store] upsertLocator failed", err);
     throw err;
@@ -163,61 +166,6 @@ export function relocateToLocatorRow(
     progress_fraction: fraction,
     text_pre: null, // P2: pre/post empty (research A1)
     text_exact: textExact,
-    text_post: null,
-  };
-}
-
-/**
- * Continuous-scroll resume token stored in `cfi` when real EPUB CFI is absent.
- * Format: `pillow-scroll:{spineIndex}:{offsetFraction}`
- */
-export const SCROLL_CFI_PREFIX = "pillow-scroll:";
-
-export function encodeScrollLocator(
-  spineIndex: number,
-  offsetFraction: number,
-): string {
-  const f = Math.max(0, Math.min(1, offsetFraction));
-  return `${SCROLL_CFI_PREFIX}${Math.max(0, Math.floor(spineIndex))}:${f.toFixed(4)}`;
-}
-
-export function parseScrollLocator(
-  cfi: string | null | undefined,
-): { spineIndex: number; offsetFraction: number } | null {
-  if (!cfi || !cfi.startsWith(SCROLL_CFI_PREFIX)) return null;
-  const rest = cfi.slice(SCROLL_CFI_PREFIX.length);
-  const [a, b] = rest.split(":");
-  const spineIndex = Number(a);
-  const offsetFraction = Number(b);
-  if (!Number.isFinite(spineIndex) || !Number.isFinite(offsetFraction)) {
-    return null;
-  }
-  return {
-    spineIndex: Math.max(0, Math.floor(spineIndex)),
-    offsetFraction: Math.max(0, Math.min(1, offsetFraction)),
-  };
-}
-
-/** Persist continuous-scroll progress (no real CFI). */
-export function continuousProgressToLocatorRow(
-  workId: string,
-  spineIndex: number,
-  offsetFraction: number,
-): {
-  work_id: string;
-  cfi: string | null;
-  progress_fraction: number | null;
-  text_pre: string | null;
-  text_exact: string | null;
-  text_post: string | null;
-} {
-  return {
-    work_id: workId,
-    cfi: encodeScrollLocator(spineIndex, offsetFraction),
-    // Approximate book progress as fraction of spine index only (coarse).
-    progress_fraction: null,
-    text_pre: null,
-    text_exact: null,
     text_post: null,
   };
 }

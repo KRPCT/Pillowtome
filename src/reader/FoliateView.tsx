@@ -53,12 +53,17 @@ import type { TocItem } from "./toc";
 import {
   encodeScrollPosition,
   isRealCfi,
-  parseScrollPosition,
   positionFromLocatorCfi,
   spineToLinearIndex,
   wholeBookFraction,
   type ReadingPosition,
 } from "./reading-position";
+import {
+  capturePosition,
+  planJump,
+  positionForTocSpine,
+  spineFromResolvedNav,
+} from "./position-bus";
 import {
   ContinuousScrollStream,
   type ContinuousScrollApi,
@@ -433,30 +438,44 @@ export function FoliateView({
 
   const jumpContinuousToSpine = useCallback(
     (spineIndex: number, offsetFraction = 0, cfi: string | null = null) => {
-      const li = spineToLinearIndex(spineIndex, continuousSections);
+      // Single jump bus (READER-POS): plan then apply imperatively.
+      const plan = planJump(
+        {
+          spineIndex,
+          offsetFraction,
+          cfi,
+        },
+        "scroll",
+      );
+      const li = spineToLinearIndex(plan.spineIndex, continuousSections);
       if (li < 0) {
         console.warn(
           "[FoliateView] jumpContinuousToSpine: spine not linear",
-          spineIndex,
+          plan.spineIndex,
         );
         return;
       }
       continuousStartRef.current = li;
-      continuousOffsetRef.current = offsetFraction;
+      continuousOffsetRef.current = plan.offsetFraction;
       const linear = continuousSections.filter((s) => s.linear !== "no");
       const sec = linear[li];
-      const resolvedCfi = cfi ?? sec?.cfi ?? null;
+      const resolvedCfi =
+        (isRealCfi(cfi) ? cfi : null) ?? sec?.cfi ?? null;
 
       // Prefer imperative API (no remount/jumpKey race).
       if (streamApiRef.current) {
-        streamApiRef.current.jumpTo(spineIndex, offsetFraction, resolvedCfi);
+        streamApiRef.current.jumpTo(
+          plan.spineIndex,
+          plan.offsetFraction,
+          resolvedCfi,
+        );
         return;
       }
 
       // Stream not mounted yet: seed props so mount/pendingJump picks them up.
-      setScrollJumpOffset(offsetFraction);
+      setScrollJumpOffset(plan.offsetFraction);
       setScrollJumpCfi(resolvedCfi);
-      setScrollJumpSpine(spineIndex);
+      setScrollJumpSpine(plan.spineIndex);
       setInitialCfi(resolvedCfi);
       setStreamMountKey((k) => k + 1);
       setScrollJumpKey((k) => k + 1);
@@ -479,7 +498,7 @@ export function FoliateView({
               | { index?: number }
               | null
               | undefined;
-            if (typeof r?.index === "number") spine = r.index;
+            spine = spineFromResolvedNav(r);
           } catch (err) {
             console.warn("[FoliateView] TOC resolveNavigation threw", href, err);
           }
@@ -488,8 +507,8 @@ export function FoliateView({
           // Last resort: ask engine to navigate (even if hidden), then read index.
           try {
             const r = (await view.goTo(href)) as { index?: number } | undefined;
-            if (typeof r?.index === "number") spine = r.index;
-            else if (typeof locationRef.current?.section?.current === "number") {
+            spine = spineFromResolvedNav(r);
+            if (spine == null && typeof locationRef.current?.section?.current === "number") {
               spine = locationRef.current.section.current;
             }
           } catch (err) {
@@ -497,7 +516,8 @@ export function FoliateView({
           }
         }
         if (spine != null) {
-          jumpContinuousToSpine(spine, 0, null);
+          const tocPos = positionForTocSpine(spine);
+          jumpContinuousToSpine(tocPos.spineIndex, tocPos.offsetFraction, null);
           return;
         }
         console.warn("[FoliateView] TOC resolve failed in scroll mode", href);
@@ -597,17 +617,29 @@ export function FoliateView({
             : null;
       let offset = continuousOffsetRef.current || 0;
 
-      const scrollTok = parseScrollPosition(cfi);
-      if (scrollTok) {
-        spine = scrollTok.spineIndex;
-        offset = scrollTok.offsetFraction;
-      } else if (spine == null && isRealCfi(cfi)) {
-        try {
-          const resolved = view.resolveCFI?.(cfi!);
-          if (typeof resolved?.index === "number") spine = resolved.index;
-        } catch {
-          /* soft-fail */
+      // Prefer capturePosition (single bus) over ad-hoc field picking.
+      const captured = capturePosition({
+        cfi,
+        spineIndex: spine,
+        offsetFraction: offset,
+        fraction: loc?.fraction ?? null,
+      });
+      if (captured) {
+        if (captured.spineIndex === 0 && spine == null && isRealCfi(cfi)) {
+          try {
+            const resolved = view.resolveCFI?.(cfi!);
+            if (typeof resolved?.index === "number") {
+              return {
+                ...captured,
+                spineIndex: resolved.index,
+                cfi,
+              };
+            }
+          } catch {
+            /* soft-fail */
+          }
         }
+        return captured;
       }
       if (spine == null) {
         const linear = continuousSections.filter((s) => s.linear !== "no");

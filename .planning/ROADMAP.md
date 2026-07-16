@@ -116,10 +116,10 @@ Plans:
 
 Plans:
 
-- [ ] 04-01: SQLite schema (books / metadata / covers / collections) + Publication EPUB metadata & cover extract + `work_id`/content-hash identity
-- [ ] 04-02: Import / folder-scan pipeline → library
-- [ ] 04-03: Library UI (cover grid, metadata display) + sort/filter
-- [ ] 04-04: **[MAJOR `READER-POS`]** Library progress SSOT + continuous-scroll position continuity (paginate↔scroll seed, scroll-mode TOC jump, open/resume from library). Persist via locator/progress rows; apply via one jump command bus (do not keep patching Phase-2 dual-surface races ad-hoc).
+- [ ] 04-00-PLAN.md — SCHEMA_V4 library_item + Publication EPUB metadata/cover extract + library-store types (LIB-01 foundation, LIB-03) [Wave 0]
+- [ ] 04-01-PLAN.md — Dual ingest: file import + recursive folder scan + content_hash dedup (LIB-01, D-50..D-53) [Wave 1]
+- [ ] 04-02-PLAN.md — Cover grid UI + sort/filter chips + empty dual CTA + progress bar (LIB-02..04) [Wave 2]
+- [ ] 04-03-PLAN.md — **[MAJOR `READER-POS`]** Position SSOT + jump bus: library open/resume, paginate↔scroll, scroll TOC (D-63..D-65) [Wave 3]
 
 ### Phase 5: Annotations & Composite Locator
 

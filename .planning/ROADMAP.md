@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation & Cross-Platform Skeleton** - Tauri v2 shell on desktop + real Android, storage-handle abstraction, DRM detect-and-refuse, 3 day-1 abstractions stubbed, key decisions locked
 - [x] **Phase 2: EPUB Reading Core** - Immersive, themeable EPUB reading (Lithium-parity milestone): modes, typography knobs, themes, TOC, search, custom fonts
 - [x] **Phase 3: CJK Typography Differentiation** - The moat: punctuation compression, autospace, kinsoku, CJK defaults, bundled font + coverage-aware fallback (completed 2026-07-16)
-- [ ] **Phase 4: Local Library** - SQLite library store with covers, metadata, sort/filter; real Publication trait + stable identity
+- [x] **Phase 4: Local Library** - SQLite library store with covers, metadata, sort/filter; real Publication trait + stable identity (completed 2026-07-16)
 - [ ] **Phase 5: Annotations & Composite Locator** - Highlights, notes, bookmarks, precise cross-device position restore, change-log schema (sync-ready)
 - [ ] **Phase 6: TXT Format & Format-Abstraction Validation** - TXT (GBK/GB18030/UTF-8 detection + chapter split) added purely via the Publication abstraction
 - [ ] **Phase 7: WebDAV Self-Hosted Sync** - Progress + annotation + selective file sync over self-hosted WebDAV with non-destructive conflict resolution
@@ -119,7 +119,7 @@ Plans:
 - [x] 04-00-PLAN.md — SCHEMA_V4 library_item + Publication EPUB metadata/cover extract + library-store types (LIB-01 foundation, LIB-03) [Wave 0]
 - [x] 04-01-PLAN.md — Dual ingest: file import + recursive folder scan + content_hash dedup (LIB-01, D-50..D-53) [Wave 1]
 - [x] 04-02-PLAN.md — Cover grid UI + sort/filter chips + empty dual CTA + progress bar (LIB-02..04) [Wave 2]
-- [ ] 04-03-PLAN.md — **[MAJOR `READER-POS`]** Position SSOT + jump bus: library open/resume, paginate↔scroll, scroll TOC (D-63..D-65) [Wave 3]
+- [x] 04-03-PLAN.md — **[MAJOR `READER-POS`]** Position SSOT + jump bus: library open/resume, paginate↔scroll, scroll TOC (D-63..D-65) [Wave 3]
 
 ### Phase 5: Annotations & Composite Locator
 
@@ -197,7 +197,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Cross-Platform Skeleton | 5/5 | Executed | 2026-07-10 |
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 4/4 | Complete   | 2026-07-16 |
-| 4. Local Library | 3/4 | In Progress|  |
+| 4. Local Library | 4/4 | Complete   | 2026-07-16 |
 | 5. Annotations & Composite Locator | 0/TBD | Not started | - |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
 | 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |

@@ -647,6 +647,80 @@ foliate-view {
   color: var(--reader-muted, #6b6458);
 }
 
+/* CJK typography rows in Aa sheet (03-UI-SPEC) */
+.reader-cjk-row {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  gap: 8px;
+}
+
+.reader-cjk-row__label {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--reader-fg, #1c1915);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-cjk-row__info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--reader-muted, #6b6458);
+  cursor: pointer;
+}
+
+.reader-cjk-row__info:hover {
+  color: var(--reader-fg, #1c1915);
+  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 70%, transparent);
+}
+
+.reader-cjk-row__switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Switch checked = reader accent under themed reader surface */
+.reader .reader-settings-sheet [data-slot="switch"][data-state="checked"],
+.reader .reader-settings-sheet [data-slot="switch"].data-checked,
+.reader-settings-sheet [data-slot="switch"][data-checked],
+.reader-settings-sheet [data-slot="switch"]:where([data-state="checked"]) {
+  background: var(--reader-accent, #8b6914) !important;
+}
+
+.reader-settings-sheet [data-slot="switch"][data-state="unchecked"],
+.reader-settings-sheet [data-slot="switch"]:where([data-state="unchecked"]) {
+  background: var(--reader-border, #e0d6c4) !important;
+}
+
+.reader-cjk-popover {
+  max-width: 320px;
+  padding: 16px !important;
+  background: var(--reader-chrome, #efe8db) !important;
+  color: var(--reader-fg, #1c1915) !important;
+  border-color: var(--reader-border, #e0d6c4) !important;
+}
+
+.reader-cjk-popover__body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--reader-muted, #6b6458);
+}
+
 .reader-font-list {
   list-style: none;
   margin: 0;

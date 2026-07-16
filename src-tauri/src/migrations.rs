@@ -96,11 +96,32 @@ ALTER TABLE reading_prefs ADD COLUMN cjk_autospace INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE reading_prefs ADD COLUMN cjk_kinsoku INTEGER NOT NULL DEFAULT 1;
 "#;
 
+/// Schema v4 DDL — local library catalog (LIB-01..04, D-51/D-54/D-65).
+///
+/// Append-only: never rewrite prior schemas. One shelf row per `work_id`
+/// (content identity); `source_id` is the SourceRegistry / import handle id.
+pub const SCHEMA_V4: &str = r#"
+CREATE TABLE library_item (
+    item_id        TEXT    PRIMARY KEY,
+    work_id        TEXT    NOT NULL UNIQUE REFERENCES work(work_id),
+    source_id      TEXT    NOT NULL,
+    title          TEXT    NOT NULL,
+    author         TEXT,
+    cover_file     TEXT,
+    imported_at    INTEGER NOT NULL,
+    last_opened_at INTEGER,
+    last_read_at   INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_library_last_read ON library_item(last_read_at DESC);
+CREATE INDEX IF NOT EXISTS idx_library_title ON library_item(title);
+"#;
+
 /// The migration set applied to `sqlite:pillow.db` at startup.
 ///
 /// Schema v1 seeds identity tables; schema v2 appends prefs/fonts + locator unique
-/// index; schema v3 appends CJK toggle columns. Later phases append higher versions;
-/// they never rewrite prior schemas.
+/// index; schema v3 appends CJK toggle columns; schema v4 adds library catalog.
+/// Later phases append higher versions; they never rewrite prior schemas.
 pub fn migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -119,6 +140,12 @@ pub fn migrations() -> Vec<Migration> {
             version: 3,
             description: "cjk_typography_prefs",
             sql: SCHEMA_V3,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description: "local_library_catalog",
+            sql: SCHEMA_V4,
             kind: MigrationKind::Up,
         },
     ]

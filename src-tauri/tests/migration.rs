@@ -6,7 +6,7 @@
 //! columns, and the locator UNIQUE index. Uses the SAME sqlx binding
 //! tauri-plugin-sql resolves (single SQLite binding, Pitfall 6).
 
-use pillowtome_lib::migrations::{migrations, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3};
+use pillowtome_lib::migrations::{migrations, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4};
 use sqlx::{Connection, Row, SqliteConnection};
 
 async fn fresh_db_v1() -> SqliteConnection {
@@ -35,6 +35,15 @@ async fn fresh_db_v3() -> SqliteConnection {
         .execute(&mut conn)
         .await
         .expect("apply SCHEMA_V3");
+    conn
+}
+
+async fn fresh_db_v4() -> SqliteConnection {
+    let mut conn = fresh_db_v3().await;
+    sqlx::raw_sql(SCHEMA_V4)
+        .execute(&mut conn)
+        .await
+        .expect("apply SCHEMA_V4");
     conn
 }
 
@@ -187,10 +196,57 @@ async fn schema_v3_adds_cjk_toggle_columns_with_defaults_on() {
     assert_eq!(row.get::<i64, _>("cjk_kinsoku"), 1);
 }
 
+#[tokio::test]
+async fn schema_v4_creates_library_item_with_unique_work_id() {
+    let mut conn = fresh_db_v4().await;
+    let names = table_names(&mut conn).await;
+    assert!(
+        names.iter().any(|n| n == "library_item"),
+        "schema v4 missing library_item; found {names:?}"
+    );
+    for col in [
+        "item_id",
+        "work_id",
+        "source_id",
+        "title",
+        "author",
+        "cover_file",
+        "imported_at",
+        "last_opened_at",
+        "last_read_at",
+    ] {
+        assert!(
+            has_column(&mut conn, "library_item", col).await,
+            "library_item missing {col}"
+        );
+    }
+
+    sqlx::query(
+        "INSERT INTO work (work_id, content_hash, format, created_at) VALUES ('wlib', 'h', 'epub', 0)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("seed work");
+    sqlx::query(
+        "INSERT INTO library_item (item_id, work_id, source_id, title, author, cover_file, imported_at, last_opened_at, last_read_at) \
+         VALUES ('i1', 'wlib', 'import-1', 'Title', NULL, NULL, 0, NULL, NULL)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("first library insert");
+    let dup = sqlx::query(
+        "INSERT INTO library_item (item_id, work_id, source_id, title, author, cover_file, imported_at, last_opened_at, last_read_at) \
+         VALUES ('i2', 'wlib', 'import-2', 'Other', NULL, NULL, 1, NULL, NULL)",
+    )
+    .execute(&mut conn)
+    .await;
+    assert!(dup.is_err(), "duplicate work_id library_item should violate UNIQUE");
+}
+
 #[test]
-fn migration_set_is_v1_then_v2_then_v3_up() {
+fn migration_set_is_v1_through_v4_up() {
     let set = migrations();
-    assert_eq!(set.len(), 3, "exactly three migrations (v1 + v2 + v3)");
+    assert_eq!(set.len(), 4, "exactly four migrations (v1..v4)");
     assert_eq!(set[0].version, 1);
     assert_eq!(set[0].description, "seed_stub_schema");
     assert_eq!(set[0].sql, SCHEMA_V1, "v1 SQL is SCHEMA_V1 (one source of truth)");
@@ -212,4 +268,12 @@ fn migration_set_is_v1_then_v2_then_v3_up() {
     assert!(set[2].sql.contains("cjk_autospace"));
     assert!(set[2].sql.contains("cjk_kinsoku"));
     assert!(set[2].sql.contains("DEFAULT 1"));
+
+    assert_eq!(set[3].version, 4);
+    assert_eq!(set[3].description, "local_library_catalog");
+    assert_eq!(set[3].sql, SCHEMA_V4, "v4 SQL is SCHEMA_V4 (one source of truth)");
+    assert!(set[3].sql.contains("library_item"));
+    assert!(set[3].sql.contains("work_id"));
+    assert!(set[3].sql.contains("source_id"));
+    assert!(set[3].sql.contains("idx_library_last_read"));
 }

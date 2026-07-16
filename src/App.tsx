@@ -4,6 +4,9 @@ import { onBackButtonPress } from "@tauri-apps/api/app";
 import "./App.css";
 import { FoliateView } from "./reader/FoliateView";
 import { ImportButton, type ImportedBook } from "./library/ImportButton";
+import { FolderScanButton } from "./library/FolderScanButton";
+import { listLibraryItems } from "./library/library-store";
+import type { LibraryItem } from "./library/types";
 
 /**
  * Pillowtome 应用外壳（简体中文）。
@@ -23,6 +26,7 @@ import { ImportButton, type ImportedBook } from "./library/ImportButton";
 function App() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [imported, setImported] = useState<ImportedBook[]>([]);
+  const [shelf, setShelf] = useState<LibraryItem[]>([]);
   const openIdRef = useRef<string | null>(null);
   openIdRef.current = openId;
 
@@ -37,8 +41,17 @@ function App() {
     }
   }
 
+  async function refreshShelf() {
+    try {
+      setShelf(await listLibraryItems());
+    } catch (err) {
+      console.error("[App] 获取书库失败", err);
+    }
+  }
+
   useEffect(() => {
     void refreshImported();
+    void refreshShelf();
   }, []);
 
   const closeReader = useCallback(() => {
@@ -101,25 +114,58 @@ function App() {
         <ImportButton
           onImported={(book) => {
             void refreshImported();
+            void refreshShelf();
             setOpenId(book.id);
+          }}
+          onDone={() => {
+            void refreshImported();
+            void refreshShelf();
+          }}
+        />
+        <FolderScanButton
+          onDone={() => {
+            void refreshImported();
+            void refreshShelf();
           }}
         />
       </div>
 
-      {imported.length > 0 && (
+      {shelf.length > 0 ? (
+        <section className="library">
+          <h2 className="library__title">书库</h2>
+          <ul className="library__list">
+            {shelf.map((item) => (
+              <li key={item.itemId}>
+                <button
+                  type="button"
+                  className="library__item"
+                  onClick={() => setOpenId(item.sourceId)}
+                >
+                  {item.title}
+                  {item.author ? ` · ${item.author}` : ""}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : imported.length > 0 ? (
         <section className="library">
           <h2 className="library__title">已导入</h2>
           <ul className="library__list">
             {imported.map((book) => (
               <li key={book.id}>
-                <button type="button" className="library__item" onClick={() => setOpenId(book.id)}>
+                <button
+                  type="button"
+                  className="library__item"
+                  onClick={() => setOpenId(book.id)}
+                >
                   {book.name}
                 </button>
               </li>
             ))}
           </ul>
         </section>
-      )}
+      ) : null}
     </main>
   );
 }

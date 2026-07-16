@@ -156,6 +156,8 @@ pub fn run() {
             commands::ensure_work,
             commands::import,
             commands::imported_books,
+            commands::library_ingest,
+            commands::library_scan_folder,
             commands::is_android,
             fonts::import_font,
             fonts::remove_font,

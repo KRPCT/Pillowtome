@@ -212,6 +212,236 @@ pub fn imported_books(app: AppHandle, registry: State<'_, SourceRegistry>) -> Ve
     books
 }
 
+/// Outcome of catalog ingest for one EPUB (LIB-01, D-51).
+///
+/// Small struct only — never book/cover bytes (D-06). Frontend writes
+/// `library_item` via plugin-sql using these fields.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngestResult {
+    pub status: String, // imported | skipped_duplicate | refused
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub work_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+impl IngestResult {
+    fn imported(
+        source_id: String,
+        work_id: String,
+        content_hash: String,
+        title: String,
+        author: Option<String>,
+        cover_file: Option<String>,
+    ) -> Self {
+        Self {
+            status: "imported".into(),
+            source_id: Some(source_id),
+            work_id: Some(work_id),
+            content_hash: Some(content_hash),
+            title: Some(title),
+            author,
+            cover_file,
+            message: None,
+        }
+    }
+
+    fn skipped_duplicate(work_id: String, title_hint: &str) -> Self {
+        Self {
+            status: "skipped_duplicate".into(),
+            source_id: None,
+            work_id: Some(work_id),
+            content_hash: None,
+            title: Some(title_hint.to_string()),
+            author: None,
+            cover_file: None,
+            message: Some("书库中已有".into()),
+        }
+    }
+
+    fn refused(message: &str) -> Self {
+        Self {
+            status: "refused".into(),
+            source_id: None,
+            work_id: None,
+            content_hash: None,
+            title: None,
+            author: None,
+            cover_file: None,
+            message: Some(message.to_string()),
+        }
+    }
+}
+
+/// Aggregate folder-scan summary (D-53).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanSummary {
+    pub imported: u32,
+    pub skipped_duplicate: u32,
+    pub failed: u32,
+    pub messages: Vec<String>,
+    /// Successfully ingested entries (for frontend SQL insert).
+    pub items: Vec<IngestResult>,
+}
+
+/// Catalog-aware import of one EPUB (register handle + extract meta/cover).
+///
+/// Does **not** write SQLite — frontend inserts `library_item` with bound params.
+/// Duplicate detection is by content_hash / work_id (D-51): when `known_hashes`
+/// contains the hash, returns `skipped_duplicate` without registering a second shelf intent.
+#[tauri::command]
+pub async fn library_ingest(
+    app: AppHandle,
+    registry: State<'_, SourceRegistry>,
+    path: Option<String>,
+    known_hashes: Option<Vec<String>>,
+) -> Result<IngestResult, String> {
+    let source = pick_source(&app, path).await?;
+    Ok(ingest_source(&app, &registry, source, known_hashes.as_deref()))
+}
+
+/// Desktop: recursive scan of a folder for `.epub` (D-50, D-53).
+///
+/// Android SAF tree walk is not fully wired here — returns a clear message so
+/// the UI can fall back / show 简体中文 guidance. Desktop walks recursively.
+#[tauri::command]
+pub async fn library_scan_folder(
+    app: AppHandle,
+    registry: State<'_, SourceRegistry>,
+    dir: Option<String>,
+    known_hashes: Option<Vec<String>>,
+) -> Result<ScanSummary, String> {
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, registry, dir, known_hashes);
+        return Err("Android 文件夹扫描将使用系统目录授权；当前请使用「导入书籍」。".into());
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let dir = dir.ok_or_else(|| "未选择文件夹".to_string())?;
+        let root = std::path::PathBuf::from(&dir);
+        if !root.is_dir() {
+            return Err("无效的文件夹。".into());
+        }
+        let mut known: std::collections::HashSet<String> =
+            known_hashes.unwrap_or_default().into_iter().collect();
+        let mut summary = ScanSummary {
+            imported: 0,
+            skipped_duplicate: 0,
+            failed: 0,
+            messages: Vec::new(),
+            items: Vec::new(),
+        };
+        let mut paths: Vec<std::path::PathBuf> = Vec::new();
+        collect_epubs(&root, &mut paths);
+        for p in paths {
+            let source = BookSource::Path(p.clone());
+            let known_vec: Vec<String> = known.iter().cloned().collect();
+            let result = ingest_source(&app, &registry, source, Some(&known_vec));
+            match result.status.as_str() {
+                "imported" => {
+                    summary.imported += 1;
+                    if let Some(h) = result.content_hash.clone() {
+                        known.insert(h);
+                    }
+                    if let Some(w) = result.work_id.clone() {
+                        known.insert(w);
+                    }
+                    summary.items.push(result);
+                }
+                "skipped_duplicate" => summary.skipped_duplicate += 1,
+                _ => {
+                    summary.failed += 1;
+                    if let Some(m) = result.message {
+                        let name = p
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| p.display().to_string());
+                        summary.messages.push(format!("{name}：{m}"));
+                    }
+                }
+            }
+        }
+        Ok(summary)
+    }
+}
+
+fn collect_epubs(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_epubs(&path, out);
+        } else if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("epub"))
+            .unwrap_or(false)
+        {
+            out.push(path);
+        }
+    }
+}
+
+fn ingest_source(
+    app: &AppHandle,
+    registry: &SourceRegistry,
+    source: BookSource,
+    known_hashes: Option<&[String]>,
+) -> IngestResult {
+    let bytes = match resolve_bytes(&source, app) {
+        Ok(b) => b,
+        Err(_) => return IngestResult::refused("无法读取书籍文件。"),
+    };
+    let decision = decide(detect_protection(&bytes));
+    if !decision.can_render {
+        return IngestResult::refused(
+            decision
+                .message
+                .as_deref()
+                .unwrap_or("无法打开：不支持的书籍。"),
+        );
+    }
+    let pubn = EpubPublication::from_bytes(&bytes);
+    let content_hash = pubn.content_hash();
+    let work_id = work_id_from_hash(&content_hash);
+    if let Some(known) = known_hashes {
+        if known.iter().any(|h| h == &content_hash || h == &work_id) {
+            let meta = EpubPublication::metadata_from_bytes(&bytes);
+            return IngestResult::skipped_duplicate(work_id, &meta.title);
+        }
+    }
+    let meta = EpubPublication::metadata_from_bytes(&bytes);
+    let cover_file = EpubPublication::cover_from_bytes(&bytes).and_then(|cover| {
+        let dir = crate::covers::covers_dir(app).ok()?;
+        crate::covers::write_cover_file(&dir, &work_id, &cover.bytes, cover.ext).ok()
+    });
+    let id = book_id(&source);
+    registry.register(id.clone(), source);
+    IngestResult::imported(
+        id,
+        work_id,
+        content_hash,
+        meta.title,
+        meta.author,
+        cover_file,
+    )
+}
+
 /// A stable id derived from the handle, so a freshly imported book and the same
 /// book re-hydrated after a restart share one id. Only `[0-9a-f-]` — passes
 /// `sanitize_id` (no `/`, `\`, or `..`).

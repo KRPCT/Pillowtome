@@ -116,7 +116,7 @@ Plans:
 
 Plans:
 
-- [ ] 04-00-PLAN.md — SCHEMA_V4 library_item + Publication EPUB metadata/cover extract + library-store types (LIB-01 foundation, LIB-03) [Wave 0]
+- [x] 04-00-PLAN.md — SCHEMA_V4 library_item + Publication EPUB metadata/cover extract + library-store types (LIB-01 foundation, LIB-03) [Wave 0]
 - [ ] 04-01-PLAN.md — Dual ingest: file import + recursive folder scan + content_hash dedup (LIB-01, D-50..D-53) [Wave 1]
 - [ ] 04-02-PLAN.md — Cover grid UI + sort/filter chips + empty dual CTA + progress bar (LIB-02..04) [Wave 2]
 - [ ] 04-03-PLAN.md — **[MAJOR `READER-POS`]** Position SSOT + jump bus: library open/resume, paginate↔scroll, scroll TOC (D-63..D-65) [Wave 3]
@@ -197,7 +197,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Cross-Platform Skeleton | 5/5 | Executed | 2026-07-10 |
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 4/4 | Complete   | 2026-07-16 |
-| 4. Local Library | 0/TBD | Not started | - |
+| 4. Local Library | 1/4 | In Progress|  |
 | 5. Annotations & Composite Locator | 0/TBD | Not started | - |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
 | 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |

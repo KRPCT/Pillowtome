@@ -121,6 +121,17 @@ export function pillowCustomFamily(id: string): string {
   return `PillowCustom-${id}`;
 }
 
+/** Bundled Noto Sans CJK family name (filled in 03-03; stub for D-47 prep). */
+export const BUNDLED_CJK_FAMILY = "PillowBundledCJK";
+
+/**
+ * `@font-face` CSS for bundled CJK faces.
+ * Wave 0 stub returns empty; 03-03 materializes real faces.
+ */
+export function buildBundledCjkFontFaceCss(): string {
+  return "";
+}
+
 /**
  * Build `@font-face` CSS for the active custom font (D-30).
  * Empty string when system / missing id.

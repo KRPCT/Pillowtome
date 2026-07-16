@@ -86,15 +86,16 @@ Plans:
   4. Chinese text uses optimized defaults — 2-character first-line indent, CJK-appropriate line-height, and full-width quotation marks.
   5. Chinese renders with a bundled CJK font and coverage-aware glyph fallback, so no tofu boxes or ransom-note font mixing appear on a glyph-coverage sheet across both engine families.
 
-**Plans**: TBD
+**Plans**: 4 plans
 **UI hint**: yes
 **Research flag**: yes — Blink-vs-WebKit CSS feature-parity matrix, the JS text-shaping fallback layer, per zh-Hans/zh-Hant/ja kinsoku prohibited-char tables, and the font subset/variable/optional-download bundling + embedding-license decision need engine-specific verification via `/gsd-plan-phase --research-phase`.
 
 Plans:
 
-- [ ] 03-01: CJK CSS pipeline (`text-spacing-trim`, `text-autospace`, `line-break`/kinsoku) + JS degradation shim
-- [ ] 03-02: CJK defaults (2-char indent, line-height, full-width quotes) + kinsoku prohibited-char tables per zh-Hans/zh-Hant
-- [ ] 03-03: Bundled CJK font subset + coverage-aware fallback chain + golden-image visual-regression harness (Blink + WebKit)
+- [ ] 03-00-PLAN.md — Wave 0: SCHEMA_V3 CJK prefs columns + ReadingPrefs defaults ON + pure feature-detect/kinsoku/autospace-shim contracts + shadcn switch/popover + coverage fixtures [Wave 0, autonomous]
+- [ ] 03-01-PLAN.md — CJK CSS pipeline (`text-spacing-trim`, `text-autospace`, `line-break`/kinsoku) + indent defaults + autospace JS shim on FoliateView & ContinuousScrollStream (CJK-01..04) [Wave 1, autonomous]
+- [ ] 03-02-PLAN.md — Aa「中文排版」section: three toggles default ON + 简体中文 info popovers (D-30..D-34, D-38) [Wave 1, autonomous]
+- [ ] 03-03-PLAN.md — Bundled Noto Sans CJK SC+TC OFL + pillow serve + coverage-aware stack + golden-image harness Blink+WebKit (CJK-05) [Wave 2, autonomous]
 
 ### Phase 4: Local Library
 
@@ -107,16 +108,18 @@ Plans:
   2. The library displays books as a cover grid.
   3. Each book shows title, author, and other basic metadata (extracted natively via the `Publication` trait).
   4. User can sort and filter the library by title, author, recently read, and reading progress.
+  5. **[MAJOR carry-in `READER-POS`]** Opening a book from the library (and switching paginate↔scroll / TOC jump in continuous scroll) restores and navigates from a single position SSOT — not a second ad-hoc jump bus. SQL stores progress; the frontend still owns dual-surface (foliate host vs ContinuousScrollStream) jump apply.
 
 **Plans**: TBD
 **UI hint**: yes
-**Research flag**: no — standard SQLite metadata/catalog patterns.
+**Research flag**: no — standard SQLite metadata/catalog patterns. (`READER-POS` needs an explicit frontend position-bus design during 04 planning, not only schema work.)
 
 Plans:
 
 - [ ] 04-01: SQLite schema (books / metadata / covers / collections) + Publication EPUB metadata & cover extract + `work_id`/content-hash identity
 - [ ] 04-02: Import / folder-scan pipeline → library
 - [ ] 04-03: Library UI (cover grid, metadata display) + sort/filter
+- [ ] 04-04: **[MAJOR `READER-POS`]** Library progress SSOT + continuous-scroll position continuity (paginate↔scroll seed, scroll-mode TOC jump, open/resume from library). Persist via locator/progress rows; apply via one jump command bus (do not keep patching Phase-2 dual-surface races ad-hoc).
 
 ### Phase 5: Annotations & Composite Locator
 
@@ -193,7 +196,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Foundation & Cross-Platform Skeleton | 5/5 | Executed | 2026-07-10 |
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
-| 3. CJK Typography Differentiation | 0/TBD | Not started | - |
+| 3. CJK Typography Differentiation | 0/4 | Planned | - |
 | 4. Local Library | 0/TBD | Not started | - |
 | 5. Annotations & Composite Locator | 0/TBD | Not started | - |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |

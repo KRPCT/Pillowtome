@@ -22,14 +22,13 @@ import {
 } from "./reading-prefs";
 import {
   LOCATOR_DEBOUNCE_MS,
-  continuousProgressToLocatorRow,
   ensureWorkRow,
   loadLocator,
-  parseScrollLocator,
   relocateToLocatorRow,
   upsertLocator,
 } from "./locator-store";
 import {
+  buildBundledCjkFontFaceCss,
   buildFontFaceCss,
   fontFamilyCssFor,
   importCustomFont,
@@ -37,6 +36,14 @@ import {
   removeCustomFont,
   type CustomFont,
 } from "./fonts";
+import {
+  detectCjkCssCaps,
+  type CjkCssCaps,
+} from "./cjk-feature-detect";
+import {
+  installAutospaceShim,
+  shouldInstallAutospaceShim,
+} from "./cjk-autospace-shim";
 import type {
   FoliateBookSection,
   FoliateViewElement,
@@ -44,7 +51,17 @@ import type {
 } from "./foliate-types";
 import type { TocItem } from "./toc";
 import {
+  encodeScrollPosition,
+  isRealCfi,
+  parseScrollPosition,
+  positionFromLocatorCfi,
+  spineToLinearIndex,
+  wholeBookFraction,
+  type ReadingPosition,
+} from "./reading-position";
+import {
   ContinuousScrollStream,
+  type ContinuousScrollApi,
   type ContinuousSection,
 } from "./ContinuousScrollStream";
 
@@ -127,9 +144,23 @@ export function FoliateView({
   const [continuousCss, setContinuousCss] = useState("");
   const continuousStartRef = useRef(0);
   const continuousOffsetRef = useRef(0);
-  /** Increment to force ContinuousScrollStream jump (TOC / resume). */
+  const streamApiRef = useRef<ContinuousScrollApi | null>(null);
+  /** Increment to force ContinuousScrollStream jump (TOC / resume / mode switch). */
   const [scrollJumpKey, setScrollJumpKey] = useState(0);
   const [scrollJumpSpine, setScrollJumpSpine] = useState<number | null>(null);
+  /** Top-edge offset 0..1 within the jump target section. */
+  const [scrollJumpOffset, setScrollJumpOffset] = useState(0);
+  /** Optional real CFI for finer mid-section resume. */
+  const [scrollJumpCfi, setScrollJumpCfi] = useState<string | null>(null);
+  /** Optional real CFI for first mount of the stream (open resume). */
+  const [initialCfi, setInitialCfi] = useState<string | null>(null);
+  /** Bump to remount ContinuousScrollStream with fresh initial* props. */
+  const [streamMountKey, setStreamMountKey] = useState(0);
+  /** Session-cached CJK CSS caps (D-35) — probe once per reader open. */
+  const cjkCapsRef = useRef<CjkCssCaps | null>(null);
+  /** Disposers for paginate render-doc autospace shims. */
+  const autospaceDisposersRef = useRef<Array<() => void>>([]);
+  const [autospaceShimEnabled, setAutospaceShimEnabled] = useState(false);
 
   prefsRef.current = prefs;
   locationRef.current = location;
@@ -138,22 +169,51 @@ export function FoliateView({
   const useContinuousScroll =
     prefs.mode === "scroll" && !fxlLocked && continuousSections.length > 0;
 
-  const buildCss = useCallback((next: ReadingPrefs) => {
-    return buildReadingCss(
-      next,
-      buildFontFaceCss(next.activeFontId),
-      fontFamilyCssFor(next.fontFamilyKey, next.activeFontId),
-    );
+  const ensureCjkCaps = useCallback((): CjkCssCaps => {
+    if (!cjkCapsRef.current) {
+      cjkCapsRef.current = detectCjkCssCaps();
+    }
+    return cjkCapsRef.current;
   }, []);
+
+  const clearAutospaceShims = useCallback(() => {
+    for (const dispose of autospaceDisposersRef.current) {
+      try {
+        dispose();
+      } catch {
+        /* soft-fail */
+      }
+    }
+    autospaceDisposersRef.current = [];
+  }, []);
+
+  const buildCss = useCallback(
+    (next: ReadingPrefs) => {
+      const caps = ensureCjkCaps();
+      const faces =
+        buildFontFaceCss(next.activeFontId) + buildBundledCjkFontFaceCss();
+      return buildReadingCss(
+        next,
+        faces,
+        fontFamilyCssFor(next.fontFamilyKey, next.activeFontId),
+        caps,
+      );
+    },
+    [ensureCjkCaps],
+  );
 
   /** Apply flow + layout attrs + setStyles to the live renderer (READ-01/02/03/06). */
   const applyPrefsToRenderer = useCallback(
     (next: ReadingPrefs) => {
+      const caps = ensureCjkCaps();
       const css = buildCss(next);
       setContinuousCss(css);
+      const wantShim = shouldInstallAutospaceShim(next, caps);
+      setAutospaceShimEnabled(wantShim);
 
       // Continuous scroll owns the surface — skip foliate flow while scrolled.
       if (next.mode === "scroll" && !fxlRef.current) {
+        clearAutospaceShims();
         return;
       }
 
@@ -168,6 +228,32 @@ export function FoliateView({
       applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
       renderer.setStyles?.(css);
 
+      // Re-install autospace shim on paginate docs when needed (D-36/D-37).
+      clearAutospaceShims();
+      if (wantShim) {
+        try {
+          const root = view as unknown as {
+            shadowRoot?: ShadowRoot | null;
+            querySelectorAll?: (s: string) => NodeListOf<Element>;
+          };
+          const docs: Document[] = [];
+          const collect = (node: ParentNode | null | undefined) => {
+            if (!node?.querySelectorAll) return;
+            node.querySelectorAll("iframe").forEach((frame) => {
+              const d = (frame as HTMLIFrameElement).contentDocument;
+              if (d) docs.push(d);
+            });
+          };
+          collect(root?.shadowRoot ?? null);
+          collect(hostRef.current);
+          for (const d of docs) {
+            autospaceDisposersRef.current.push(installAutospaceShim(d));
+          }
+        } catch {
+          /* silent degrade D-38 */
+        }
+      }
+
       if (prevFlow !== nextFlow) {
         const cfi = locationRef.current?.cfi;
         requestAnimationFrame(() => {
@@ -181,7 +267,7 @@ export function FoliateView({
         });
       }
     },
-    [buildCss],
+    [buildCss, clearAutospaceShims, ensureCjkCaps],
   );
 
   const scheduleSave = useCallback((next: ReadingPrefs) => {
@@ -311,34 +397,72 @@ export function FoliateView({
     }
   }, []);
 
-  /** Resolve TOC/search target to spine index for continuous scroll. */
+  /** Resolve TOC/search/CFI target to spine index for continuous scroll. */
   const resolveSpineIndex = useCallback((target: string): number | null => {
     const view = viewRef.current;
     if (!view || !target) return null;
     try {
-      const resolved =
-        view.resolveNavigation?.(target) ??
-        view.book?.resolveHref?.(target) ??
-        view.book?.resolveCFI?.(target);
-      if (resolved && typeof resolved.index === "number") {
-        return resolved.index;
+      const candidates: Array<{ index?: number } | null | undefined> = [
+        view.resolveNavigation?.(target) as { index?: number } | null | undefined,
+        view.book?.resolveHref?.(target) as { index?: number } | null | undefined,
+        view.book?.resolveCFI?.(target) as { index?: number } | null | undefined,
+      ];
+      for (const resolved of candidates) {
+        if (resolved && typeof resolved.index === "number" && resolved.index >= 0) {
+          return resolved.index;
+        }
+      }
+      // Path match against section.id (absolute book href).
+      const hrefPath = decodeURI(target.split("#")[0] ?? "");
+      if (hrefPath) {
+        const hit = continuousSections.find((s) => {
+          if (!s.id) return false;
+          return (
+            s.id === hrefPath ||
+            s.id.endsWith(hrefPath) ||
+            hrefPath.endsWith(s.id)
+          );
+        });
+        if (hit) return hit.index;
       }
     } catch (err) {
-      console.warn("[FoliateView] resolve spine failed", err);
+      console.warn("[FoliateView] resolve spine failed", target, err);
     }
     return null;
-  }, []);
-
-  const jumpContinuousToSpine = useCallback((spineIndex: number) => {
-    continuousStartRef.current = (() => {
-      const linear = continuousSections.filter((s) => s.linear !== "no");
-      const li = linear.findIndex((s) => s.index === spineIndex);
-      return li >= 0 ? li : 0;
-    })();
-    continuousOffsetRef.current = 0;
-    setScrollJumpSpine(spineIndex);
-    setScrollJumpKey((k) => k + 1);
   }, [continuousSections]);
+
+  const jumpContinuousToSpine = useCallback(
+    (spineIndex: number, offsetFraction = 0, cfi: string | null = null) => {
+      const li = spineToLinearIndex(spineIndex, continuousSections);
+      if (li < 0) {
+        console.warn(
+          "[FoliateView] jumpContinuousToSpine: spine not linear",
+          spineIndex,
+        );
+        return;
+      }
+      continuousStartRef.current = li;
+      continuousOffsetRef.current = offsetFraction;
+      const linear = continuousSections.filter((s) => s.linear !== "no");
+      const sec = linear[li];
+      const resolvedCfi = cfi ?? sec?.cfi ?? null;
+
+      // Prefer imperative API (no remount/jumpKey race).
+      if (streamApiRef.current) {
+        streamApiRef.current.jumpTo(spineIndex, offsetFraction, resolvedCfi);
+        return;
+      }
+
+      // Stream not mounted yet: seed props so mount/pendingJump picks them up.
+      setScrollJumpOffset(offsetFraction);
+      setScrollJumpCfi(resolvedCfi);
+      setScrollJumpSpine(spineIndex);
+      setInitialCfi(resolvedCfi);
+      setStreamMountKey((k) => k + 1);
+      setScrollJumpKey((k) => k + 1);
+    },
+    [continuousSections],
+  );
 
   const handleTocNavigate = useCallback(
     async (href: string) => {
@@ -346,14 +470,38 @@ export function FoliateView({
       setTocOpen(false);
       if (!view || !href) return;
 
-      // Continuous scroll: jump inside stream (foliate host is hidden).
       if (useContinuousScroll) {
-        const spine = resolveSpineIndex(href);
+        let spine = resolveSpineIndex(href);
+        if (spine == null) {
+          // Engine resolveNavigation is the authoritative href→index path.
+          try {
+            const r = view.resolveNavigation?.(href) as
+              | { index?: number }
+              | null
+              | undefined;
+            if (typeof r?.index === "number") spine = r.index;
+          } catch (err) {
+            console.warn("[FoliateView] TOC resolveNavigation threw", href, err);
+          }
+        }
+        if (spine == null) {
+          // Last resort: ask engine to navigate (even if hidden), then read index.
+          try {
+            const r = (await view.goTo(href)) as { index?: number } | undefined;
+            if (typeof r?.index === "number") spine = r.index;
+            else if (typeof locationRef.current?.section?.current === "number") {
+              spine = locationRef.current.section.current;
+            }
+          } catch (err) {
+            console.warn("[FoliateView] TOC goTo fallback failed", href, err);
+          }
+        }
         if (spine != null) {
-          jumpContinuousToSpine(spine);
+          jumpContinuousToSpine(spine, 0, null);
           return;
         }
-        // Fallback: try goTo then re-hide (may still fail if host hidden)
+        console.warn("[FoliateView] TOC resolve failed in scroll mode", href);
+        return;
       }
 
       try {
@@ -419,18 +567,98 @@ export function FoliateView({
     return () => ro.disconnect();
   }, [status, prefs.mode]);
 
-  // When entering continuous scroll, hide the foliate host (stream covers it).
-  // When leaving, re-apply paginated flow on the engine.
+  // Mode switch: continuous stream is a SECOND surface. Snapshot SSOT position,
+  // remount stream (paginate->scroll) or re-anchor engine (scroll->paginate).
+  const prevContinuousRef = useRef(false);
   useEffect(() => {
-    if (status !== "reading" || fxlRef.current) return;
+    if (status !== "reading" || fxlRef.current) {
+      prevContinuousRef.current = useContinuousScroll;
+      return;
+    }
     const view = viewRef.current;
     const host = hostRef.current;
     if (!view || !host) return;
+    if (continuousSections.length === 0) return;
+
+    const switchedToScroll = useContinuousScroll && !prevContinuousRef.current;
+    const switchedFromScroll = !useContinuousScroll && prevContinuousRef.current;
+
+    const readSsot = (): ReadingPosition | null => {
+      const loc = locationRef.current;
+      const last = (view as unknown as { lastLocation?: RelocateDetail }).lastLocation;
+      const cfi =
+        (typeof loc?.cfi === "string" ? loc.cfi : null) ??
+        (typeof last?.cfi === "string" ? last.cfi : null);
+      let spine: number | null =
+        typeof loc?.section?.current === "number"
+          ? loc.section.current
+          : typeof last?.section?.current === "number"
+            ? last.section.current
+            : null;
+      let offset = continuousOffsetRef.current || 0;
+
+      const scrollTok = parseScrollPosition(cfi);
+      if (scrollTok) {
+        spine = scrollTok.spineIndex;
+        offset = scrollTok.offsetFraction;
+      } else if (spine == null && isRealCfi(cfi)) {
+        try {
+          const resolved = view.resolveCFI?.(cfi!);
+          if (typeof resolved?.index === "number") spine = resolved.index;
+        } catch {
+          /* soft-fail */
+        }
+      }
+      if (spine == null) {
+        const linear = continuousSections.filter((s) => s.linear !== "no");
+        const sec = linear[continuousStartRef.current];
+        if (sec) spine = sec.index;
+      }
+      if (spine == null) return null;
+      return {
+        spineIndex: spine,
+        offsetFraction: offset,
+        cfi: isRealCfi(cfi) ? cfi : null,
+        fraction: loc?.fraction ?? null,
+      };
+    };
 
     if (useContinuousScroll) {
+      if (switchedToScroll) {
+        const pos = readSsot();
+        if (pos) {
+          const li = spineToLinearIndex(pos.spineIndex, continuousSections);
+          if (li < 0) {
+            console.warn(
+              "[FoliateView] paginate->scroll: spine not in linear list",
+              pos.spineIndex,
+            );
+          }
+          continuousStartRef.current = li >= 0 ? li : 0;
+          continuousOffsetRef.current = pos.offsetFraction;
+          setInitialCfi(pos.cfi ?? null);
+          setScrollJumpCfi(pos.cfi ?? null);
+          setScrollJumpOffset(pos.offsetFraction);
+          setScrollJumpSpine(pos.spineIndex);
+          // Remount with correct initialLinearIndex/offset.
+          setStreamMountKey((k) => k + 1);
+          setScrollJumpKey((k) => k + 1);
+          // If stream is already mounted (unlikely on first switch), jump imperatively next frame.
+          requestAnimationFrame(() => {
+            streamApiRef.current?.jumpTo(
+              pos.spineIndex,
+              pos.offsetFraction,
+              pos.cfi ?? null,
+            );
+          });
+        } else {
+          console.warn("[FoliateView] paginate->scroll: no SSOT spine; stream starts at 0");
+        }
+      }
       view.style.visibility = "hidden";
       view.style.pointerEvents = "none";
       setContinuousCss(buildCss(prefsRef.current));
+      prevContinuousRef.current = true;
       return;
     }
 
@@ -441,13 +669,40 @@ export function FoliateView({
     renderer.setAttribute?.("flow", "paginated");
     applyFoliateLayoutAttrs(renderer, host.clientHeight);
     renderer.setStyles?.(buildCss(prefsRef.current));
-    const cfi = locationRef.current?.cfi;
-    if (cfi) {
-      void view.goTo(cfi).catch(() => {
-        /* soft-fail */
-      });
+
+    if (switchedFromScroll) {
+      const pos = readSsot();
+      void (async () => {
+        let ok = false;
+        if (pos?.cfi && isRealCfi(pos.cfi)) {
+          try {
+            ok = Boolean(await view.goTo(pos.cfi));
+          } catch {
+            /* soft-fail */
+          }
+        }
+        if (!ok && pos) {
+          try {
+            await renderer.goTo?.({
+              index: pos.spineIndex,
+              anchor: pos.offsetFraction,
+            });
+            ok = true;
+          } catch {
+            /* soft-fail */
+          }
+        }
+        if (!ok && pos) {
+          try {
+            await renderer.goTo?.({ index: pos.spineIndex });
+          } catch {
+            /* soft-fail */
+          }
+        }
+      })();
     }
-  }, [status, useContinuousScroll, buildCss]);
+    prevContinuousRef.current = false;
+  }, [status, useContinuousScroll, buildCss, continuousSections]);
 
   // Desktop keyboard: arrows/PageUp/Down page; Esc closes sheet; / Ctrl+F search (D-33).
   useEffect(() => {
@@ -612,20 +867,19 @@ export function FoliateView({
         prefsRef.current = loaded;
         setCustomFonts(fonts);
 
-        // Live flow + layout + typography + theme + custom face (READ-01/02/03/06).
+        // Live flow + layout + typography + theme + custom face + CJK (READ-01/02/03/06).
         if (!isFxl) {
           // Prefer paginated for engine path; continuous scroll uses stream UI.
           const engineMode =
             loaded.mode === "scroll" ? "paginate" : loaded.mode;
           view.renderer?.setAttribute?.("flow", flowAttr(engineMode));
           applyFoliateLayoutAttrs(view.renderer, host.clientHeight);
-          view.renderer?.setStyles?.(
-            buildReadingCss(
-              loaded,
-              buildFontFaceCss(loaded.activeFontId),
-              fontFamilyCssFor(loaded.fontFamilyKey, loaded.activeFontId),
-            ),
-          );
+          const caps = ensureCjkCaps();
+          const openCss = buildCss(loaded);
+          view.renderer?.setStyles?.(openCss);
+          setContinuousCss(openCss);
+          const wantShim = shouldInstallAutospaceShim(loaded, caps);
+          setAutospaceShimEnabled(wantShim);
         }
 
         // TOC for sheet (READ-05)
@@ -639,48 +893,67 @@ export function FoliateView({
             load: () => s.load(),
             unload: s.unload ? () => s.unload?.() : undefined,
             linear: s.linear,
+            cfi: s.cfi,
+            id: s.id,
           }),
         );
         setContinuousSections(continuous);
         setContinuousCss(buildCss(loaded));
 
-        // Restore locator (D-25).
+        // Restore locator (D-25) via ReadingPosition SSOT helpers.
         let restored = false;
         if (savedLoc?.cfi) {
-          const scrollTok = parseScrollLocator(savedLoc.cfi);
-          if (scrollTok) {
-            const linearList = continuous.filter((s) => s.linear !== "no");
-            const linearIdx = linearList.findIndex(
-              (s) => s.index === scrollTok.spineIndex,
-            );
-            continuousStartRef.current = linearIdx >= 0 ? linearIdx : 0;
-            continuousOffsetRef.current = scrollTok.offsetFraction;
-            setScrollJumpSpine(scrollTok.spineIndex);
+          // Try resolve spine for real CFI up front.
+          let spineHint: number | null = null;
+          if (isRealCfi(savedLoc.cfi)) {
+            try {
+              const resolved = view.resolveCFI?.(savedLoc.cfi);
+              if (typeof resolved?.index === "number") spineHint = resolved.index;
+            } catch {
+              /* soft-fail */
+            }
+          }
+          const pos = positionFromLocatorCfi(
+            savedLoc.cfi,
+            savedLoc.progress_fraction,
+            spineHint,
+          );
+
+          if (loaded.mode === "scroll" && pos) {
+            const li = spineToLinearIndex(pos.spineIndex, continuous);
+            continuousStartRef.current = li >= 0 ? li : 0;
+            continuousOffsetRef.current = pos.offsetFraction;
+            setInitialCfi(pos.cfi ?? null);
+            setScrollJumpCfi(pos.cfi ?? null);
+            setScrollJumpOffset(pos.offsetFraction);
+            setScrollJumpSpine(pos.spineIndex);
+            setStreamMountKey((k) => k + 1);
             setScrollJumpKey((k) => k + 1);
-            if (loaded.mode === "scroll") {
-              restored = true;
-            } else {
+            restored = true;
+          } else if (loaded.mode !== "scroll" && pos) {
+            if (isRealCfi(savedLoc.cfi)) {
+              try {
+                restored = Boolean(await view.goTo(savedLoc.cfi));
+              } catch (err) {
+                console.warn("[FoliateView] goTo(cfi) failed", err);
+              }
+            }
+            if (!restored) {
               try {
                 await view.renderer?.goTo?.({
-                  index: scrollTok.spineIndex,
-                  anchor: scrollTok.offsetFraction,
+                  index: pos.spineIndex,
+                  anchor: pos.offsetFraction,
                 });
                 restored = true;
               } catch (err) {
                 console.warn("[FoliateView] resume spine goTo failed", err);
               }
             }
-          } else {
-            try {
-              await view.goTo(savedLoc.cfi);
-              restored = true;
-            } catch (err) {
-              console.warn("[FoliateView] goTo(cfi) failed; text start", err);
-            }
           }
           setLocation({
             fraction: savedLoc.progress_fraction ?? undefined,
             cfi: savedLoc.cfi ?? undefined,
+            section: pos ? { current: pos.spineIndex } : undefined,
           });
         }
         if (!restored && loaded.mode !== "scroll") {
@@ -689,9 +962,6 @@ export function FoliateView({
           } catch (err) {
             console.warn("[FoliateView] goToTextStart failed", err);
           }
-        }
-        if (!savedLoc?.cfi) {
-          continuousOffsetRef.current = 0;
         }
 
         // Best-effort title from engine metadata when present.
@@ -716,6 +986,8 @@ export function FoliateView({
     void load();
     return () => {
       cancelled = true;
+      clearAutospaceShims();
+      cjkCapsRef.current = null;
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         // Force flush pending prefs on unmount (D-22 companion to D-24).
@@ -739,7 +1011,7 @@ export function FoliateView({
       created?.remove();
       viewRef.current = null;
     };
-  }, [id, scheduleLocatorUpsert]);
+  }, [id, scheduleLocatorUpsert, buildCss, clearAutospaceShims, ensureCjkCaps]);
 
   // Also flush locator when parent closes via onClose path — onClose may unmount us;
   // wrap onBack to flush first.
@@ -800,32 +1072,41 @@ export function FoliateView({
     return () => registerBackHandler(null);
   }, [registerBackHandler, handleSystemBack]);
 
-  /** Continuous-scroll progress → locator upsert (no real CFI). */
+  /** Continuous-scroll progress → locator upsert via real CFI (same path as paginate). */
+  /** Continuous-scroll progress -> locator upsert via real CFI (same path as paginate). */
+  /**
+   * Continuous-scroll progress.
+   * Primary resume token: pillow-scroll:{spine}:{offset} (reliable).
+   * Optional real CFI stored in the same cfi column when available; on restore
+   * we detect epubcfi(...) vs pillow-scroll: and choose the right path.
+   * Also keep a coarse progress_fraction for the UI bar.
+   */
+  /**
+   * Continuous-scroll progress observation.
+   * Writes SSOT location only — never mutates scrollJump* command state.
+   */
   const handleContinuousProgress = useCallback(
-    (spineIndex: number, offsetFraction: number) => {
+    (spineIndex: number, offsetFraction: number, cfi: string | null) => {
       const workId = workIdRef.current;
       if (!workId) return;
-      continuousStartRef.current = (() => {
-        const linear = continuousSections.filter((s) => s.linear !== "no");
-        const li = linear.findIndex((s) => s.index === spineIndex);
-        return li >= 0 ? li : continuousStartRef.current;
-      })();
+
+      const li = spineToLinearIndex(spineIndex, continuousSections);
+      continuousStartRef.current = li >= 0 ? li : continuousStartRef.current;
       continuousOffsetRef.current = offsetFraction;
-      const row = continuousProgressToLocatorRow(
-        workId,
+
+      const token =
+        isRealCfi(cfi) ? (cfi as string) : encodeScrollPosition(spineIndex, offsetFraction);
+      const frac = wholeBookFraction(
         spineIndex,
         offsetFraction,
+        continuousSections,
       );
+      const row = relocateToLocatorRow(workId, { cfi: token, fraction: frac });
       pendingLocatorRef.current = row;
-      const n = continuousSections.filter((s) => s.linear !== "no").length || 1;
-      const linearPos =
-        continuousSections
-          .filter((s) => s.linear !== "no")
-          .findIndex((s) => s.index === spineIndex) ?? spineIndex;
-      const frac = Math.min(1, (Math.max(0, linearPos) + offsetFraction) / n);
       setLocation({
         fraction: frac,
-        cfi: row.cfi ?? undefined,
+        cfi: token,
+        section: { current: spineIndex },
       });
       if (locatorTimerRef.current) clearTimeout(locatorTimerRef.current);
       locatorTimerRef.current = setTimeout(() => {
@@ -874,17 +1155,24 @@ export function FoliateView({
       <div ref={hostRef} className="reader__view">
         {status === "reading" && useContinuousScroll ? (
           <ContinuousScrollStream
-            key={`stream-${id}`}
+            key={`stream-${id}-${streamMountKey}`}
             sections={continuousSections}
             initialLinearIndex={continuousStartRef.current}
             initialOffsetFraction={continuousOffsetRef.current}
+            initialCfi={initialCfi}
             jumpKey={scrollJumpKey}
             targetSpineIndex={scrollJumpSpine}
+            targetOffsetFraction={scrollJumpOffset}
+            targetCfi={scrollJumpCfi}
             readingCss={continuousCss}
+            autospaceShimEnabled={autospaceShimEnabled}
             onTap={() => {
               if (!anySheetOpen) setChromeVisible((v) => !v);
             }}
             onProgress={handleContinuousProgress}
+            onReady={(api) => {
+              streamApiRef.current = api;
+            }}
           />
         ) : null}
         {status === "reading" && !useContinuousScroll ? (

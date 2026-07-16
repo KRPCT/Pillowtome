@@ -1,10 +1,18 @@
 /**
- * 显示设置 (Aa) bottom sheet — UI-SPEC sections for mode/theme/font/sliders.
+ * 显示设置 (Aa) bottom sheet — UI-SPEC sections for mode/theme/CJK/font/sliders.
  * Live apply via onPrefsChange; no separate 应用 button (D-22).
- * Clean-room from UI-SPEC (T-02-agpl).
+ * Clean-room from UI-SPEC (T-02-agpl / DEC-001).
  */
 
+import { CircleHelp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
@@ -14,8 +22,35 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { ReadingPrefs, ReadingTheme } from "./apply-reading-styles";
+
+const CJK_ROWS: Array<{
+  key: "cjkPunctTrim" | "cjkAutospace" | "cjkKinsoku";
+  label: string;
+  aboutLabel: string;
+  body: string;
+}> = [
+  {
+    key: "cjkPunctTrim",
+    label: "标点挤压",
+    aboutLabel: "关于标点挤压",
+    body: "收窄中文标点旁多余空白，让「你好。」这类句子更紧凑、更像印刷书。",
+  },
+  {
+    key: "cjkAutospace",
+    label: "盘古之白",
+    aboutLabel: "关于盘古之白",
+    body: "在汉字与英文、数字之间自动留出细小间距，例如「读取 PDF」更易扫读。",
+  },
+  {
+    key: "cjkKinsoku",
+    label: "禁则",
+    aboutLabel: "关于禁则",
+    body: "避免行首出现句号、逗号，或行尾出现左引号、左括号等不合适的断行。",
+  },
+];
 
 /** Minimal custom-font list item for 02-04 wiring. */
 export interface CustomFontListItem {
@@ -68,7 +103,7 @@ export function SettingsSheet({
         <SheetHeader className="reader-sheet__header shrink-0 px-4 pt-4 pb-2">
           <SheetTitle className="text-lg font-semibold">显示设置</SheetTitle>
           <SheetDescription className="sr-only">
-            调整阅读模式、主题与排版选项
+            调整阅读模式、主题、中文排版与字体选项
           </SheetDescription>
         </SheetHeader>
 
@@ -138,7 +173,49 @@ export function SettingsSheet({
               </ToggleGroup>
             </section>
 
-            {/* 3. 字体 */}
+            {/* 3. 中文排版 (D-31..D-33) — after 主题, before 字体 */}
+            <section className="reader-settings-section">
+              <h3 className="reader-settings-section__title">中文排版</h3>
+              <div className="flex flex-col gap-1">
+                {CJK_ROWS.map((row) => (
+                  <div key={row.key} className="reader-cjk-row">
+                    <span className="reader-cjk-row__label">{row.label}</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="reader-cjk-row__info"
+                          aria-label={row.aboutLabel}
+                        >
+                          <CircleHelp aria-hidden className="size-4" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="end"
+                        side="top"
+                        className="reader-cjk-popover"
+                      >
+                        <PopoverHeader>
+                          <PopoverTitle>{row.label}</PopoverTitle>
+                        </PopoverHeader>
+                        <p className="reader-cjk-popover__body">{row.body}</p>
+                      </PopoverContent>
+                    </Popover>
+                    <div className="reader-cjk-row__switch">
+                      <Switch
+                        checked={prefs[row.key]}
+                        onCheckedChange={(checked) =>
+                          onPrefsChange({ [row.key]: checked })
+                        }
+                        aria-label={row.label}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* 4. 字体 */}
             <section className="reader-settings-section">
               <h3 className="reader-settings-section__title">字体</h3>
               <ul className="reader-font-list" role="listbox" aria-label="字体">

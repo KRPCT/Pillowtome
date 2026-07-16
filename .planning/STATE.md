@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
+status: executing
 stopped_at: Phase 3 context gathered
-last_updated: "2026-07-15T18:41:42.048Z"
-last_activity: 2026-07-16 -- Deferred continuous-scroll position continuity (`READER-POS`) to Phase 4 library progress SSOT
+last_updated: "2026-07-16T03:10:47.731Z"
+last_activity: 2026-07-16 -- Phase 03 execution started
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 10
+  total_plans: 14
   completed_plans: 10
   percent: 29
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-09)
 
 **Core value:** 在任意一端打开书，都能以干净、舒适的中文排版稳定阅读，并与自托管（WebDAV）书库/进度状态可靠互通。
-**Current focus:** Phase 3 — CJK Typography Differentiation (reader position continuity deferred — see MAJOR `READER-POS`)
+**Current focus:** Phase 03 — cjk-typography-differentiation
 
 ## Current Position
 
-Phase: 2 (EPUB Reading Core) — COMPLETE
-Plan: 5 of 5
-Status: Phase complete — ready for Phase 3; **MAJOR reader-position continuity deferred to Phase 4**
-Last activity: 2026-07-16 -- Deferred continuous-scroll position continuity (`READER-POS`) to Phase 4 library progress SSOT
+Phase: 03 (cjk-typography-differentiation) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 03
+Last activity: 2026-07-16 -- Phase 03 execution started
 
 Progress: [███░░░░░░░] ~29% (Phases 1–2 complete)
 

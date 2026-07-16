@@ -1,12 +1,12 @@
-//! Off-device migration smoke test for schema v1 + v2 (D-09 / D-20).
+//! Off-device migration smoke test for schema v1 + v2 + v3 (D-09 / D-20 / D-34).
 //!
 //! Proves the DB migrates without booting the app: open an in-memory SQLite,
-//! apply [`SCHEMA_V1`] then [`SCHEMA_V2`], and assert identity / locator /
-//! change-log / reading_prefs / custom_font tables, seed row, and the locator
-//! UNIQUE index. Uses the SAME sqlx binding tauri-plugin-sql resolves (single
-//! SQLite binding, Pitfall 6).
+//! apply [`SCHEMA_V1`] then [`SCHEMA_V2`] then [`SCHEMA_V3`], and assert identity /
+//! locator / change-log / reading_prefs / custom_font tables, seed row, CJK
+//! columns, and the locator UNIQUE index. Uses the SAME sqlx binding
+//! tauri-plugin-sql resolves (single SQLite binding, Pitfall 6).
 
-use pillowtome_lib::migrations::{migrations, SCHEMA_V1, SCHEMA_V2};
+use pillowtome_lib::migrations::{migrations, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3};
 use sqlx::{Connection, Row, SqliteConnection};
 
 async fn fresh_db_v1() -> SqliteConnection {
@@ -26,6 +26,15 @@ async fn fresh_db_v2() -> SqliteConnection {
         .execute(&mut conn)
         .await
         .expect("apply SCHEMA_V2");
+    conn
+}
+
+async fn fresh_db_v3() -> SqliteConnection {
+    let mut conn = fresh_db_v2().await;
+    sqlx::raw_sql(SCHEMA_V3)
+        .execute(&mut conn)
+        .await
+        .expect("apply SCHEMA_V3");
     conn
 }
 
@@ -154,10 +163,34 @@ async fn schema_v2_creates_unique_index_on_locator_work_id() {
     assert!(dup.is_err(), "duplicate work_id locator should violate UNIQUE");
 }
 
+#[tokio::test]
+async fn schema_v3_adds_cjk_toggle_columns_with_defaults_on() {
+    let mut conn = fresh_db_v3().await;
+    for col in ["cjk_punct_trim", "cjk_autospace", "cjk_kinsoku"] {
+        assert!(
+            has_column(&mut conn, "reading_prefs", col).await,
+            "schema v3 missing reading_prefs.{col}"
+        );
+    }
+
+    let row = sqlx::query(
+        "SELECT cjk_punct_trim, cjk_autospace, cjk_kinsoku \
+         FROM reading_prefs WHERE id = 'global'",
+    )
+    .fetch_optional(&mut conn)
+    .await
+    .expect("select global prefs after v3")
+    .expect("seed row id=global must still exist");
+
+    assert_eq!(row.get::<i64, _>("cjk_punct_trim"), 1);
+    assert_eq!(row.get::<i64, _>("cjk_autospace"), 1);
+    assert_eq!(row.get::<i64, _>("cjk_kinsoku"), 1);
+}
+
 #[test]
-fn migration_set_is_v1_then_v2_up() {
+fn migration_set_is_v1_then_v2_then_v3_up() {
     let set = migrations();
-    assert_eq!(set.len(), 2, "exactly two migrations (v1 + v2)");
+    assert_eq!(set.len(), 3, "exactly three migrations (v1 + v2 + v3)");
     assert_eq!(set[0].version, 1);
     assert_eq!(set[0].description, "seed_stub_schema");
     assert_eq!(set[0].sql, SCHEMA_V1, "v1 SQL is SCHEMA_V1 (one source of truth)");
@@ -171,4 +204,12 @@ fn migration_set_is_v1_then_v2_up() {
     assert!(set[1].sql.contains("reading_prefs"));
     assert!(set[1].sql.contains("custom_font"));
     assert!(set[1].sql.contains("idx_locator_work_id"));
+
+    assert_eq!(set[2].version, 3);
+    assert_eq!(set[2].description, "cjk_typography_prefs");
+    assert_eq!(set[2].sql, SCHEMA_V3, "v3 SQL is SCHEMA_V3 (one source of truth)");
+    assert!(set[2].sql.contains("cjk_punct_trim"));
+    assert!(set[2].sql.contains("cjk_autospace"));
+    assert!(set[2].sql.contains("cjk_kinsoku"));
+    assert!(set[2].sql.contains("DEFAULT 1"));
 }

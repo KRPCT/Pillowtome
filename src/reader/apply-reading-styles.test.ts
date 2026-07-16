@@ -31,6 +31,9 @@ describe("DEFAULT_PREFS / constants", () => {
       lineHeight: 1.75,
       marginPx: 24,
       activeFontId: null,
+      cjkPunctTrim: true,
+      cjkAutospace: true,
+      cjkKinsoku: true,
     });
   });
 

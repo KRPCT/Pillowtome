@@ -28,6 +28,9 @@ interface ReadingPrefsRow {
   margin_px: number;
   active_font_id: string | null;
   updated_at: number;
+  cjk_punct_trim?: number | null;
+  cjk_autospace?: number | null;
+  cjk_kinsoku?: number | null;
 }
 
 function isMode(v: string): v is ReadingMode {
@@ -36,6 +39,12 @@ function isMode(v: string): v is ReadingMode {
 
 function isTheme(v: string): v is ReadingTheme {
   return v === "day" || v === "night" || v === "sepia";
+}
+
+/** Missing/undefined columns soft-fail to ON (D-32 / D-34). */
+function cjkFlagOn(value: number | null | undefined): boolean {
+  if (value == null) return true;
+  return value !== 0;
 }
 
 function rowToPrefs(row: ReadingPrefsRow): ReadingPrefs {
@@ -56,6 +65,9 @@ function rowToPrefs(row: ReadingPrefsRow): ReadingPrefs {
         ? row.margin_px
         : DEFAULT_PREFS.marginPx,
     activeFontId: row.active_font_id ?? null,
+    cjkPunctTrim: cjkFlagOn(row.cjk_punct_trim),
+    cjkAutospace: cjkFlagOn(row.cjk_autospace),
+    cjkKinsoku: cjkFlagOn(row.cjk_kinsoku),
   };
 }
 
@@ -68,7 +80,7 @@ export async function loadReadingPrefs(): Promise<ReadingPrefs> {
   try {
     const db = await openDb();
     const rows = await db.select<ReadingPrefsRow[]>(
-      "SELECT id, mode, theme, font_family_key, font_size_px, line_height, margin_px, active_font_id, updated_at FROM reading_prefs WHERE id = $1",
+      "SELECT id, mode, theme, font_family_key, font_size_px, line_height, margin_px, active_font_id, updated_at, cjk_punct_trim, cjk_autospace, cjk_kinsoku FROM reading_prefs WHERE id = $1",
       [GLOBAL_ID],
     );
     if (!rows?.length) return { ...DEFAULT_PREFS };
@@ -79,14 +91,15 @@ export async function loadReadingPrefs(): Promise<ReadingPrefs> {
   }
 }
 
-/** Upsert global prefs with bound parameters only (T-02-sql). */
+/** Upsert global prefs with bound parameters only (T-02-sql / T-03-sql). */
 export async function saveReadingPrefs(prefs: ReadingPrefs): Promise<void> {
   const db = await openDb();
   const updatedAt = Date.now();
   await db.execute(
     `INSERT INTO reading_prefs (
-      id, mode, theme, font_family_key, font_size_px, line_height, margin_px, active_font_id, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      id, mode, theme, font_family_key, font_size_px, line_height, margin_px, active_font_id, updated_at,
+      cjk_punct_trim, cjk_autospace, cjk_kinsoku
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     ON CONFLICT(id) DO UPDATE SET
       mode = excluded.mode,
       theme = excluded.theme,
@@ -95,7 +108,10 @@ export async function saveReadingPrefs(prefs: ReadingPrefs): Promise<void> {
       line_height = excluded.line_height,
       margin_px = excluded.margin_px,
       active_font_id = excluded.active_font_id,
-      updated_at = excluded.updated_at`,
+      updated_at = excluded.updated_at,
+      cjk_punct_trim = excluded.cjk_punct_trim,
+      cjk_autospace = excluded.cjk_autospace,
+      cjk_kinsoku = excluded.cjk_kinsoku`,
     [
       GLOBAL_ID,
       prefs.mode,
@@ -106,6 +122,9 @@ export async function saveReadingPrefs(prefs: ReadingPrefs): Promise<void> {
       prefs.marginPx,
       prefs.activeFontId,
       updatedAt,
+      prefs.cjkPunctTrim ? 1 : 0,
+      prefs.cjkAutospace ? 1 : 0,
+      prefs.cjkKinsoku ? 1 : 0,
     ],
   );
 }

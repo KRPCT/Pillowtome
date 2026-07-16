@@ -14,6 +14,12 @@ export interface ReadingPrefs {
   lineHeight: number;
   marginPx: number;
   activeFontId: string | null;
+  /** 标点挤压 (CJK-01 / D-32). */
+  cjkPunctTrim: boolean;
+  /** 盘古之白 (CJK-02 / D-32). */
+  cjkAutospace: boolean;
+  /** 禁则 (CJK-03 / D-32). */
+  cjkKinsoku: boolean;
 }
 
 /** UI-SPEC defaults: paginate / day / system CJK / 18px / 1.75 / 24px margins. */
@@ -25,6 +31,9 @@ export const DEFAULT_PREFS: ReadingPrefs = {
   lineHeight: 1.75,
   marginPx: 24,
   activeFontId: null,
+  cjkPunctTrim: true,
+  cjkAutospace: true,
+  cjkKinsoku: true,
 };
 
 /** Default reading body stack — never Geist (chrome-only). */

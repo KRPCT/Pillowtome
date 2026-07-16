@@ -86,10 +86,21 @@ INSERT INTO reading_prefs (
 );
 "#;
 
+/// Schema v3 DDL — global CJK typography toggles on reading_prefs (D-34).
+///
+/// Append-only: never rewrite [`SCHEMA_V1`] / [`SCHEMA_V2`]. Existing `global`
+/// seed row gets DEFAULT 1 for each column (标点挤压 / 盘古之白 / 禁则 ON).
+pub const SCHEMA_V3: &str = r#"
+ALTER TABLE reading_prefs ADD COLUMN cjk_punct_trim INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE reading_prefs ADD COLUMN cjk_autospace INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE reading_prefs ADD COLUMN cjk_kinsoku INTEGER NOT NULL DEFAULT 1;
+"#;
+
 /// The migration set applied to `sqlite:pillow.db` at startup.
 ///
 /// Schema v1 seeds identity tables; schema v2 appends prefs/fonts + locator unique
-/// index. Later phases append higher versions; they never rewrite v1.
+/// index; schema v3 appends CJK toggle columns. Later phases append higher versions;
+/// they never rewrite prior schemas.
 pub fn migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -102,6 +113,12 @@ pub fn migrations() -> Vec<Migration> {
             version: 2,
             description: "reading_prefs_and_custom_fonts",
             sql: SCHEMA_V2,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 3,
+            description: "cjk_typography_prefs",
+            sql: SCHEMA_V3,
             kind: MigrationKind::Up,
         },
     ]

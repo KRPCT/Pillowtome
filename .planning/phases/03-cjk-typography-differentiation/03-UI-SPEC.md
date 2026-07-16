@@ -1,10 +1,11 @@
 ---
 phase: 3
 slug: cjk-typography-differentiation
-status: draft
+status: approved
 shadcn_initialized: true
 preset: radix-nova (b2fA)
 created: 2026-07-16
+reviewed_at: 2026-07-16
 extends: .planning/phases/02-epub-reading-core/02-UI-SPEC.md
 ---
 

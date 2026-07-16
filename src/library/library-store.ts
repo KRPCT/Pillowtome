@@ -86,22 +86,37 @@ export async function insertLibraryItem(item: {
   importedAt: number;
 }): Promise<void> {
   const db = await openDb();
-  await db.execute(
-    `INSERT INTO library_item (
-       item_id, work_id, source_id, title, author, cover_file,
-       imported_at, last_opened_at, last_read_at
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL)
-     ON CONFLICT(work_id) DO NOTHING`,
-    [
-      item.itemId,
-      item.workId,
-      item.sourceId,
-      item.title,
-      item.author,
-      item.coverFile,
-      item.importedAt,
-    ],
-  );
+  try {
+    await db.execute(
+      `INSERT INTO library_item (
+         item_id, work_id, source_id, title, author, cover_file,
+         imported_at, last_opened_at, last_read_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL)
+       ON CONFLICT(work_id) DO NOTHING`,
+      [
+        item.itemId,
+        item.workId,
+        item.sourceId,
+        item.title,
+        item.author,
+        item.coverFile,
+        item.importedAt,
+      ],
+    );
+  } catch (err) {
+    const msg = String(err);
+    // Common when app DB has not migrated to SCHEMA_V4 yet — surface clearly.
+    if (
+      msg.includes("no such table") ||
+      msg.includes("library_item") ||
+      msg.includes("SQLITE_ERROR")
+    ) {
+      throw new Error(
+        "书库数据表未就绪，请完全退出应用后重新打开（将自动升级数据库）。",
+      );
+    }
+    throw err;
+  }
 }
 
 /** Touch last_opened_at (D-65). */

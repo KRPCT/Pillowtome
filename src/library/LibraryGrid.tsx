@@ -11,6 +11,8 @@ export interface LibraryGridProps {
   onOpen: (item: LibraryItem) => void;
   onRefresh: () => void;
   onImportedOpen?: (sourceId: string) => void;
+  /** When true, hide empty-state import buttons (chrome already has them). */
+  chromeHasActions?: boolean;
 }
 
 export function LibraryGrid({
@@ -18,6 +20,7 @@ export function LibraryGrid({
   onOpen,
   onRefresh,
   onImportedOpen,
+  chromeHasActions = false,
 }: LibraryGridProps) {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("recent");
@@ -33,28 +36,29 @@ export function LibraryGrid({
         <p className="library-empty__text">
           书库还是空的。导入一本 EPUB，或扫描文件夹批量添加。
         </p>
-        <div className="library-empty__actions">
-          <ImportButton
-            onImported={(b) => onImportedOpen?.(b.id)}
-            onDone={onRefresh}
-          />
-          <FolderScanButton onDone={onRefresh} />
-        </div>
+        {!chromeHasActions ? (
+          <div className="library-empty__actions">
+            <ImportButton
+              onImported={(b) => onImportedOpen?.(b.id)}
+              onDone={onRefresh}
+            />
+            <FolderScanButton onDone={onRefresh} />
+          </div>
+        ) : (
+          <p className="library-empty__hint">使用上方「导入」或「扫描」添加书籍</p>
+        )}
       </section>
     );
   }
 
   return (
     <section className="library" aria-label="书库">
-      <div className="library__header">
-        <h2 className="library__title">书库</h2>
-        <LibraryToolbar
-          filter={filter}
-          sort={sort}
-          onFilterChange={setFilter}
-          onSortChange={setSort}
-        />
-      </div>
+      <LibraryToolbar
+        filter={filter}
+        sort={sort}
+        onFilterChange={setFilter}
+        onSortChange={setSort}
+      />
       <div className="library-grid">
         {view.map((item) => (
           <LibraryCard key={item.itemId} item={item} onOpen={onOpen} />

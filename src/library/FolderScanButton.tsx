@@ -7,18 +7,39 @@ import {
   type IngestResult,
   type ScanSummary,
 } from "./import-pipeline";
-import { insertLibraryItem, listLibraryItems, libraryHasWorkId } from "./library-store";
+import {
+  insertLibraryItem,
+  listLibraryItems,
+  libraryHasWorkId,
+} from "./library-store";
 import { ensureWorkRow } from "../reader/locator-store";
+import { Button } from "@/components/ui/button";
 
 export interface FolderScanButtonProps {
   onDone?: () => void;
+  variant?: "default" | "toolbar";
+  className?: string;
+}
+
+function newItemId(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* fall through */
+  }
+  return `item-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
 /**
  * 「扫描文件夹」— desktop recursive EPUB scan (D-50, D-53).
- * Android shows guidance to use 导入书籍 until SAF tree walk lands.
  */
-export function FolderScanButton({ onDone }: FolderScanButtonProps) {
+export function FolderScanButton({
+  onDone,
+  variant = "default",
+  className,
+}: FolderScanButtonProps) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -28,7 +49,7 @@ export function FolderScanButton({ onDone }: FolderScanButtonProps) {
     try {
       const onAndroid = await invoke<boolean>("is_android");
       if (onAndroid) {
-        setStatus("Android 请使用「导入书籍」选择文件（目录扫描后续完善）。");
+        setStatus("Android 请使用「导入」选择 EPUB 文件。");
         return;
       }
       const picked = await open({
@@ -60,15 +81,38 @@ export function FolderScanButton({ onDone }: FolderScanButtonProps) {
     }
   }
 
+  const label = busy ? "扫描中…" : variant === "toolbar" ? "扫描" : "扫描文件夹";
+
+  if (variant === "toolbar") {
+    return (
+      <div className={className}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => void handleScan()}
+        >
+          {label}
+        </Button>
+        {status ? (
+          <p className="library-status" role="status">
+            {status}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <div className="import">
+    <div className={className ?? "import"}>
       <button
         type="button"
         className="import-book"
         onClick={() => void handleScan()}
         disabled={busy}
       >
-        {busy ? "扫描中…" : "扫描文件夹"}
+        {label}
       </button>
       {status ? (
         <p className="import__error" role="status">
@@ -84,7 +128,7 @@ async function persistIngest(result: IngestResult): Promise<void> {
   if (await libraryHasWorkId(result.workId)) return;
   await ensureWorkRow(result.workId, result.contentHash ?? result.workId, "epub");
   await insertLibraryItem({
-    itemId: crypto.randomUUID(),
+    itemId: newItemId(),
     workId: result.workId,
     sourceId: result.sourceId,
     title: result.title ?? "未知书名",

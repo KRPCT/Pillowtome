@@ -4,13 +4,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { knownHashesFromItems, summarizeIngest } from "./import-pipeline";
 import { ingestPathToLibrary } from "./import-actions";
 import { listLibraryItems } from "./library-store";
+import { Button } from "@/components/ui/button";
 
 /**
- * 「导入书籍」按钮（简体中文）— catalog-aware (LIB-01).
- *
- * - 桌面：`dialog.open` → `library_ingest`
- * - Android：Rust SAF picker via `library_ingest` (path null)
- * Never returns book bytes (D-06).
+ * 「导入书籍」— catalog-aware (LIB-01).
  */
 
 export interface ImportedBook {
@@ -19,13 +16,19 @@ export interface ImportedBook {
 }
 
 export interface ImportButtonProps {
-  /** After successful catalog insert; id is source_id for pillow open. */
   onImported?: (book: ImportedBook) => void;
-  /** Always called after a completed attempt (refresh shelf). */
   onDone?: () => void;
+  /** Compact toolbar style */
+  variant?: "default" | "toolbar";
+  className?: string;
 }
 
-export function ImportButton({ onImported, onDone }: ImportButtonProps) {
+export function ImportButton({
+  onImported,
+  onDone,
+  variant = "default",
+  className,
+}: ImportButtonProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,8 +61,7 @@ export function ImportButton({ onImported, onDone }: ImportButtonProps) {
           id: result.sourceId,
           name: result.title ?? "未知书名",
         });
-      } else if (result.status === "skipped_duplicate") {
-        setError(caption);
+        if (result.message) setError(result.message);
       } else {
         setError(caption);
       }
@@ -68,15 +70,36 @@ export function ImportButton({ onImported, onDone }: ImportButtonProps) {
       console.error("[ImportButton] 导入失败", err);
       const msg = String(err);
       if (!msg.includes("已取消")) {
-        setError("导入失败，请重试。");
+        setError(msg.replace(/^Error:\s*/i, "") || "导入失败，请重试。");
       }
     } finally {
       setBusy(false);
     }
   }
 
+  if (variant === "toolbar") {
+    return (
+      <div className={className}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => void handleImport()}
+        >
+          {busy ? "导入中…" : "导入"}
+        </Button>
+        {error ? (
+          <p className="library-status" role="status">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <div className="import">
+    <div className={className ?? "import"}>
       <button
         type="button"
         className="import-book"

@@ -94,7 +94,7 @@ Plans:
 
 - [x] 03-00-PLAN.md — Wave 0: SCHEMA_V3 CJK prefs columns + ReadingPrefs defaults ON + pure feature-detect/kinsoku/autospace-shim contracts + shadcn switch/popover + coverage fixtures [Wave 0, autonomous]
 - [x] 03-01-PLAN.md — CJK CSS pipeline (`text-spacing-trim`, `text-autospace`, `line-break`/kinsoku) + indent defaults + autospace JS shim on FoliateView & ContinuousScrollStream (CJK-01..04) [Wave 1, autonomous]
-- [ ] 03-02-PLAN.md — Aa「中文排版」section: three toggles default ON + 简体中文 info popovers (D-30..D-34, D-38) [Wave 1, autonomous]
+- [x] 03-02-PLAN.md — Aa「中文排版」section: three toggles default ON + 简体中文 info popovers (D-30..D-34, D-38) [Wave 1, autonomous]
 - [ ] 03-03-PLAN.md — Bundled Noto Sans CJK SC+TC OFL + pillow serve + coverage-aware stack + golden-image harness Blink+WebKit (CJK-05) [Wave 2, autonomous]
 
 ### Phase 4: Local Library
@@ -196,7 +196,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Foundation & Cross-Platform Skeleton | 5/5 | Executed | 2026-07-10 |
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
-| 3. CJK Typography Differentiation | 2/4 | In Progress|  |
+| 3. CJK Typography Differentiation | 3/4 | In Progress|  |
 | 4. Local Library | 0/TBD | Not started | - |
 | 5. Annotations & Composite Locator | 0/TBD | Not started | - |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |

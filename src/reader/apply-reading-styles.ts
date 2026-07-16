@@ -3,8 +3,17 @@
  * No React / Tauri imports — unit-testable.
  */
 
+import type { CjkCssCaps } from "./cjk-feature-detect";
+
 export type ReadingMode = "paginate" | "scroll";
 export type ReadingTheme = "day" | "night" | "sepia";
+
+/** Safe default for unit tests / callers that omit capability probes. */
+export const NO_CJK_CAPS: CjkCssCaps = {
+  textSpacingTrim: false,
+  textAutospace: false,
+  lineBreakStrict: false,
+};
 
 export interface ReadingPrefs {
   mode: ReadingMode;
@@ -120,6 +129,55 @@ export function applyFoliateLayoutAttrs(
 }
 
 /**
+ * CJK typography CSS gated by prefs + runtime caps (CJK-01..04, D-35..D-42).
+ * Pure property templates only — no free-form user strings (T-03-css).
+ */
+export function buildCjkCss(prefs: ReadingPrefs, caps: CjkCssCaps): string {
+  const parts: string[] = [];
+
+  // CJK-04 defaults (always on; not toggles). D-40 indent / D-41 line-height stays on body/p.
+  parts.push(`
+    body p {
+      text-indent: 2em !important;
+    }
+    body h1, body h2, body h3, body h4, body h5, body h6,
+    body blockquote, body pre, body li, body td, body th {
+      text-indent: 0 !important;
+    }
+  `);
+
+  // CJK-01 标点挤压 — CSS-only; silent degrade when unsupported (D-38). No JS rewriter.
+  if (prefs.cjkPunctTrim && caps.textSpacingTrim) {
+    parts.push(`html, body { text-spacing-trim: normal !important; }`);
+  } else if (!prefs.cjkPunctTrim && caps.textSpacingTrim) {
+    // OFF path: space-all restores full-width spacing when engine supports the property.
+    parts.push(`html, body { text-spacing-trim: space-all !important; }`);
+  }
+
+  // CJK-02 盘古之白 — native CSS when caps allow; else caller may install shim.
+  if (prefs.cjkAutospace && caps.textAutospace) {
+    parts.push(`html, body { text-autospace: normal !important; }`);
+  } else if (!prefs.cjkAutospace && caps.textAutospace) {
+    parts.push(`html, body { text-autospace: no-autospace !important; }`);
+  }
+
+  // CJK-03 禁则 — never word-break: break-all.
+  if (prefs.cjkKinsoku && caps.lineBreakStrict) {
+    parts.push(`
+      html, body {
+        line-break: strict !important;
+        word-break: normal !important;
+        overflow-wrap: break-word !important;
+      }
+    `);
+  } else if (!prefs.cjkKinsoku) {
+    parts.push(`html, body { line-break: auto !important; }`);
+  }
+
+  return parts.join("\n");
+}
+
+/**
  * Build CSS for `renderer.setStyles(...)`.
  *
  * Horizontal page margins use body padding (`prefs.marginPx` left/right).
@@ -131,17 +189,22 @@ export function applyFoliateLayoutAttrs(
  * which wins over `html { background }` alone — leaving white patches /
  * mismatched chrome vs page. Force html+body (+ common wrappers) with
  * !important and both `background` / `background-color`.
+ *
+ * Optional `caps` gates CJK property emission (D-35). Defaults to no caps so
+ * unit tests without probes stay silent on engine-specific properties.
  */
 export function buildReadingCss(
   prefs: ReadingPrefs,
   fontFaceCss: string,
   fontFamilyCss: string,
+  caps: CjkCssCaps = NO_CJK_CAPS,
 ): string {
   const colors = PAGE_COLORS[prefs.theme];
   const m = prefs.marginPx;
   const top = PAGE_TOP_EXTRA_PX;
   const bg = colors.background;
   const fg = colors.foreground;
+  const cjk = buildCjkCss(prefs, caps);
   return `
     ${fontFaceCss}
     html {
@@ -179,5 +242,6 @@ export function buildReadingCss(
     a {
       color: inherit !important;
     }
+    ${cjk}
   `;
 }

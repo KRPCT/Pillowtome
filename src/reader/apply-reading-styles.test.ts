@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_PREFS,
   FOLIATE_MAX_BLOCK_SIZE_FLOOR_PX,
+  NO_CJK_CAPS,
   PAGE_COLORS,
   SYSTEM_CJK_STACK,
   applyFoliateLayoutAttrs,
@@ -10,6 +11,13 @@ import {
   foliateMarginBandPx,
   type ReadingTheme,
 } from "./apply-reading-styles";
+import type { CjkCssCaps } from "./cjk-feature-detect";
+
+const ALL_CJK_CAPS: CjkCssCaps = {
+  textSpacingTrim: true,
+  textAutospace: true,
+  lineBreakStrict: true,
+};
 
 describe("flowAttr", () => {
   it("maps paginate → paginated", () => {
@@ -79,6 +87,47 @@ describe("buildReadingCss", () => {
     expect(css).toContain("background-color: #FFFEF9 !important");
     // Both html and body get the paint
     expect(css.indexOf("html")).toBeLessThan(css.indexOf("body"));
+  });
+
+  it("always emits CJK-04 indent defaults", () => {
+    const css = buildReadingCss(DEFAULT_PREFS, "", SYSTEM_CJK_STACK, NO_CJK_CAPS);
+    expect(css).toContain("text-indent: 2em");
+    expect(css).toMatch(/body h1[\s\S]*text-indent:\s*0/);
+    expect(css).toContain("blockquote");
+    expect(css).not.toContain("break-all");
+    expect(css).not.toMatch(/content:\s*["']「/);
+  });
+
+  it("emits trim/autospace/line-break only when toggle+caps true", () => {
+    const css = buildReadingCss(DEFAULT_PREFS, "", SYSTEM_CJK_STACK, ALL_CJK_CAPS);
+    expect(css).toContain("text-spacing-trim: normal");
+    expect(css).toContain("text-autospace: normal");
+    expect(css).toContain("line-break: strict");
+    expect(css).toContain("word-break: normal");
+    expect(css).not.toContain("break-all");
+  });
+
+  it("OFF paths emit engine-safe tokens without break-all", () => {
+    const prefs = {
+      ...DEFAULT_PREFS,
+      cjkPunctTrim: false,
+      cjkAutospace: false,
+      cjkKinsoku: false,
+    };
+    const css = buildReadingCss(prefs, "", SYSTEM_CJK_STACK, ALL_CJK_CAPS);
+    expect(css).toContain("text-spacing-trim: space-all");
+    expect(css).toContain("text-autospace: no-autospace");
+    expect(css).toContain("line-break: auto");
+    expect(css).not.toContain("text-spacing-trim: normal");
+    expect(css).not.toContain("line-break: strict");
+    expect(css).not.toContain("break-all");
+  });
+
+  it("silent-degrades when caps are false (no trim/autospace/strict)", () => {
+    const css = buildReadingCss(DEFAULT_PREFS, "", SYSTEM_CJK_STACK, NO_CJK_CAPS);
+    expect(css).not.toContain("text-spacing-trim");
+    expect(css).not.toContain("text-autospace");
+    expect(css).not.toContain("line-break: strict");
   });
 });
 

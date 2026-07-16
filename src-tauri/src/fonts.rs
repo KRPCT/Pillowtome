@@ -211,7 +211,19 @@ pub fn resolve_font_path(fonts_dir: &Path, id: &str) -> Option<PathBuf> {
     None
 }
 
-/// Count existing font files in the fonts directory (for limit enforcement).
+/// Reserved bundled face ids (CJK-05). Flat tokens that pass [`is_safe_font_id`].
+pub const BUNDLED_NOTO_SC_ID: &str = "bundled-noto-sc";
+pub const BUNDLED_NOTO_TC_ID: &str = "bundled-noto-tc";
+
+/// True when the file stem is a reserved bundled face (excluded from custom count).
+pub fn is_bundled_font_id(id: &str) -> bool {
+    id.starts_with("bundled-")
+}
+
+/// Count **custom** font files in the fonts directory (for limit enforcement).
+///
+/// Files whose stem starts with `bundled-` are product faces (CJK-05) and do
+/// **not** consume the user's [`MAX_CUSTOM_FONTS`] slots.
 pub fn count_font_files(fonts_dir: &Path) -> Result<usize, String> {
     if !fonts_dir.exists() {
         return Ok(0);
@@ -221,13 +233,48 @@ pub fn count_font_files(fonts_dir: &Path) -> Result<usize, String> {
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if let Some((_stem, ext)) = name.rsplit_once('.') {
+        if let Some((stem, ext)) = name.rsplit_once('.') {
+            if is_bundled_font_id(stem) {
+                continue;
+            }
             if ALLOWED_EXTS.contains(&ext.to_ascii_lowercase().as_str()) {
                 n += 1;
             }
         }
     }
     Ok(n)
+}
+
+/// Write embedded bytes to `fonts_dir/{id}.otf` when missing or size-mismatched.
+///
+/// Soft-fail friendly: returns Ok(false) when skipped (already present), Ok(true)
+/// when written. Callers log warn on Err without blocking app start.
+pub fn materialize_bundled_font(
+    fonts_dir: &Path,
+    id: &str,
+    bytes: &[u8],
+) -> Result<bool, String> {
+    if !is_safe_font_id(id) {
+        return Err(format!("bundled font id unsafe: {id}"));
+    }
+    if bytes.is_empty() {
+        return Err(format!("bundled font empty: {id}"));
+    }
+    fs::create_dir_all(fonts_dir).map_err(|e| format!("无法创建字体目录：{e}"))?;
+    let dest = fonts_dir.join(format!("{id}.otf"));
+    if !dest.starts_with(fonts_dir) {
+        return Err("字体路径无效。".to_string());
+    }
+    let expected = bytes.len() as u64;
+    let stale = match fs::metadata(&dest) {
+        Ok(meta) if meta.is_file() && meta.len() == expected => false,
+        _ => true,
+    };
+    if !stale {
+        return Ok(false);
+    }
+    fs::write(&dest, bytes).map_err(|e| format!("写入内置字体失败（{id}）：{e}"))?;
+    Ok(true)
 }
 
 /// Content-Type for a font extension (lowercase, no dot).
@@ -375,6 +422,8 @@ mod tests {
         assert!(!is_safe_font_id(".."));
         assert!(!is_safe_font_id("x.y"));
         assert!(is_safe_font_id("f0123456789abcdef"));
+        assert!(is_safe_font_id(BUNDLED_NOTO_SC_ID));
+        assert!(is_safe_font_id(BUNDLED_NOTO_TC_ID));
 
         let dir = temp_fonts_dir("trav");
         assert!(remove_font_file(&dir, "../evil").is_err());
@@ -394,5 +443,28 @@ mod tests {
         assert_eq!(font_content_type("ttf"), "font/ttf");
         assert_eq!(font_content_type("OTF"), "font/otf");
         assert_eq!(font_content_type("woff"), "font/woff");
+    }
+
+    #[test]
+    fn bundled_ids_resolve_and_excluded_from_custom_count() {
+        let dir = temp_fonts_dir("bundled");
+        let bytes = b"OTTO-fake-font-bytes";
+        assert!(materialize_bundled_font(&dir, BUNDLED_NOTO_SC_ID, bytes).unwrap());
+        // Second call is a no-op when size matches.
+        assert!(!materialize_bundled_font(&dir, BUNDLED_NOTO_SC_ID, bytes).unwrap());
+        let path = resolve_font_path(&dir, BUNDLED_NOTO_SC_ID).expect("resolve sc");
+        assert!(path.exists());
+        // Bundled does not count toward custom limit.
+        assert_eq!(count_font_files(&dir).unwrap(), 0);
+        // Custom file still counts (source lives outside fonts dir).
+        let src = std::env::temp_dir().join(format!(
+            "pillow-bundled-src-{}.ttf",
+            std::process::id()
+        ));
+        write_dummy_font(&src, 64);
+        import_font_into(&dir, &src, 0).expect("import custom");
+        assert_eq!(count_font_files(&dir).unwrap(), 1);
+        let _ = fs::remove_file(&src);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

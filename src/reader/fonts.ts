@@ -121,15 +121,32 @@ export function pillowCustomFamily(id: string): string {
   return `PillowCustom-${id}`;
 }
 
-/** Bundled Noto Sans CJK family name (filled in 03-03; stub for D-47 prep). */
+/** Bundled Noto Sans CJK family name (D-47 / CJK-05). */
 export const BUNDLED_CJK_FAMILY = "PillowBundledCJK";
 
+/** Pillow protocol font ids for materialized Noto SC/TC (safe flat tokens). */
+export const BUNDLED_NOTO_SC_ID = "bundled-noto-sc";
+export const BUNDLED_NOTO_TC_ID = "bundled-noto-tc";
+
 /**
- * `@font-face` CSS for bundled CJK faces.
- * Wave 0 stub returns empty; 03-03 materializes real faces.
+ * `@font-face` CSS for bundled CJK faces (same family, SC + TC sources).
+ * Served via pillow fonts path — never IPC bytes (D-06).
  */
 export function buildBundledCjkFontFaceCss(): string {
-  return "";
+  const sc = pillowFontUrl(BUNDLED_NOTO_SC_ID);
+  const tc = pillowFontUrl(BUNDLED_NOTO_TC_ID);
+  return `
+    @font-face {
+      font-family: "${BUNDLED_CJK_FAMILY}";
+      src: url("${sc}");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "${BUNDLED_CJK_FAMILY}";
+      src: url("${tc}");
+      font-display: swap;
+    }
+  `;
 }
 
 /**
@@ -150,14 +167,16 @@ export function buildFontFaceCss(activeFontId: string | null | undefined): strin
 }
 
 /**
- * Body font-family CSS: custom face first, then system CJK stack.
+ * Body font-family CSS: custom? → PillowBundledCJK → system CJK stack (D-47).
+ * Incomplete custom face still falls through to bundled for CJK coverage.
  */
 export function fontFamilyCssFor(
   fontFamilyKey: string,
   activeFontId: string | null | undefined,
 ): string {
+  const tail = `"${BUNDLED_CJK_FAMILY}", ${SYSTEM_CJK_STACK}`;
   if (fontFamilyKey === "system" || !activeFontId) {
-    return SYSTEM_CJK_STACK;
+    return tail;
   }
-  return `"${pillowCustomFamily(activeFontId)}", ${SYSTEM_CJK_STACK}`;
+  return `"${pillowCustomFamily(activeFontId)}", ${tail}`;
 }

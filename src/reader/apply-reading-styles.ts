@@ -45,9 +45,9 @@ export const DEFAULT_PREFS: ReadingPrefs = {
   cjkKinsoku: true,
 };
 
-/** Default reading body stack — never Geist (chrome-only). */
+/** Default reading body stack — never Geist (chrome-only). Includes TC names (D-44/D-47). */
 export const SYSTEM_CJK_STACK =
-  'system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
+  'system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK TC", sans-serif';
 
 /** Book page colors injected into foliate render documents (UI-SPEC §Color B). */
 export const PAGE_COLORS: Record<

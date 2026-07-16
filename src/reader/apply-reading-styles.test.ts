@@ -45,10 +45,10 @@ describe("DEFAULT_PREFS / constants", () => {
     });
   });
 
-  it("exports system CJK stack", () => {
-    expect(SYSTEM_CJK_STACK).toBe(
-      'system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif',
-    );
+  it("exports system CJK stack with TC names", () => {
+    expect(SYSTEM_CJK_STACK).toContain("Noto Sans CJK SC");
+    expect(SYSTEM_CJK_STACK).toContain("Noto Sans CJK TC");
+    expect(SYSTEM_CJK_STACK).not.toContain("Geist");
   });
 });
 

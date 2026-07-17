@@ -381,18 +381,21 @@ const cfi = view.getCFI(index, doc.getSelection()!.getRangeAt(0));
 | A5 | content_hash 用 Rust blake3（保持与 `work` 一致）；planner 可选 WebCrypto SHA-256 省一次 invoke | Data Model | 算法一旦定需写入 payload；跨端须一致，否则 P7 dedup 失效 |
 | A6 | device_id/logical_clock 应在 P5 建立（roadmap「landing the change-log schema, unsynced」+ D-81 要求 P5 写 change_log） | Data Model | 若 planner 判其属 P7，则 P5 change_log 写入缺 device/clock → 与 D-81 冲突，需在 discuss 澄清 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **分页闭合 shadow 下气泡坐标映射的精确平移量**
    - 已知：`range.getClientRects()` 相对渲染 iframe 视口；host 铺满可近似平移。
    - 不清楚：不同 DPI/竖屏/分栏下 host↔iframe 偏移是否恒定。
    - 建议：设备端（Android 模拟器）实测 + 桌面双栏实测，作为验收硬门；必要时读 `foliate-view` host rect 动态校正。
+   - **RESOLVED** by 05-05 Task 2（Android 设备验收硬门）：分页闭合 shadow 气泡坐标映射列为 device-gate 硬门 step 1，在 AVD `Medium_Phone_API_36.1` 上双模式（分页 + 滚动）人工/截图验收；若 DPI/竖屏/分栏下漂移，按 T-05-14 动态读 `foliate-view` host rect 校正。
 
 2. **content_hash 算法归属（blake3 via invoke vs WebCrypto SHA-256）**
    - 建议：默认 Rust blake3（与身份一致、免依赖）；若 planner 权衡 IPC 频次可改 SHA-256，但须在 change_log payload 标注算法版本。
+   - **RESOLVED** by 05-01 Task 2：改用 **WebCrypto SHA-256**（对固定字段集 `{type, cfi, color, text_exact, note, deleted}` 的规范序列化取哈希），在 change_log payload 中以 `hash_algo:"sha256"` 标注——纯前端、无 IPC、无新依赖，且为**非安全用途 dedup 哈希**（不同于 `work.content_hash` 的 blake3，见 05-01 WARNING 注记，P7 同步不得假设跨表单一哈希算法）。
 
 3. **device_id/clock 生成放 P5 还是 P7**
    - 建议：放 P5（本研究据 D-81/roadmap 判定 P5 需写 change_log）。若与 planner 认知不一致，discuss-phase 澄清。
+   - **RESOLVED** by 05-01：`device_id` + 单调 `logical_clock` 于 P5 建立，存 `sync_meta` 表（V7），`annotation-store.ensureDevice()` 首启生成 `crypto.randomUUID()`；change_log 每行的 clock 在单条原子 INSERT 内 `COALESCE(MAX)+1`——符合 D-81/roadmap「landing the change-log schema, unsynced」。
 
 ## Environment Availability
 

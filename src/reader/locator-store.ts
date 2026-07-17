@@ -13,8 +13,11 @@ export const LOCATOR_DEBOUNCE_MS = 500;
 
 const DB_PATH = "sqlite:pillow.db";
 
-/** Max chars kept for text_exact window (P2; pre/post may be empty — research A1). */
+/** Max chars kept for text_exact window. */
 const TEXT_EXACT_MAX = 120;
+
+/** Chars kept on each side for the pre/post self-healing window (RESEARCH text_context). */
+const TEXT_CONTEXT_MAX = 16;
 
 export interface LocatorRow {
   work_id: string;
@@ -125,7 +128,7 @@ export async function upsertLocator(row: {
   }
 }
 
-/** Trim/window text_exact from a Range (or string); empty pre/post in P2. */
+/** Trim/window text_exact from a Range (or string). */
 export function textExactFromRange(range: Range | null | undefined): string | null {
   if (!range) return null;
   try {
@@ -135,6 +138,41 @@ export function textExactFromRange(range: Range | null | undefined): string | nu
   } catch {
     return null;
   }
+}
+
+/** Chars immediately before `offset` in a text node, whitespace-collapsed, capped. */
+function neighborBefore(node: Node | undefined, offset: number): string {
+  if (!node || node.nodeType !== 3 || typeof node.nodeValue !== "string") return "";
+  return node.nodeValue.slice(0, offset).replace(/\s+/g, " ").slice(-TEXT_CONTEXT_MAX);
+}
+
+/** Chars immediately after `offset` in a text node, whitespace-collapsed, capped. */
+function neighborAfter(node: Node | undefined, offset: number): string {
+  if (!node || node.nodeType !== 3 || typeof node.nodeValue !== "string") return "";
+  return node.nodeValue.slice(offset).replace(/\s+/g, " ").slice(0, TEXT_CONTEXT_MAX);
+}
+
+/**
+ * Build the composite text window `{ text_pre, text_exact, text_post }` from a Range.
+ * pre/post are the 16 chars adjacent to the range within its containing text nodes
+ * (empty string at a boundary; the whole struct's fields are null when no range).
+ * This is the self-healing window the shared anchor resolver reads back.
+ */
+export function textContextFromRange(range: Range | null | undefined): {
+  text_pre: string | null;
+  text_exact: string | null;
+  text_post: string | null;
+} {
+  if (!range) return { text_pre: null, text_exact: null, text_post: null };
+  let text_pre = "";
+  let text_post = "";
+  try {
+    text_pre = neighborBefore(range.startContainer, range.startOffset);
+    text_post = neighborAfter(range.endContainer, range.endOffset);
+  } catch {
+    /* leave boundaries empty */
+  }
+  return { text_pre, text_exact: textExactFromRange(range), text_post };
 }
 
 /**
@@ -158,14 +196,14 @@ export function relocateToLocatorRow(
       : null;
   const cfi =
     typeof detail?.cfi === "string" && detail.cfi.trim() ? detail.cfi : null;
-  const textExact = textExactFromRange(detail?.range ?? null);
+  const ctx = textContextFromRange(detail?.range ?? null);
 
   return {
     work_id: workId,
     cfi,
     progress_fraction: fraction,
-    text_pre: null, // P2: pre/post empty (research A1)
-    text_exact: textExact,
-    text_post: null,
+    text_pre: ctx.text_pre,
+    text_exact: ctx.text_exact,
+    text_post: ctx.text_post,
   };
 }

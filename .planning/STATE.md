@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-07-17T13:52:25.826Z"
-last_activity: 2026-07-17 -- Phase 05 planning complete
+last_updated: "2026-07-17T14:05:43.373Z"
+last_activity: 2026-07-17
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 23
-  completed_plans: 18
+  completed_plans: 19
   percent: 57
 ---
 
@@ -29,15 +29,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-09)
 
 **Core value:** 在任意一端打开书，都能以干净、舒适的中文排版稳定阅读，并与自托管（WebDAV）书库/进度状态可靠互通。
-**Current focus:** Phase 04 — local-library
+**Current focus:** Phase 05 — annotations-composite-locator
 
 ## Current Position
 
-Phase: 04 (local-library) — DELIVERED (ad-hoc). Phase 06 (formats) — bulk DELIVERED ahead of sequence. Phase 05 (annotations) — PLANNED, next.
+Phase: 05 (annotations-composite-locator) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-07-17 -- Phase 05 planning complete
+Last activity: 2026-07-17
 
-Progress: [██████░░░░] ~60% (Phases 1–4 done; Phase 6 formats done ahead; Phase 5 planned)
+Progress: [████████░░] 83%
 
 Delivered 2026-07-16..17 (ad-hoc, verified on Android AVD, all formats + both modes):
 
@@ -76,6 +77,7 @@ Next GSD entry point: reconcile phase status (audit), then `/gsd-plan-phase` / `
 | Phase 02 P02 | 3 min | 2 tasks | 6 files |
 | Phase 02 P03 | 3 min | 2 tasks | 7 files |
 | Phase 02 P04 | 6 min | 2 tasks | 13 files |
+| Phase 05 P01 | 12 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -104,6 +106,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Immersive default + 500ms locator debounce/flush; no 3s auto-hide — READ-04/D-24; optional auto-hide skipped per CONTEXT discretion
 - [Phase 02]: Font serve via pillow /fonts/{id} jailed under app_data/fonts; SQL metadata frontend-owned — READ-06/D-30; no font bytes over IPC
 - [Phase 02]: Search uses view.search whole book + buildSearchOpts without matchWholeWords — READ-07/D-31 CJK grapheme path
+- [Phase ?]: [05-01] annotation content_hash = WebCrypto SHA-256 (frontend, no IPC, no new dep), hash_algo tagged per change_log row; two-algorithm split from work.content_hash blake3 — P7 reads hash_algo per record
+- [Phase ?]: [05-01] change_log monotonic clock = COALESCE(MAX(logical_clock) per device)+1 computed inside a single atomic INSERT; sync_meta holds device_id only (logical_clock reserved). Delete is a tombstone (deleted=1), never physical DELETE
 
 ### Pending Todos
 
@@ -131,7 +135,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-17T13:00:32.164Z
+Last session: 2026-07-17T14:05:11.289Z
 Stopped at: Phase 5 UI-SPEC approved
-Resume file: .planning/phases/05-annotations-composite-locator/05-UI-SPEC.md
+Resume file: None
 Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

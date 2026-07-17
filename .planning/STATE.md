@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: 05-05 device gate BLOCKED (2 defects) — routed to /gsd-plan-phase 05 --gaps
+stopped_at: 05-05 device gate BLOCKED (2 defects) — gap plans 05-06..05-08 planned + checked, ready to execute
 last_updated: "2026-07-18T00:00:00.000Z"
 last_activity: 2026-07-18
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 23
+  total_plans: 26
   completed_plans: 22
   percent: 57
 ---
@@ -33,12 +33,12 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 05 (annotations-composite-locator) — EXECUTING (device gate blocked)
-Plan: 5 of 5
-Status: Waves 1–3 done (05-01..05-04). 05-05 Android device gate BLOCKED — 2 defects found on AVD. Routed to /gsd-plan-phase 05 --gaps. Phase NOT complete.
-Last activity: 2026-07-18 — Phase 05 device gate; CSP blob: fix landed (25e9a23), selection ActionMode + PDF-outline defects deferred to gaps
+Phase: 05 (annotations-composite-locator) — EXECUTING (gap plans ready)
+Plan: 5 done + 3 gap plans planned (05-06..05-08)
+Status: Waves 1–3 done (05-01..05-04). 05-05 device gate BLOCKED (2 defects). Gap plans 05-06..05-08 planned via /gsd-plan-phase 05 --gaps, plan-checker PASSED (0 blockers, 2 non-blocking warnings). Ready to execute. Phase NOT complete.
+Last activity: 2026-07-18 — Phase 05 gap planning: 05-06 (PDF spine id guard), 05-07 (native ActionMode suppression + git-durability + prod-APK gate), 05-08 (re-run 8-step device acceptance)
 
-Progress: [█████████░] ~96% (4/5 plans; 05-05 device gate blocked)
+Progress: [█████████░] ~96% (4/5 original plans; 3 gap plans queued; 05-05 device gate blocked)
 
 Device gate (05-05) findings: .planning/phases/05-annotations-composite-locator/05-DEVICE-GATE-FINDINGS.md
 - FIXED (committed 25e9a23): app CSP blocked blob: → EPUB/PDF/MOBI/TXT unrenderable in production build (pre-existing since Phase 1, masked by dev-only gate). EPUB + PDF now render on AVD.
@@ -51,7 +51,7 @@ Delivered 2026-07-16..17 (ad-hoc, verified on Android AVD, all formats + both mo
 - Phase 6 (formats, ahead of sequence): PDF (pdf.js), MOBI, AZW3, TXT (custom adapter) rendering; engine title/author/cover backfill; in-book links (filepos:/kindle:); 简繁/词不拆行 for all formats incl. TXT.
 - Phase 5 (annotations): plan only — docs/READER-PHASE5-ANNOTATIONS-PLAN.md.
 
-Next GSD entry point: reconcile phase status (audit), then `/gsd-plan-phase` / `/gsd-execute-phase` for Phase 5 (annotations). Work on `main` (branching_strategy: none).
+Next GSD entry point: `/gsd-execute-phase 05` — wave 1 = 05-06 (autonomous) + 05-07 (device checkpoint), then 05-08 (device acceptance, depends_on 05-07). Work on `main` (branching_strategy: none).
 
 ## Performance Metrics
 

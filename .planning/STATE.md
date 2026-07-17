@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-04-PLAN.md
-last_updated: "2026-07-17T15:01:44.484Z"
-last_activity: 2026-07-17
+stopped_at: 05-05 device gate BLOCKED (2 defects) — routed to /gsd-plan-phase 05 --gaps
+last_updated: "2026-07-18T00:00:00.000Z"
+last_activity: 2026-07-18
 progress:
   total_phases: 7
   completed_phases: 4
@@ -33,12 +33,17 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 05 (annotations-composite-locator) — EXECUTING
+Phase: 05 (annotations-composite-locator) — EXECUTING (device gate blocked)
 Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-07-17
+Status: Waves 1–3 done (05-01..05-04). 05-05 Android device gate BLOCKED — 2 defects found on AVD. Routed to /gsd-plan-phase 05 --gaps. Phase NOT complete.
+Last activity: 2026-07-18 — Phase 05 device gate; CSP blob: fix landed (25e9a23), selection ActionMode + PDF-outline defects deferred to gaps
 
-Progress: [██████████] 96%
+Progress: [█████████░] ~96% (4/5 plans; 05-05 device gate blocked)
+
+Device gate (05-05) findings: .planning/phases/05-annotations-composite-locator/05-DEVICE-GATE-FINDINGS.md
+- FIXED (committed 25e9a23): app CSP blocked blob: → EPUB/PDF/MOBI/TXT unrenderable in production build (pre-existing since Phase 1, masked by dev-only gate). EPUB + PDF now render on AVD.
+- DEFECT 1 (blocking, Phase 5): native WebView selection ActionMode preempts custom SelectionBubble. Fix needs a durable native intercept (MainActivity onWebViewCreate reparent → startActionModeForChild); RustWebView.kt is regenerated each build + gen/android is gitignored → durability strategy required. Blocks the 8-step annotation acceptance.
+- DEFECT 2 (minor): PDF outline resolve throws `Te.id.endsWith is not a function` (FoliateView spine resolution assumes string id; PDF ref ids are numeric). Non-fatal; PDF renders.
 
 Delivered 2026-07-16..17 (ad-hoc, verified on Android AVD, all formats + both modes):
 

@@ -82,6 +82,17 @@ export interface FoliateViewElement extends HTMLElement {
     matchWholeWords?: boolean;
   }): AsyncGenerator<unknown>;
   clearSearch?(): void;
+  /** Range → range-CFI joined onto the section base CFI (paginate selection). */
+  getCFI?(index: number, range: Range): string;
+  /**
+   * Draw (or remove) an annotation via the closed-shadow Overlayer — the only
+   * path into the paginate iframe. `value` is a CFI string. Emits
+   * `draw-annotation` for the section whose overlayer is rendered.
+   */
+  addAnnotation?(
+    annotation: { value: string; type?: string; color?: string | null },
+    remove?: boolean,
+  ): Promise<{ index: number; label: string } | undefined>;
 }
 
 export interface RelocateDetail {

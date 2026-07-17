@@ -34,6 +34,7 @@ import { installAutospaceShim } from "./cjk-autospace-shim";
 import {
   clearHighlights,
   HIGHLIGHT_CSS,
+  paletteColor,
   registerHighlight,
   supportsCssHighlight,
   type HighlightType,
@@ -68,16 +69,6 @@ export interface ScrollSelection {
   iframe: HTMLIFrameElement;
   doc: Document;
   linearIndex: number;
-}
-
-/** Resolve the seed CSS color for the Overlayer fallback from the injected vars. */
-function paletteColor(doc: Document, color: string, type: HighlightType): string {
-  const varName = type === "highlight" ? `--anno-${color}-fill` : `--anno-${color}`;
-  const v = doc.defaultView
-    ?.getComputedStyle(doc.documentElement)
-    .getPropertyValue(varName)
-    .trim();
-  return v || "rgba(210,74,50,0.28)"; // cinnabar fallback
 }
 
 export interface ContinuousSection {
@@ -914,7 +905,7 @@ export function ContinuousScrollStream({
           }
           const draw = type === "underline" ? Overlayer.underline : Overlayer.highlight;
           overlayer.add(a.annotation_id, range, draw, {
-            color: paletteColor(doc, a.color as string, type),
+            color: paletteColor(doc, a.color as string),
           });
         }
       }

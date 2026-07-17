@@ -76,12 +76,17 @@ import {
   positionForTocSpine,
   spineFromResolvedNav,
 } from "./position-bus";
-import { spineFromCfi } from "./scroll-cfi";
+import { cfiToRange, spineFromCfi } from "./scroll-cfi";
+import { resolveAnchor } from "./anchor-resolver";
+import { paletteColor } from "./css-highlight";
+import { Overlayer } from "../vendor/foliate-js/overlayer.js";
+import { upsertAnnotation, type AnnotationRow } from "./annotation-store";
 import {
   ContinuousScrollStream,
   type ContinuousScrollApi,
   type ContinuousSection,
   type ScrollAnchorResolver,
+  type ScrollSelection,
 } from "./ContinuousScrollStream";
 import { ReaderBottomBar } from "./ReaderBottomBar";
 
@@ -112,6 +117,21 @@ interface EnsureWorkResult {
   contentHash: string;
 }
 
+/**
+ * A settled text selection surfaced to the 05-04 bubble. `rects` are the
+ * selection client rects in the section doc's own viewport; 05-04 maps them to
+ * page coords via `iframe` (scroll) or the `foliate-view` host rect (paginate).
+ */
+export interface ReaderSelection {
+  cfi: string;
+  rects: DOMRect[];
+  doc: Document;
+  /** Present in scroll mode only (per-section iframe). */
+  iframe?: HTMLIFrameElement;
+  /** Spine index (paginate) or linear index (scroll) — mode-local carrier. */
+  index: number;
+}
+
 export interface FoliateViewProps {
   /** Registered book id (SourceRegistry). */
   id?: string;
@@ -122,6 +142,12 @@ export interface FoliateViewProps {
    * Handler returns true if the event was consumed (sheet/chrome/close).
    */
   registerBackHandler?: (handler: (() => boolean) | null) => void;
+  /** A settled selection (paginate or scroll), or null on dismiss (05-04 bubble). */
+  onSelection?: (sel: ReaderSelection | null) => void;
+  /** Tapping an existing annotation → its CFI, so 05-04 reopens an edit bubble (D-73). */
+  onSelectExisting?: (cfi: string) => void;
+  /** The work's annotations, drawn/replayed in both modes (05-04 owns the store). */
+  annotations?: AnnotationRow[];
 }
 
 type Status = "loading" | "reading" | "error";
@@ -209,9 +235,22 @@ export function FoliateView({
   id = "sample",
   onClose,
   registerBackHandler,
+  onSelection,
+  onSelectExisting,
+  annotations,
 }: FoliateViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<FoliateViewElement | null>(null);
+  const onSelectionRef = useRef(onSelection);
+  const onSelectExistingRef = useRef(onSelectExisting);
+  const annotationsRef = useRef<AnnotationRow[]>(annotations ?? []);
+  /** Section docs handed out by the paginate `load` event (closed shadow seam). */
+  const sectionDocsRef = useRef<Map<number, Document>>(new Map());
+  /** CFI keys currently drawn per section, so a redraw can remove stale overlays. */
+  const drawnKeysRef = useRef<Map<number, Set<string>>>(new Map());
+  onSelectionRef.current = onSelection;
+  onSelectExistingRef.current = onSelectExisting;
+  annotationsRef.current = annotations ?? [];
   const fxlRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -297,6 +336,23 @@ export function FoliateView({
   const handleStreamTap = useCallback(() => {
     if (!anySheetOpenRef.current) setChromeVisible((v) => !v);
   }, []);
+  /** Normalize a scroll-mode selection into the shared ReaderSelection (05-04). */
+  const handleScrollSelection = useCallback(
+    (sel: ScrollSelection | null) => {
+      onSelectionRef.current?.(
+        sel
+          ? {
+              cfi: sel.cfi,
+              rects: sel.rects,
+              doc: sel.doc,
+              iframe: sel.iframe,
+              index: sel.linearIndex,
+            }
+          : null,
+      );
+    },
+    [],
+  );
 
   const ensureCjkCaps = useCallback((): CjkCssCaps => {
     if (!cjkCapsRef.current) {
@@ -428,6 +484,82 @@ export function FoliateView({
       console.warn("[FoliateView] locator flush failed", err);
     }
   }, []);
+
+  /**
+   * Replay this section's annotations through foliate (paginate). `addAnnotation`
+   * only draws once the section's overlayer is rendered, so this runs on
+   * `load`/`create-overlay` — lazily, per visible section (Pitfall 9), never a
+   * whole-book bulk loop. When a stored CFI no longer resolves (structural CFI
+   * broke after a 简繁/词不拆行 toggle), the shared resolver recovers a Range,
+   * `getCFI` recomputes a fresh CFI, and the healed CFI is written back
+   * (self-heal) before drawing.
+   */
+  const replayPaginateSection = useCallback((index: number) => {
+    const view = viewRef.current;
+    if (!view) return;
+    const doc = sectionDocsRef.current.get(index) ?? null;
+    // Remove this section's previously-drawn overlays first so deletes/edits are
+    // reflected (addAnnotation keys by CFI value; a dropped annotation would linger).
+    const prevKeys = drawnKeysRef.current.get(index);
+    if (prevKeys) for (const key of prevKeys) void view.addAnnotation?.({ value: key }, true);
+    const nextKeys = new Set<string>();
+    for (const a of annotationsRef.current) {
+      if (a.type !== "highlight" && a.type !== "underline") continue;
+      if (spineFromCfi(a.cfi) !== index) continue;
+      let value = a.cfi;
+      if (doc) {
+        const range = cfiToRange(doc, a.cfi);
+        const ok = !!range && (range.getClientRects?.().length ?? 0) > 0;
+        if (!ok) {
+          const res = resolveAnchor(doc, a);
+          const healedRange = res && "range" in res ? res.range : null;
+          const healed = healedRange ? view.getCFI?.(index, healedRange) : null;
+          if (healed && healed !== a.cfi) {
+            value = healed;
+            void upsertAnnotation({ ...a, cfi: healed });
+          }
+        }
+      }
+      nextKeys.add(value);
+      void view.addAnnotation?.({ value, type: a.type, color: a.color });
+    }
+    drawnKeysRef.current.set(index, nextKeys);
+  }, []);
+
+  /** Attach selection→CFI on a paginate section doc (closed-shadow `load` seam). */
+  const attachPaginateSelection = useCallback(
+    (doc: Document, index: number) => {
+      const emit = () => {
+        const view = viewRef.current;
+        const selo = doc.getSelection?.();
+        if (!view || !selo || selo.isCollapsed || selo.rangeCount === 0) {
+          onSelectionRef.current?.(null);
+          return;
+        }
+        const range = selo.getRangeAt(0);
+        if (range.collapsed) {
+          onSelectionRef.current?.(null);
+          return;
+        }
+        const cfi = view.getCFI?.(index, range);
+        if (!cfi) return;
+        onSelectionRef.current?.({
+          cfi,
+          rects: Array.from(range.getClientRects()),
+          doc,
+          index,
+        });
+      };
+      const settle = () => doc.defaultView?.setTimeout(emit, 0);
+      doc.addEventListener("pointerup", settle, { passive: true });
+      doc.addEventListener("mouseup", settle, { passive: true });
+      doc.addEventListener("selectionchange", () => {
+        const s = doc.getSelection?.();
+        if (!s || s.isCollapsed) onSelectionRef.current?.(null);
+      });
+    },
+    [],
+  );
 
   const scheduleLocatorUpsert = useCallback(
     (detail: RelocateDetail) => {
@@ -1286,6 +1418,43 @@ export function FoliateView({
           scheduleLocatorUpsert(next);
         });
 
+        // Annotation seam (paginate) — ALL through foliate events because the
+        // paginate iframe is in a CLOSED shadow root (no DOM shim / querySelector).
+        // `load` is the only reachable doc seam; `draw-annotation` is the only draw
+        // path; `create-overlay` fires once a section's overlayer exists; and
+        // `show-annotation` reports a tap on an existing highlight (D-73).
+        view.addEventListener("load", (event) => {
+          const detail = (event as CustomEvent<{ doc?: Document; index?: number }>)
+            .detail;
+          const doc = detail?.doc;
+          const index = detail?.index;
+          if (!doc || typeof index !== "number") return;
+          sectionDocsRef.current.set(index, doc);
+          attachPaginateSelection(doc, index);
+          replayPaginateSection(index);
+        });
+        view.addEventListener("draw-annotation", (event) => {
+          const { draw, annotation, doc } = (
+            event as CustomEvent<{
+              draw: (fn: unknown, opts: { color: string }) => void;
+              annotation: { type?: string; color?: string | null };
+              doc?: Document;
+            }>
+          ).detail;
+          const fn =
+            annotation.type === "underline" ? Overlayer.underline : Overlayer.highlight;
+          const color = doc ? paletteColor(doc, annotation.color ?? "cinnabar") : "#D24A32";
+          draw(fn, { color });
+        });
+        view.addEventListener("create-overlay", (event) => {
+          const index = (event as CustomEvent<{ index?: number }>).detail?.index;
+          if (typeof index === "number") replayPaginateSection(index);
+        });
+        view.addEventListener("show-annotation", (event) => {
+          const value = (event as CustomEvent<{ value?: string }>).detail?.value;
+          if (value) onSelectExistingRef.current?.(value);
+        });
+
         // Resolve prefs BEFORE opening so the transformTarget handler + first
         // section render see the correct 简繁/词不拆行 state (no first-section race).
         const loaded = await prefsPromise;
@@ -1509,6 +1678,9 @@ export function FoliateView({
       }
       created?.remove();
       viewRef.current = null;
+      // Drop refs to the torn-down view's section docs (reopenTick re-populates).
+      sectionDocsRef.current.clear();
+      drawnKeysRef.current.clear();
     };
     // reopenTick: re-run (re-open the book) when 简繁/词不拆行 toggles so the
     // transformTarget content transform re-applies; position restores from the
@@ -1573,6 +1745,13 @@ export function FoliateView({
     registerBackHandler(handleSystemBack);
     return () => registerBackHandler(null);
   }, [registerBackHandler, handleSystemBack]);
+
+  // Paginate: re-draw annotations for already-rendered sections when the list
+  // changes (new highlight / edit / delete). Scroll mode redraws inside the stream.
+  useEffect(() => {
+    if (status !== "reading" || useContinuousScroll) return;
+    for (const index of sectionDocsRef.current.keys()) replayPaginateSection(index);
+  }, [annotations, status, useContinuousScroll, replayPaginateSection]);
 
   /** Continuous-scroll progress → locator upsert via real CFI (same path as paginate). */
   /** Continuous-scroll progress -> locator upsert via real CFI (same path as paginate). */
@@ -1683,6 +1862,8 @@ export function FoliateView({
             onTap={handleStreamTap}
             onLinkClick={handleInternalLink}
             onProgress={handleContinuousProgress}
+            annotations={annotations}
+            onSelection={handleScrollSelection}
             onReady={handleStreamReady}
           />
         ) : null}

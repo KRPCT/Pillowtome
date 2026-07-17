@@ -82,6 +82,22 @@ export function registerHighlight(
   return true;
 }
 
+/**
+ * Resolve the SOLID palette seed color (`--anno-<color>`) from a section doc, for
+ * the foliate `Overlayer` draw path (scroll-mode WebView<105 fallback AND paginate
+ * draw-annotation). Overlayer.highlight applies its own `--overlayer-highlight-opacity`,
+ * so the seed is passed solid, not the translucent `-fill` var. Unknown colors fall
+ * back to the cinnabar seed.
+ */
+export function paletteColor(doc: Document, color: string): string {
+  const safe = PALETTE.includes(color as PaletteColor) ? color : "cinnabar";
+  const v = doc.defaultView
+    ?.getComputedStyle(doc.documentElement)
+    .getPropertyValue(`--anno-${safe}`)
+    .trim();
+  return v || "#D24A32"; // cinnabar solid seed
+}
+
 /** Remove this window's pillow-hl-/pillow-ul- entries before a clean redraw. */
 export function clearHighlights(win: HighlightWindow | null | undefined): void {
   const reg = win?.CSS?.highlights;

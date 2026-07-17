@@ -2,6 +2,7 @@ package com.pillowtome.app
 
 import android.content.Context
 import android.util.AttributeSet
+import android.util.Log
 import android.view.ActionMode
 import android.view.View
 import android.widget.FrameLayout
@@ -35,6 +36,7 @@ class SuppressSelectionActionModeFrameLayout @JvmOverloads constructor(
     type: Int
   ): ActionMode? {
     if (type == ActionMode.TYPE_FLOATING) {
+      Log.i("Pillowtome", "startActionModeForChild: suppressing TYPE_FLOATING selection toolbar")
       return null
     }
     return super.startActionModeForChild(originalView, callback, type)

@@ -136,13 +136,51 @@ ALTER TABLE reading_prefs ADD COLUMN word_keep INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE reading_prefs ADD COLUMN cn_convert TEXT NOT NULL DEFAULT 'off';
 "#;
 
+/// Schema v7 DDL — annotations + device sync metadata (D-79/D-80/D-81, P5).
+///
+/// Append-only: never rewrite prior schemas and never alter `change_log` (V1),
+/// which is REUSED as the sync ledger (entity='annotation'). `annotation` mirrors
+/// the `locator` composite self-healing columns (text_pre/exact/post +
+/// progress_fraction) so the shared resolver (05-02, D-77) reads one shape.
+/// Delete is a tombstone (`deleted = 1`, D-80) — never a physical DELETE.
+/// `sync_meta` holds the single device row (`id = 'device'`) with the monotonic
+/// logical clock the change_log's first TS writer needs.
+pub const SCHEMA_V7: &str = r#"
+CREATE TABLE annotation (
+    annotation_id     TEXT    PRIMARY KEY,       -- crypto.randomUUID()
+    work_id           TEXT    NOT NULL REFERENCES work(work_id),
+    type              TEXT    NOT NULL,          -- highlight | underline | note | bookmark
+    cfi               TEXT    NOT NULL,          -- range-CFI (point-CFI for bookmark)
+    color             TEXT,                      -- 朱砂 palette key; NULL for bookmark
+    text_pre          TEXT,                      -- self-healing context: text before
+    text_exact        TEXT,                      --                       anchor text (≤120)
+    text_post         TEXT,                      --                       text after
+    progress_fraction REAL,                      -- 0..1 last-resort anchor (never bare %)
+    note              TEXT,                      -- user note (type=note)
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    content_hash      TEXT,                      -- SHA-256 (WebCrypto) dedup, hash_algo tagged
+    deleted           INTEGER NOT NULL DEFAULT 0 -- tombstone (D-80), never physical delete
+);
+
+CREATE INDEX idx_annotation_work ON annotation(work_id, deleted);
+
+CREATE TABLE sync_meta (
+    id            TEXT    PRIMARY KEY,           -- single row uses id='device'
+    device_id     TEXT    NOT NULL,              -- crypto.randomUUID(), generated first launch
+    logical_clock INTEGER NOT NULL DEFAULT 0
+);
+"#;
+
 /// The migration set applied to `sqlite:pillow.db` at startup.
 ///
 /// Schema v1 seeds identity tables; schema v2 appends prefs/fonts + locator unique
 /// index; schema v3 appends CJK toggle columns; schema v4 adds library catalog;
 /// schema v5 adds the title-cleaning toggle; schema v6 adds the CJK word-keep +
-/// simp/trad conversion toggles. Later phases append higher versions; they never
-/// rewrite prior schemas.
+/// simp/trad conversion toggles; schema v7 adds the annotation + sync_meta tables
+/// (reusing change_log as the sync ledger). Later phases append higher versions;
+/// they never rewrite prior schemas.
 pub fn migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -179,6 +217,12 @@ pub fn migrations() -> Vec<Migration> {
             version: 6,
             description: "cjk_wordkeep_and_convert_prefs",
             sql: SCHEMA_V6,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 7,
+            description: "annotations_and_sync_meta",
+            sql: SCHEMA_V7,
             kind: MigrationKind::Up,
         },
     ]

@@ -7,7 +7,7 @@
 //! tauri-plugin-sql resolves (single SQLite binding, Pitfall 6).
 
 use pillowtome_lib::migrations::{
-    migrations, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6,
+    migrations, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7,
 };
 use sqlx::{Connection, Row, SqliteConnection};
 
@@ -64,6 +64,15 @@ async fn fresh_db_v6() -> SqliteConnection {
         .execute(&mut conn)
         .await
         .expect("apply SCHEMA_V6");
+    conn
+}
+
+async fn fresh_db_v7() -> SqliteConnection {
+    let mut conn = fresh_db_v6().await;
+    sqlx::raw_sql(SCHEMA_V7)
+        .execute(&mut conn)
+        .await
+        .expect("apply SCHEMA_V7");
     conn
 }
 
@@ -296,10 +305,95 @@ async fn schema_v4_creates_library_item_with_unique_work_id() {
     assert!(dup.is_err(), "duplicate work_id library_item should violate UNIQUE");
 }
 
+#[tokio::test]
+async fn schema_v7_creates_annotation_and_sync_meta_tables() {
+    let mut conn = fresh_db_v7().await;
+    let names = table_names(&mut conn).await;
+    for expected in ["annotation", "sync_meta"] {
+        assert!(
+            names.iter().any(|n| n == expected),
+            "schema v7 missing table `{expected}`; found {names:?}"
+        );
+    }
+    for col in [
+        "annotation_id",
+        "work_id",
+        "type",
+        "cfi",
+        "color",
+        "text_pre",
+        "text_exact",
+        "text_post",
+        "progress_fraction",
+        "note",
+        "created_at",
+        "updated_at",
+        "revision",
+        "content_hash",
+        "deleted",
+    ] {
+        assert!(
+            has_column(&mut conn, "annotation", col).await,
+            "annotation missing {col}"
+        );
+    }
+    for col in ["id", "device_id", "logical_clock"] {
+        assert!(
+            has_column(&mut conn, "sync_meta", col).await,
+            "sync_meta missing {col}"
+        );
+    }
+
+    let indexes = index_names(&mut conn).await;
+    assert!(
+        indexes.iter().any(|n| n == "idx_annotation_work"),
+        "missing idx_annotation_work; found {indexes:?}"
+    );
+
+    // change_log (V1) is reused unchanged — still present after V7.
+    assert!(
+        table_names(&mut conn).await.iter().any(|n| n == "change_log"),
+        "v7 must not drop the reused change_log ledger"
+    );
+
+    // V6 prefs still intact forward from V7 (append-only, no rewrite).
+    let row = sqlx::query("SELECT word_keep, cn_convert FROM reading_prefs WHERE id = 'global'")
+        .fetch_optional(&mut conn)
+        .await
+        .expect("select global prefs after v7")
+        .expect("seed row id=global must still exist after v7");
+    assert_eq!(row.get::<i64, _>("word_keep"), 0);
+    assert_eq!(row.get::<String, _>("cn_convert"), "off");
+}
+
+#[tokio::test]
+async fn schema_v7_annotation_defaults_and_fk() {
+    let mut conn = fresh_db_v7().await;
+    sqlx::query(
+        "INSERT INTO work (work_id, content_hash, format, created_at) VALUES ('wa', 'h', 'epub', 0)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("seed work");
+    sqlx::query(
+        "INSERT INTO annotation (annotation_id, work_id, type, cfi, created_at, updated_at) \
+         VALUES ('a1', 'wa', 'highlight', 'epubcfi(/6/2)', 0, 0)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("insert annotation with defaults");
+    let row = sqlx::query("SELECT revision, deleted FROM annotation WHERE annotation_id = 'a1'")
+        .fetch_one(&mut conn)
+        .await
+        .expect("read annotation defaults");
+    assert_eq!(row.get::<i64, _>("revision"), 1);
+    assert_eq!(row.get::<i64, _>("deleted"), 0);
+}
+
 #[test]
-fn migration_set_is_v1_through_v6_up() {
+fn migration_set_is_v1_through_v7_up() {
     let set = migrations();
-    assert_eq!(set.len(), 6, "exactly six migrations (v1..v6)");
+    assert_eq!(set.len(), 7, "exactly seven migrations (v1..v7)");
     assert_eq!(set[0].version, 1);
     assert_eq!(set[0].description, "seed_stub_schema");
     assert_eq!(set[0].sql, SCHEMA_V1, "v1 SQL is SCHEMA_V1 (one source of truth)");
@@ -341,4 +435,13 @@ fn migration_set_is_v1_through_v6_up() {
     assert_eq!(set[5].sql, SCHEMA_V6, "v6 SQL is SCHEMA_V6 (one source of truth)");
     assert!(set[5].sql.contains("word_keep"));
     assert!(set[5].sql.contains("cn_convert"));
+
+    assert_eq!(set[6].version, 7);
+    assert_eq!(set[6].description, "annotations_and_sync_meta");
+    assert_eq!(set[6].sql, SCHEMA_V7, "v7 SQL is SCHEMA_V7 (one source of truth)");
+    assert!(set[6].sql.contains("CREATE TABLE annotation"));
+    assert!(set[6].sql.contains("sync_meta"));
+    assert!(set[6].sql.contains("idx_annotation_work"));
+    // V1 change_log ledger is reused, not extended by V7.
+    assert!(!set[6].sql.contains("change_log"));
 }

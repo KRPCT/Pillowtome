@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: 05-05 device gate BLOCKED (2 defects) — gap plans 05-06..05-08 planned + checked, ready to execute
-last_updated: "2026-07-18T00:00:00.000Z"
-last_activity: 2026-07-18
+stopped_at: Completed 05-03-PLAN.md
+last_updated: "2026-07-17T16:43:42.450Z"
+last_activity: 2026-07-17
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 26
-  completed_plans: 22
+  completed_plans: 23
   percent: 57
 ---
 
@@ -33,14 +33,15 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 05 (annotations-composite-locator) — EXECUTING (gap plans ready)
-Plan: 5 done + 3 gap plans planned (05-06..05-08)
-Status: Waves 1–3 done (05-01..05-04). 05-05 device gate BLOCKED (2 defects). Gap plans 05-06..05-08 planned via /gsd-plan-phase 05 --gaps, plan-checker PASSED (0 blockers, 2 non-blocking warnings). Ready to execute. Phase NOT complete.
-Last activity: 2026-07-18 — Phase 05 gap planning: 05-06 (PDF spine id guard), 05-07 (native ActionMode suppression + git-durability + prod-APK gate), 05-08 (re-run 8-step device acceptance)
+Phase: 05 (annotations-composite-locator) — EXECUTING
+Plan: 2 of 8
+Status: Ready to execute
+Last activity: 2026-07-17
 
-Progress: [█████████░] ~96% (4/5 original plans; 3 gap plans queued; 05-05 device gate blocked)
+Progress: [█████████░] 88%
 
 Device gate (05-05) findings: .planning/phases/05-annotations-composite-locator/05-DEVICE-GATE-FINDINGS.md
+
 - FIXED (committed 25e9a23): app CSP blocked blob: → EPUB/PDF/MOBI/TXT unrenderable in production build (pre-existing since Phase 1, masked by dev-only gate). EPUB + PDF now render on AVD.
 - DEFECT 1 (blocking, Phase 5): native WebView selection ActionMode preempts custom SelectionBubble. Fix needs a durable native intercept (MainActivity onWebViewCreate reparent → startActionModeForChild); RustWebView.kt is regenerated each build + gen/android is gitignored → durability strategy required. Blocks the 8-step annotation acceptance.
 - DEFECT 2 (minor): PDF outline resolve throws `Te.id.endsWith is not a function` (FoliateView spine resolution assumes string id; PDF ref ids are numeric). Non-fatal; PDF renders.
@@ -86,6 +87,7 @@ Next GSD entry point: `/gsd-execute-phase 05` — wave 1 = 05-06 (autonomous) + 
 | Phase 05 P02 | 8min | 3 tasks | 6 files |
 | Phase 05 P03 | 13 | 3 tasks | 6 files |
 | Phase 05 P4 | 20 | 3 tasks | 9 files |
+| Phase 05 P05-06 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -124,6 +126,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [05-04] Note stored on its highlight row (note field set, type kept) — never flips to type='note', which 05-03's highlight/underline-only draw would un-draw
 - [Phase ?]: [05-04] --anno-* injected into reading CSS (iframe scope) as well as index.css — section iframes are separate docs; custom props do not cascade for ::highlight()/paletteColor()
 - [Phase ?]: [05-04] FoliateView owns annotation state; selection bubble mounted once on the shared reader root; edit-context bubble is paginate-only
+- [Phase ?]: [05-06] matchSectionByHref: unknown 参数 + typeof 守卫,PDF 数字 ref 静默跳过不抛错;纯函数集中一处修覆盖所有 spine path-match 调用方
 
 ### Pending Todos
 
@@ -151,7 +154,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-17T15:00:57.407Z
+Last session: 2026-07-17T16:43:25.965Z
 Stopped at: Completed 05-03-PLAN.md
 Resume file: None
 Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

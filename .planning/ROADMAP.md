@@ -159,7 +159,7 @@ Plans:
 
 **Gap closure** *(from the 05-05 device-gate findings — DEFECT 1/2 + process fix)*
 
-- [ ] 05-06-PLAN.md — DEFECT 2: guard PDF numeric-ref section ids in resolveSpineIndex (matchSectionByHref + unit test) [Wave 1, autonomous]
+- [x] 05-06-PLAN.md — DEFECT 2: guard PDF numeric-ref section ids in resolveSpineIndex (matchSectionByHref + unit test) [Wave 1, autonomous]
 - [ ] 05-07-PLAN.md — DEFECT 1: native TYPE_FLOATING ActionMode suppression (onWebViewCreate reparent → FrameLayout) + git-track durability + production-APK device-gate process fix [Wave 1, non-autonomous]
 - [ ] 05-08-PLAN.md — Re-run the blocked 05-05 8-step device acceptance (ANNO-01..04) via the standalone production APK [Wave 2, checkpoint, depends 05-07]
 
@@ -217,6 +217,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 4/4 | Complete   | 2026-07-16 |
 | 4. Local Library | 4/4 | Complete   | 2026-07-16 |
-| 5. Annotations & Composite Locator | 4/8 | In Progress|  |
+| 5. Annotations & Composite Locator | 5/8 | In Progress|  |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
 | 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |

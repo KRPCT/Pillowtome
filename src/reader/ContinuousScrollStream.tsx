@@ -24,8 +24,24 @@ import {
   useState,
 } from "react";
 import { clamp01 } from "./reading-position";
-import { resolveCfiScrollTop, visibleRangeCfi } from "./scroll-cfi";
+import {
+  resolveCfiScrollTop,
+  selectionCfi,
+  spineFromCfi,
+  visibleRangeCfi,
+} from "./scroll-cfi";
 import { installAutospaceShim } from "./cjk-autospace-shim";
+import {
+  clearHighlights,
+  HIGHLIGHT_CSS,
+  registerHighlight,
+  supportsCssHighlight,
+  type HighlightType,
+  type HighlightWindow,
+} from "./css-highlight";
+import { resolveAnchor } from "./anchor-resolver";
+import type { AnnotationRow } from "./annotation-store";
+import { Overlayer } from "../vendor/foliate-js/overlayer.js";
 import {
   capWindow,
   extendWindow,
@@ -33,6 +49,36 @@ import {
   sameWindow,
   seedWindow,
 } from "./scroll-window";
+
+/** Minimal shape of the vendored foliate `Overlayer` (WebView < 105 fallback). */
+interface OverlayerLike {
+  element: SVGElement;
+  add(key: string, range: Range, draw: unknown, opts: unknown): void;
+  remove(key: string): void;
+  redraw(): void;
+}
+
+/** A settled scroll-mode text selection, surfaced for the 05-04 bubble/store. */
+export interface ScrollSelection {
+  /** Range-CFI (selectionCfi over the section base CFI). */
+  cfi: string;
+  /** Selection client rects in the iframe's own content viewport. */
+  rects: DOMRect[];
+  /** The section iframe (05-04 maps iframe→page coords). */
+  iframe: HTMLIFrameElement;
+  doc: Document;
+  linearIndex: number;
+}
+
+/** Resolve the seed CSS color for the Overlayer fallback from the injected vars. */
+function paletteColor(doc: Document, color: string, type: HighlightType): string {
+  const varName = type === "highlight" ? `--anno-${color}-fill` : `--anno-${color}`;
+  const v = doc.defaultView
+    ?.getComputedStyle(doc.documentElement)
+    .getPropertyValue(varName)
+    .trim();
+  return v || "rgba(210,74,50,0.28)"; // cinnabar fallback
+}
 
 export interface ContinuousSection {
   /** Spine index in book.sections */
@@ -83,6 +129,17 @@ export interface ContinuousScrollStreamProps {
     offsetFraction: number,
     cfi: string | null,
   ) => void;
+  /**
+   * The work's annotations (memoized list from annotation-store; small rows, no
+   * book bytes). Drawn lazily per section as sections (re)load — never bulk on
+   * open (Pitfall 9). Changing this redraws the loaded sections.
+   */
+  annotations?: AnnotationRow[];
+  /**
+   * A non-collapsed selection settled in a section (or null on dismiss). The
+   * 05-04 shell opens the bubble + writes the store; this plan only emits.
+   */
+  onSelection?: (sel: ScrollSelection | null) => void;
   /** Imperative controller registered on mount (avoids jumpKey remount races). */
   onReady?: (api: ContinuousScrollApi | null) => void;
 }
@@ -97,6 +154,8 @@ export interface ContinuousScrollApi {
     cfi?: string | null,
     anchor?: ScrollAnchorResolver | null,
   ) => void;
+  /** Re-draw annotations for every loaded section (after a new highlight). */
+  redrawAnnotations: () => void;
 }
 
 const PRELOAD_PX = 800;
@@ -138,6 +197,8 @@ export function ContinuousScrollStream({
   onLinkClick,
   onPrimarySectionChange,
   onProgress,
+  annotations,
+  onSelection,
   onReady,
 }: ContinuousScrollStreamProps) {
   const linear = useMemo(
@@ -175,6 +236,10 @@ export function ContinuousScrollStream({
   const onProgressRef = useRef(onProgress);
   const onPrimaryRef = useRef(onPrimarySectionChange);
   const onLinkClickRef = useRef(onLinkClick);
+  const onSelectionRef = useRef(onSelection);
+  const annotationsRef = useRef<AnnotationRow[]>(annotations ?? []);
+  /** Per-section foliate Overlayer (WebView < 105 fallback); keyed by linearIdx. */
+  const overlayersRef = useRef<Map<number, OverlayerLike>>(new Map());
   const targetOffsetRef = useRef(targetOffsetFraction);
   const targetCfiRef = useRef(targetCfi);
   const targetSpineRef = useRef(targetSpineIndex);
@@ -204,6 +269,8 @@ export function ContinuousScrollStream({
   onProgressRef.current = onProgress;
   onPrimaryRef.current = onPrimarySectionChange;
   onLinkClickRef.current = onLinkClick;
+  onSelectionRef.current = onSelection;
+  annotationsRef.current = annotations ?? [];
   targetOffsetRef.current = targetOffsetFraction;
   targetCfiRef.current = targetCfi;
   targetSpineRef.current = targetSpineIndex;
@@ -283,10 +350,6 @@ export function ContinuousScrollStream({
     [spineToLinear, seedWindowForJump, beginJumpVeil],
   );
 
-  useEffect(() => {
-    onReady?.({ jumpTo });
-    return () => onReady?.(null);
-  }, [onReady, jumpTo]);
 
   const ensureUrl = useCallback(async (linearIdx: number) => {
     if (urlsRef.current.has(linearIdx)) return urlsRef.current.get(linearIdx)!;
@@ -400,7 +463,9 @@ export function ContinuousScrollStream({
         style.id = "pillow-reading-css";
         doc.head.appendChild(style);
       }
-      style.textContent = readingCss;
+      // Annotation ::highlight() rules ride the same per-iframe style block as the
+      // reading CSS (the per-window CSS.highlights registry needs them here).
+      style.textContent = `${readingCss}\n${HIGHLIGHT_CSS}`;
 
       // Real viewport height (px) for image max-height in scroll mode: vh/svh
       // inside a height-expanded iframe mean the WHOLE content height, not one
@@ -731,6 +796,8 @@ export function ContinuousScrollStream({
     let rafId = 0;
     const markGesture = () => {
       userGestureAtRef.current = performance.now();
+      // A scroll gesture dismisses a pending selection bubble (D-74 seam).
+      onSelectionRef.current?.(null);
     };
     const runNeighbors = () => {
       rafId = 0;
@@ -791,7 +858,92 @@ export function ContinuousScrollStream({
     if (prev != null && prev !== h && pendingJumpRef.current) {
       setUrlTick((t) => t + 1);
     }
+    // Fallback Overlayer holds live ranges but paints an SVG that must be
+    // re-laid-out on reflow (CSS Custom Highlight redraws itself, so no-op there).
+    overlayersRef.current.get(idx)?.redraw();
   }, []);
+
+  /**
+   * Draw this section's annotations, lazily (only the ones whose CFI resolves
+   * into THIS spine section — Pitfall 9, never a bulk open-time loop). Primary
+   * path is the per-iframe CSS Custom Highlight registry (live Range, zero manual
+   * reflow redraw); WebView < 105 falls back to a per-iframe foliate Overlayer.
+   * Idempotent per section: it clears the section's prior drawings first.
+   */
+  const drawSectionAnnotations = useCallback(
+    (iframe: HTMLIFrameElement, spineIndex: number, linearIdx: number) => {
+      const doc = iframe.contentDocument;
+      const win = iframe.contentWindow as (HighlightWindow & Window) | null;
+      if (!doc?.body || !win) return;
+
+      const useCss = supportsCssHighlight(win);
+      // Reset this section's prior drawings before re-registering.
+      if (useCss) clearHighlights(win);
+      const prevOverlayer = overlayersRef.current.get(linearIdx);
+      if (prevOverlayer) {
+        try {
+          prevOverlayer.element.remove();
+        } catch {
+          /* ignore */
+        }
+        overlayersRef.current.delete(linearIdx);
+      }
+
+      const annos = annotationsRef.current.filter(
+        (a) =>
+          (a.type === "highlight" || a.type === "underline") &&
+          !!a.color &&
+          spineFromCfi(a.cfi) === spineIndex,
+      );
+      if (annos.length === 0) return;
+
+      let overlayer: OverlayerLike | null = null;
+      for (const a of annos) {
+        const res = resolveAnchor(doc, a);
+        const range = res && "range" in res ? res.range : null;
+        if (!range) continue; // fraction/null anchor can't be drawn as a highlight
+        const type = a.type as HighlightType;
+        if (useCss) {
+          registerHighlight(win, type, a.color as string, range);
+        } else {
+          if (!overlayer) {
+            overlayer = new Overlayer() as OverlayerLike;
+            doc.body.style.position ||= "relative";
+            doc.body.appendChild(overlayer.element);
+            overlayersRef.current.set(linearIdx, overlayer);
+          }
+          const draw = type === "underline" ? Overlayer.underline : Overlayer.highlight;
+          overlayer.add(a.annotation_id, range, draw, {
+            color: paletteColor(doc, a.color as string, type),
+          });
+        }
+      }
+    },
+    [],
+  );
+
+  /** Re-draw annotations for every currently loaded section iframe. */
+  const redrawAllLoaded = useCallback(() => {
+    const root = scrollerRef.current;
+    if (!root) return;
+    root.querySelectorAll("iframe[data-linear-index]").forEach((node) => {
+      const iframe = node as HTMLIFrameElement;
+      const li = Number(iframe.dataset.linearIndex);
+      const spine = Number.isFinite(li) ? linearRef.current[li]?.index : undefined;
+      if (spine != null) drawSectionAnnotations(iframe, spine, li);
+    });
+  }, [drawSectionAnnotations]);
+
+  // Redraw loaded sections when the annotation list changes (new highlight, edit,
+  // delete) without waiting for a section reload.
+  useEffect(() => {
+    redrawAllLoaded();
+  }, [annotations, redrawAllLoaded]);
+
+  useEffect(() => {
+    onReady?.({ jumpTo, redrawAnnotations: redrawAllLoaded });
+    return () => onReady?.(null);
+  }, [onReady, jumpTo, redrawAllLoaded]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.isPrimary === false) return;
@@ -888,6 +1040,45 @@ export function ContinuousScrollStream({
                     };
                     doc.addEventListener("pointerdown", down, { passive: true });
                     doc.addEventListener("pointerup", up, { passive: true });
+
+                    // Selection → range-CFI (same section-doc seam as link-click /
+                    // autospace, D-74 — no new full-screen pointer-capture layer).
+                    const win = iframe.contentWindow;
+                    const emitSelection = () => {
+                      const selo = win?.getSelection?.();
+                      if (!selo || selo.isCollapsed || selo.rangeCount === 0) {
+                        onSelectionRef.current?.(null);
+                        return;
+                      }
+                      const range = selo.getRangeAt(0);
+                      if (range.collapsed) {
+                        onSelectionRef.current?.(null);
+                        return;
+                      }
+                      const baseCfi = linearRef.current[linearIdx]?.cfi;
+                      if (!baseCfi) return;
+                      const cfi = selectionCfi(baseCfi, range);
+                      if (!cfi) return;
+                      onSelectionRef.current?.({
+                        cfi,
+                        rects: Array.from(range.getClientRects()),
+                        iframe,
+                        doc,
+                        linearIndex: linearIdx,
+                      });
+                    };
+                    // Emit only on settle (pointerup/mouseup); selectionchange only
+                    // clears the bubble when the selection collapses.
+                    const settle = () => win?.setTimeout?.(emitSelection, 0);
+                    doc.addEventListener("pointerup", settle, { passive: true });
+                    doc.addEventListener("mouseup", settle, { passive: true });
+                    doc.addEventListener("selectionchange", () => {
+                      const s = win?.getSelection?.();
+                      if (!s || s.isCollapsed) onSelectionRef.current?.(null);
+                    });
+
+                    // Lazy per-section annotation draw (this section only).
+                    drawSectionAnnotations(iframe, sec.index, linearIdx);
                     // Intercept in-book links: the WebView would otherwise try to
                     // navigate the iframe to filepos:/kindle:/relative URLs
                     // (net::ERR_UNKNOWN_URL_SCHEME). Parent resolves + jumps.

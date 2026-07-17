@@ -17,6 +17,20 @@ declare module "*/vendor/foliate-js/view.js" {
   export function makeBook(file: File | Blob | string): Promise<FoliateBook>;
 }
 
+declare module "*/vendor/foliate-js/overlayer.js" {
+  /** SVG overlay drawer used as the scroll-mode highlight fallback (WebView < 105)
+   *  and by the paginate `draw-annotation` seam (closed shadow root). */
+  export class Overlayer {
+    readonly element: SVGElement;
+    add(key: string, range: Range, draw: unknown, options?: unknown): void;
+    remove(key: string): void;
+    redraw(): void;
+    hitTest(event: { x: number; y: number }): [string, Range] | [];
+    static highlight(rects: DOMRectList | DOMRect[], options?: { color?: string }): SVGElement;
+    static underline(rects: DOMRectList | DOMRect[], options?: { color?: string }): SVGElement;
+  }
+}
+
 declare module "*/vendor/foliate-js/epubcfi.js" {
   /** A CFI part: { index, offset?, id?, before?, after? }. */
   export interface CfiPart {

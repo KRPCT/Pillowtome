@@ -151,7 +151,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05-04-PLAN.md — Annotation UI: selection bubble + note editor + annotations sheet + bookmark toggle + 朱砂 palette [Wave 3, autonomous]
+- [x] 05-04-PLAN.md — Annotation UI: selection bubble + note editor + annotations sheet + bookmark toggle + 朱砂 palette [Wave 3, autonomous]
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -211,6 +211,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 4/4 | Complete   | 2026-07-16 |
 | 4. Local Library | 4/4 | Complete   | 2026-07-16 |
-| 5. Annotations & Composite Locator | 3/5 | In Progress|  |
+| 5. Annotations & Composite Locator | 4/5 | In Progress|  |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
 | 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |

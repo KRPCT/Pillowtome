@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-03-PLAN.md
-last_updated: "2026-07-17T14:36:55.989Z"
+stopped_at: Completed 05-04-PLAN.md
+last_updated: "2026-07-17T15:01:44.484Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
   percent: 57
 ---
 
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 05 (annotations-composite-locator) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-07-17
 
-Progress: [█████████░] 91%
+Progress: [██████████] 96%
 
 Delivered 2026-07-16..17 (ad-hoc, verified on Android AVD, all formats + both modes):
 
@@ -80,6 +80,7 @@ Next GSD entry point: reconcile phase status (audit), then `/gsd-plan-phase` / `
 | Phase 05 P01 | 12 | 2 tasks | 4 files |
 | Phase 05 P02 | 8min | 3 tasks | 6 files |
 | Phase 05 P03 | 13 | 3 tasks | 6 files |
+| Phase 05 P4 | 20 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [05-03] 滚动高亮走 CSS Custom Highlight API（live Range 零手动重绘），旧机退 per-iframe foliate Overlayer；分页高亮全走闭合-shadow 事件
 - [Phase ?]: [05-03] ::highlight registry 名只从 cinnabar|ochre|green|indigo allowlist 构造（T-05-07）；Overlayer 传纯色种子（自带 opacity），滚动半透明由 --anno-*-fill CSS 给
 - [Phase ?]: [05-03] 批注重放懒式逐 section（Pitfall 9）；分页 CFI 断裂经 resolveAnchor + view.getCFI 自愈并 upsertAnnotation 回写；重放由 annotations prop 声明式驱动
+- [Phase ?]: [05-04] Note stored on its highlight row (note field set, type kept) — never flips to type='note', which 05-03's highlight/underline-only draw would un-draw
+- [Phase ?]: [05-04] --anno-* injected into reading CSS (iframe scope) as well as index.css — section iframes are separate docs; custom props do not cascade for ::highlight()/paletteColor()
+- [Phase ?]: [05-04] FoliateView owns annotation state; selection bubble mounted once on the shared reader root; edit-context bubble is paginate-only
 
 ### Pending Todos
 
@@ -142,7 +146,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-17T14:36:55.980Z
+Last session: 2026-07-17T15:00:57.407Z
 Stopped at: Completed 05-03-PLAN.md
 Resume file: None
 Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

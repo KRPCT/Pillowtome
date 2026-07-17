@@ -202,6 +202,49 @@ export function buildCjkCss(prefs: ReadingPrefs, caps: CjkCssCaps): string {
  * Optional `caps` gates CJK property emission (D-35). Defaults to no caps so
  * unit tests without probes stay silent on engine-specific properties.
  */
+/**
+ * Annotation palette per theme (D-70). The `::highlight()` rules injected per
+ * section iframe (css-highlight.ts) and `paletteColor()` both read `--anno-*`
+ * from the iframe's own documentElement, so the vars must live in the injected
+ * reading CSS — CSS custom properties do NOT cascade in from the parent document.
+ * index.css declares the same tokens for the outer chrome (bubble swatches).
+ */
+const ANNO_PALETTE: Record<
+  ReadingPrefs["theme"],
+  Record<"cinnabar" | "ochre" | "green" | "indigo", { seed: string; alpha: number }>
+> = {
+  day: {
+    cinnabar: { seed: "#d24a32", alpha: 28 },
+    ochre: { seed: "#c08a2e", alpha: 28 },
+    green: { seed: "#4f855f", alpha: 28 },
+    indigo: { seed: "#3e5c99", alpha: 28 },
+  },
+  sepia: {
+    cinnabar: { seed: "#d24a32", alpha: 28 },
+    ochre: { seed: "#c08a2e", alpha: 28 },
+    green: { seed: "#4f855f", alpha: 28 },
+    indigo: { seed: "#3e5c99", alpha: 28 },
+  },
+  night: {
+    cinnabar: { seed: "#e8846f", alpha: 30 },
+    ochre: { seed: "#d9b061", alpha: 30 },
+    green: { seed: "#7fb48c", alpha: 30 },
+    indigo: { seed: "#8aa4d6", alpha: 30 },
+  },
+};
+
+/** Build the `--anno-*` / `--anno-*-fill` declarations for a theme (iframe scope). */
+export function annoPaletteCss(theme: ReadingPrefs["theme"]): string {
+  return (Object.entries(ANNO_PALETTE[theme]) as Array<
+    [string, { seed: string; alpha: number }]
+  >)
+    .map(
+      ([key, { seed, alpha }]) =>
+        `--anno-${key}: ${seed}; --anno-${key}-fill: color-mix(in srgb, ${seed} ${alpha}%, transparent);`,
+    )
+    .join(" ");
+}
+
 export function buildReadingCss(
   prefs: ReadingPrefs,
   fontFaceCss: string,
@@ -220,6 +263,7 @@ export function buildReadingCss(
       background: ${bg} !important;
       background-color: ${bg} !important;
       color: ${fg} !important;
+      ${annoPaletteCss(prefs.theme)}
     }
     body {
       font-family: ${fontFamilyCss} !important;

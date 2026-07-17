@@ -66,6 +66,16 @@
   --page-bg: #fffef9;
   --page-fg: #1c1915;
 
+  /* Annotation palette (D-70) — solid seed + translucent fill (day/sepia @28%). */
+  --anno-cinnabar: #d24a32;
+  --anno-cinnabar-fill: color-mix(in srgb, #d24a32 28%, transparent);
+  --anno-ochre: #c08a2e;
+  --anno-ochre-fill: color-mix(in srgb, #c08a2e 28%, transparent);
+  --anno-green: #4f855f;
+  --anno-green-fill: color-mix(in srgb, #4f855f 28%, transparent);
+  --anno-indigo: #3e5c99;
+  --anno-indigo-fill: color-mix(in srgb, #3e5c99 28%, transparent);
+
   /* MD3 color roles — light (朱砂 seed) */
   --md-primary: #b4472f;
   --md-on-primary: #ffffff;
@@ -108,6 +118,16 @@
   --page-bg: #12100e;
   --page-fg: #e8e2d6;
 
+  /* Annotation palette (D-70) — lighter night tints, fill @30% so page text reads through. */
+  --anno-cinnabar: #e8846f;
+  --anno-cinnabar-fill: color-mix(in srgb, #e8846f 30%, transparent);
+  --anno-ochre: #d9b061;
+  --anno-ochre-fill: color-mix(in srgb, #d9b061 30%, transparent);
+  --anno-green: #7fb48c;
+  --anno-green-fill: color-mix(in srgb, #7fb48c 30%, transparent);
+  --anno-indigo: #8aa4d6;
+  --anno-indigo-fill: color-mix(in srgb, #8aa4d6 30%, transparent);
+
   /* MD3 color roles — dark (朱砂 seed) */
   --md-primary: #ffb4a4;
   --md-on-primary: #5f1607;
@@ -149,6 +169,16 @@
   --reader-border: var(--md-outline-variant);
   --page-bg: #f4ecd8;
   --page-fg: #3b2f1e;
+
+  /* Annotation palette (D-70) — same seed as day, fill @28% over warm paper. */
+  --anno-cinnabar: #d24a32;
+  --anno-cinnabar-fill: color-mix(in srgb, #d24a32 28%, transparent);
+  --anno-ochre: #c08a2e;
+  --anno-ochre-fill: color-mix(in srgb, #c08a2e 28%, transparent);
+  --anno-green: #4f855f;
+  --anno-green-fill: color-mix(in srgb, #4f855f 28%, transparent);
+  --anno-indigo: #3e5c99;
+  --anno-indigo-fill: color-mix(in srgb, #3e5c99 28%, transparent);
 
   /* MD3 color roles — light on warm sepia paper (朱砂 seed) */
   --md-primary: #a8442a;

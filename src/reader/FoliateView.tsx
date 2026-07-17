@@ -34,6 +34,7 @@ import {
   ensureWorkRow,
   loadLocator,
   relocateToLocatorRow,
+  textContextFromRange,
   upsertLocator,
 } from "./locator-store";
 import {
@@ -78,9 +79,15 @@ import {
 } from "./position-bus";
 import { cfiToRange, spineFromCfi } from "./scroll-cfi";
 import { resolveAnchor } from "./anchor-resolver";
-import { paletteColor } from "./css-highlight";
+import { paletteColor, type PaletteColor } from "./css-highlight";
 import { Overlayer } from "../vendor/foliate-js/overlayer.js";
-import { upsertAnnotation, type AnnotationRow } from "./annotation-store";
+import {
+  deleteAnnotation,
+  listAnnotations,
+  upsertAnnotation,
+  type AnnotationRow,
+} from "./annotation-store";
+import { SelectionBubble, type BubbleSelection } from "./SelectionBubble";
 import {
   ContinuousScrollStream,
   type ContinuousScrollApi,
@@ -235,22 +242,17 @@ export function FoliateView({
   id = "sample",
   onClose,
   registerBackHandler,
-  onSelection,
-  onSelectExisting,
   annotations,
 }: FoliateViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<FoliateViewElement | null>(null);
-  const onSelectionRef = useRef(onSelection);
-  const onSelectExistingRef = useRef(onSelectExisting);
+  const onSelectionRef = useRef<(sel: ReaderSelection | null) => void>(() => {});
+  const onSelectExistingRef = useRef<(cfi: string) => void>(() => {});
   const annotationsRef = useRef<AnnotationRow[]>(annotations ?? []);
   /** Section docs handed out by the paginate `load` event (closed shadow seam). */
   const sectionDocsRef = useRef<Map<number, Document>>(new Map());
   /** CFI keys currently drawn per section, so a redraw can remove stale overlays. */
   const drawnKeysRef = useRef<Map<number, Set<string>>>(new Map());
-  onSelectionRef.current = onSelection;
-  onSelectExistingRef.current = onSelectExisting;
-  annotationsRef.current = annotations ?? [];
   const fxlRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -275,6 +277,24 @@ export function FoliateView({
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
   const [fontStatus, setFontStatus] = useState<string | null>(null);
+  /** The work's annotations (store-owned; drives both hosts' draw/replay). */
+  const [annos, setAnnos] = useState<AnnotationRow[]>(annotations ?? []);
+  const annosRef = useRef<AnnotationRow[]>(annos);
+  annosRef.current = annos;
+  annotationsRef.current = annos;
+  /** Selection bubble anchor (reader-root coords) + create/edit context, or null. */
+  const [bubble, setBubble] = useState<BubbleSelection | null>(null);
+  /** The live selection backing the bubble's create/edit actions. */
+  const bubbleSelRef = useRef<{
+    cfi: string;
+    textPre: string | null;
+    textExact: string | null;
+    textPost: string | null;
+    fraction: number | null;
+    editId?: string;
+    type?: AnnotationRow["type"];
+    color?: string | null;
+  } | null>(null);
   /** Linear spine for continuous scroll mode (foliate has no continuous scroll). */
   const [continuousSections, setContinuousSections] = useState<
     ContinuousSection[]
@@ -339,7 +359,7 @@ export function FoliateView({
   /** Normalize a scroll-mode selection into the shared ReaderSelection (05-04). */
   const handleScrollSelection = useCallback(
     (sel: ScrollSelection | null) => {
-      onSelectionRef.current?.(
+      onSelectionRef.current(
         sel
           ? {
               cfi: sel.cfi,
@@ -353,6 +373,187 @@ export function FoliateView({
     },
     [],
   );
+
+  /** Reload the store list; state change redraws both hosts (Pitfall 9 lazy). */
+  const reloadAnnos = useCallback(async () => {
+    const wid = workIdRef.current;
+    if (!wid) return;
+    setAnnos(await listAnnotations(wid));
+    streamApiRef.current?.redrawAnnotations();
+  }, []);
+
+  /** Map a section-doc rect + its origin into reader-root (`.reader__view`) coords. */
+  const anchorRectInHost = useCallback(
+    (
+      rects: DOMRect[],
+      origin: DOMRect | undefined,
+    ): BubbleSelection["rect"] | null => {
+      const host = hostRef.current?.getBoundingClientRect();
+      const r = rects[0];
+      if (!host || !r || !origin) return null;
+      return {
+        top: origin.top + r.top - host.top,
+        left: origin.left + r.left - host.left,
+        width: r.width,
+        height: r.height,
+      };
+    },
+    [],
+  );
+
+  /** A settled selection → open the create bubble anchored over it. */
+  const handleReaderSelection = useCallback(
+    (sel: ReaderSelection | null) => {
+      if (!sel) {
+        bubbleSelRef.current = null;
+        setBubble(null);
+        return;
+      }
+      const origin = sel.iframe
+        ? sel.iframe.getBoundingClientRect()
+        : viewRef.current?.getBoundingClientRect();
+      const rect = anchorRectInHost(sel.rects, origin);
+      if (!rect) {
+        setBubble(null);
+        return;
+      }
+      const selo = sel.doc.getSelection?.();
+      const range =
+        selo && selo.rangeCount > 0 ? selo.getRangeAt(0) : null;
+      const ctx = textContextFromRange(range);
+      bubbleSelRef.current = {
+        cfi: sel.cfi,
+        textPre: ctx.text_pre,
+        textExact: ctx.text_exact,
+        textPost: ctx.text_post,
+        fraction: locationRef.current?.fraction ?? null,
+      };
+      setBubble({ rect, context: "create" });
+    },
+    [anchorRectInHost],
+  );
+
+  /** Tap on an existing highlight (paginate show-annotation) → edit bubble (D-73). */
+  const handleSelectExisting = useCallback(
+    (cfi: string) => {
+      const a = annosRef.current.find((x) => x.cfi === cfi);
+      const spine = spineFromCfi(cfi);
+      const doc = spine != null ? sectionDocsRef.current.get(spine) : null;
+      let rect: BubbleSelection["rect"] | null = null;
+      if (doc) {
+        const range = cfiToRange(doc, cfi);
+        if (range) {
+          rect = anchorRectInHost(
+            Array.from(range.getClientRects()),
+            viewRef.current?.getBoundingClientRect(),
+          );
+        }
+      }
+      if (!rect) {
+        const host = hostRef.current?.getBoundingClientRect();
+        rect = host ? { top: 12, left: host.width / 2, width: 0, height: 0 } : null;
+      }
+      if (!rect) return;
+      bubbleSelRef.current = {
+        cfi,
+        textPre: a?.text_pre ?? null,
+        textExact: a?.text_exact ?? null,
+        textPost: a?.text_post ?? null,
+        fraction: a?.progress_fraction ?? null,
+        editId: a?.annotation_id,
+        type: a?.type,
+        color: a?.color ?? null,
+      };
+      setBubble({
+        rect,
+        context: "edit",
+        color: (a?.color as PaletteColor) ?? undefined,
+      });
+    },
+    [anchorRectInHost],
+  );
+
+  onSelectionRef.current = handleReaderSelection;
+  onSelectExistingRef.current = handleSelectExisting;
+
+  /** Build the shared field set for a create/recolor upsert from the live bubble. */
+  const rowFromBubbleSelection = useCallback(
+    (
+      id: string,
+      type: AnnotationRow["type"],
+      color: string | null,
+      note: string | null,
+    ): AnnotationRow | null => {
+      const s = bubbleSelRef.current;
+      const wid = workIdRef.current;
+      if (!s || !wid) return null;
+      const now = Date.now();
+      return {
+        annotation_id: id,
+        work_id: wid,
+        type,
+        cfi: s.cfi,
+        color,
+        text_pre: s.textPre,
+        text_exact: s.textExact,
+        text_post: s.textPost,
+        progress_fraction: s.fraction,
+        note,
+        created_at: now,
+        updated_at: now,
+        revision: 0,
+        content_hash: null,
+        deleted: 0,
+      };
+    },
+    [],
+  );
+
+  const handleBubbleCreate = useCallback(
+    (type: "highlight" | "underline", color: PaletteColor) => {
+      const s = bubbleSelRef.current;
+      const id = s?.editId ?? crypto.randomUUID();
+      // Recolor/retype keeps any existing note (D-73 edit context).
+      const keepNote = s?.editId
+        ? annosRef.current.find((a) => a.annotation_id === id)?.note ?? null
+        : null;
+      const row = rowFromBubbleSelection(id, type, color, keepNote);
+      if (row) void upsertAnnotation(row).then(reloadAnnos);
+      setBubble(null);
+    },
+    [reloadAnnos, rowFromBubbleSelection],
+  );
+
+  // Note editor is wired in Task 2; for now 笔记 ensures a highlight exists so
+  // the note has something to hang off (D-72 — a note always attaches to a mark).
+  const handleBubbleNote = useCallback(() => {
+    const s = bubbleSelRef.current;
+    if (!s) {
+      setBubble(null);
+      return;
+    }
+    if (!s.editId) {
+      const row = rowFromBubbleSelection(
+        crypto.randomUUID(),
+        "highlight",
+        (s.color as string) ?? "cinnabar",
+        null,
+      );
+      if (row) void upsertAnnotation(row).then(reloadAnnos);
+    }
+    setBubble(null);
+  }, [reloadAnnos, rowFromBubbleSelection]);
+
+  const handleBubbleCopy = useCallback(() => {
+    const text = bubbleSelRef.current?.textExact;
+    if (text) void navigator.clipboard?.writeText?.(text);
+  }, []);
+
+  const handleBubbleDelete = useCallback(() => {
+    const id = bubbleSelRef.current?.editId;
+    if (id) void deleteAnnotation(id).then(reloadAnnos);
+    setBubble(null);
+  }, [reloadAnnos]);
 
   const ensureCjkCaps = useCallback((): CjkCssCaps => {
     if (!cjkCapsRef.current) {
@@ -1374,6 +1575,10 @@ export function FoliateView({
           }
         }
 
+        // Load this work's annotations once identity is known (drawn lazily
+        // per section as sections load — never bulk here, Pitfall 9).
+        void reloadAnnos();
+
         let savedLoc: Awaited<ReturnType<typeof loadLocator>> = null;
         if (workIdRef.current) {
           try {
@@ -1751,7 +1956,7 @@ export function FoliateView({
   useEffect(() => {
     if (status !== "reading" || useContinuousScroll) return;
     for (const index of sectionDocsRef.current.keys()) replayPaginateSection(index);
-  }, [annotations, status, useContinuousScroll, replayPaginateSection]);
+  }, [annos, status, useContinuousScroll, replayPaginateSection]);
 
   /** Continuous-scroll progress → locator upsert via real CFI (same path as paginate). */
   /** Continuous-scroll progress -> locator upsert via real CFI (same path as paginate). */
@@ -1862,7 +2067,7 @@ export function FoliateView({
             onTap={handleStreamTap}
             onLinkClick={handleInternalLink}
             onProgress={handleContinuousProgress}
-            annotations={annotations}
+            annotations={annos}
             onSelection={handleScrollSelection}
             onReady={handleStreamReady}
           />
@@ -1876,6 +2081,14 @@ export function FoliateView({
             onAction={handleTapAction}
           />
         ) : null}
+        {/* Selection action bubble — the ONLY pointer-events:auto overlay (D-74). */}
+        <SelectionBubble
+          selection={bubble}
+          onCreate={handleBubbleCreate}
+          onOpenNote={handleBubbleNote}
+          onCopy={handleBubbleCopy}
+          onDelete={handleBubbleDelete}
+        />
       </div>
 
       {status === "reading" ? (

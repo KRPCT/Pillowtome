@@ -1402,3 +1402,180 @@ foliate-view {
 .error-card__dismiss {
   margin-top: 0.5em;
 }
+
+/* --- Annotation selection bubble (D-72/D-74) --- */
+.reader-anno-bubble {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: var(--reader-chrome, #efe8db);
+  color: var(--reader-fg, #1c1915);
+  border: 1px solid var(--reader-border, #d8c2bb);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+}
+
+.reader-anno-bubble__swatches {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reader-anno-bubble__swatch {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reader-anno-bubble__swatch::before {
+  content: "";
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--swatch, var(--anno-cinnabar));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12) inset;
+}
+
+.reader-anno-bubble__swatch[data-selected="true"]::after {
+  content: "";
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 2px solid var(--reader-accent, #b4472f);
+}
+
+.reader-anno-bubble__divider {
+  width: 1px;
+  height: 24px;
+  background: var(--reader-border, #d8c2bb);
+  margin: 0 4px;
+}
+
+.reader-anno-bubble__action {
+  min-width: 44px;
+  height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--reader-fg, #1c1915);
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reader-anno-bubble__action:hover {
+  background: color-mix(in srgb, var(--reader-fg, #1c1915) 8%, transparent);
+}
+
+.reader-anno-bubble__action--danger {
+  color: var(--md-error, #ba1a1a);
+}
+
+/* --- Annotations sheet (批注) --- */
+.reader-anno-sheet__filter {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px 4px;
+}
+
+.reader-anno-group__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 16px 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--reader-muted, #6b6458);
+  background: var(--reader-chrome, #efe8db);
+}
+
+.reader-anno-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 16px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--reader-fg, #1c1915);
+  text-align: left;
+  cursor: pointer;
+}
+
+.reader-anno-row:hover {
+  background: var(--reader-chrome, #efe8db);
+}
+
+.reader-anno-row__dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--dot, var(--anno-cinnabar));
+}
+
+.reader-anno-row__body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.reader-anno-row__excerpt {
+  font-size: 14px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reader-anno-row__note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--reader-muted, #6b6458);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reader-anno-row__delete {
+  flex: 0 0 auto;
+  min-width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--md-error, #ba1a1a);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.reader-anno-editor__excerpt {
+  margin: 0 0 12px;
+  padding-left: 10px;
+  border-left: 2px solid var(--reader-accent, #b4472f);
+  font-size: 14px;
+  color: var(--reader-muted, #6b6458);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

@@ -1257,6 +1257,61 @@ export function FoliateView({
     [reloadAnnos],
   );
 
+  /** A bookmark whose whole-book fraction is within epsilon of `fraction`. */
+  const bookmarkNear = useCallback(
+    (rows: AnnotationRow[], fraction: number | null | undefined) => {
+      if (fraction == null) return undefined;
+      return rows.find(
+        (a) =>
+          a.type === "bookmark" &&
+          a.progress_fraction != null &&
+          Math.abs(a.progress_fraction - fraction) < 0.015,
+      );
+    },
+    [],
+  );
+
+  const bookmarkedHere = useMemo(
+    () => !!bookmarkNear(annos, location?.fraction),
+    [annos, location, bookmarkNear],
+  );
+
+  /** Toggle a point-CFI bookmark at the current reading position (ANNO-03/D-82). */
+  const handleToggleBookmark = useCallback(() => {
+    const loc = locationRef.current;
+    const wid = workIdRef.current;
+    if (!loc || !wid) return;
+    const existing = bookmarkNear(annosRef.current, loc.fraction);
+    if (existing) {
+      void deleteAnnotation(existing.annotation_id).then(reloadAnnos);
+      return;
+    }
+    const now = Date.now();
+    const row: AnnotationRow = {
+      annotation_id: crypto.randomUUID(),
+      work_id: wid,
+      type: "bookmark",
+      cfi: loc.cfi ?? "",
+      color: null,
+      text_pre: null,
+      text_exact: null,
+      text_post: null,
+      progress_fraction: loc.fraction ?? null,
+      note: null,
+      created_at: now,
+      updated_at: now,
+      revision: 0,
+      content_hash: null,
+      deleted: 0,
+    };
+    void upsertAnnotation(row).then(reloadAnnos);
+  }, [bookmarkNear, reloadAnnos]);
+
+  const handleOpenAnnotations = useCallback(() => {
+    setChromeVisible(true);
+    setAnnotationsOpen(true);
+  }, []);
+
   /** Best-effort spine→chapter label from the TOC (resolveNavigation), memoized. */
   const chapterLabelMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -2091,6 +2146,7 @@ export function FoliateView({
             title={bookTitle}
             fraction={location?.fraction ?? null}
             chromeVisible={chromeVisible}
+            bookmarked={bookmarkedHere}
             onBack={handleBack}
             onOpenToc={() => {
               setChromeVisible(true);
@@ -2101,6 +2157,8 @@ export function FoliateView({
               setChromeVisible(true);
               setSettingsOpen(true);
             }}
+            onOpenAnnotations={handleOpenAnnotations}
+            onToggleBookmark={handleToggleBookmark}
           />
         ) : null}
 

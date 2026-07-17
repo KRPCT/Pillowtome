@@ -3,16 +3,25 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-07-16T05:49:58.627Z"
-last_activity: 2026-07-16 -- Phase 04 execution started
+stopped_at: Phase 4 delivered + multi-format (Phase 6 scope) landed ad-hoc; Phase 5 planned
+last_updated: "2026-07-17T11:30:00.000Z"
+last_activity: 2026-07-17 -- Phase 4 + multi-format (PDF/MOBI/AZW3/TXT) + metadata shipped; PR #1 merged to main; Phase 5 annotations plan written
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 18
   completed_plans: 14
-  percent: 43
+  percent: 60
 ---
+
+<!-- NOTE (2026-07-17): the 2026-07-16..17 work ran AD-HOC (outside GSD) at the
+     user's direction. It delivered GSD Phase 4 (Local Library) AND the bulk of
+     GSD Phase 6 (TXT / multi-format: PDF, MOBI, AZW3, TXT + engine metadata/
+     covers), out of roadmap sequence. GSD Phase 5 (Annotations) is PLANNED only
+     — see docs/READER-PHASE5-ANNOTATIONS-PLAN.md. Next GSD session should
+     reconcile phase status (e.g. an audit) before executing, then plan/execute
+     Phase 5. All work is on `main` (PR #1), all commits GitHub-Verified. -->
+
 
 # Project State
 
@@ -25,12 +34,18 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 04 (local-library) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 04
-Last activity: 2026-07-16 -- Phase 04 execution started
+Phase: 04 (local-library) — DELIVERED (ad-hoc). Phase 06 (formats) — bulk DELIVERED ahead of sequence. Phase 05 (annotations) — PLANNED, next.
+Status: between phases — reconcile via GSD, then execute Phase 05
+Last activity: 2026-07-17 -- multi-format + metadata shipped; PR #1 merged to main
 
-Progress: [███░░░░░░░] ~29% (Phases 1–2 complete)
+Progress: [██████░░░░] ~60% (Phases 1–4 done; Phase 6 formats done ahead; Phase 5 planned)
+
+Delivered 2026-07-16..17 (ad-hoc, verified on Android AVD, all formats + both modes):
+- Phase 4 Local Library: cover grid + filters, dual ingest, continuous-scroll CFI position core (READER-POS resolved), 朱砂 UI/UX, draggable scrubber.
+- Phase 6 (formats, ahead of sequence): PDF (pdf.js), MOBI, AZW3, TXT (custom adapter) rendering; engine title/author/cover backfill; in-book links (filepos:/kindle:); 简繁/词不拆行 for all formats incl. TXT.
+- Phase 5 (annotations): plan only — docs/READER-PHASE5-ANNOTATIONS-PLAN.md.
+
+Next GSD entry point: reconcile phase status (audit), then `/gsd-plan-phase` / `/gsd-execute-phase` for Phase 5 (annotations). Work on `main` (branching_strategy: none).
 
 ## Performance Metrics
 
@@ -104,12 +119,7 @@ Carried from research — resolve during phase planning, not blocking start:
 
 ### Major Issues (tracked)
 
-- **[MAJOR][READER-POS] Continuous-scroll position continuity incomplete** — see Deferred Items. Do **not** keep patching ad-hoc in Phase 3; resolve with Phase 4 library progress SSOT (+ Phase 5 locator formalization). Current known failures after Phase-2 reading-core:
-  1. Paginate → scroll still lands at book start (stream seed / jump race).
-  2. Scroll-mode TOC chapter jump still no-ops (href→spine resolve / jump apply).
-  3. Scroll resume / dual-surface jump bus remains fragile (foliate host hidden + ContinuousScrollStream stacked iframes).
-  - What already works: pure scroll pan no longer auto-jumps to start; scroll → paginate is acceptable.
-  - Note: SQL alone does **not** fix jump/TOC; the hard part is frontend dual-surface position ownership.
+- **[MAJOR][READER-POS] Continuous-scroll position continuity — RESOLVED (2026-07-17, Phase 4).** All three failures fixed: (1) paginate→scroll seeds continuousStartRef synchronously; (2) scroll TOC jump resolves href→spine via resolveNavigation + jump bus (no-op fixed); (3) dual-surface resume via single jump bus (`jumpContinuousToSpine` imperative API + re-pin on reflow, bounded window). CFI is the single position currency; fine-CFI on progress, offset fallback. Verified on AVD (TOC multi-jump, resume, mode-switch). Formalize composite locator further in Phase 5 as planned.
 
 ## Deferred Items
 
@@ -121,6 +131,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-15T18:41:42.038Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-cjk-typography-differentiation/03-CONTEXT.md
+Last session: 2026-07-17 (ad-hoc, outside GSD, at user direction)
+Stopped at: Phase 4 + multi-format delivered & merged to main (PR #1); Phase 5 planned
+Resume file: docs/READER-PHASE5-ANNOTATIONS-PLAN.md
+Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

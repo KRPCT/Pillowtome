@@ -167,6 +167,26 @@ export function visibleRangeCfi(
     }
 }
 
+/**
+ * Turn a selection Range into a full range-CFI, using the same
+ * `CFI.fromRange` + `CFI.joinIndir(baseCfi, local)` idiom as `visibleRangeCfi`.
+ *
+ * Scroll-mode counterpart to foliate's `view.getCFI(index, range)` (plan 05-03),
+ * so paginate and scroll selections produce comparable range-CFIs. Returns null
+ * for an empty/collapsed/failed range.
+ */
+export function selectionCfi(baseCfi: string, range: Range | null | undefined): string | null {
+    if (!range || range.collapsed) return null;
+    try {
+        const local = CFI.fromRange(range);
+        if (!local) return null;
+        return CFI.joinIndir(baseCfi, local);
+    } catch (err) {
+        console.warn("[scroll-cfi] selectionCfi failed", err);
+        return null;
+    }
+}
+
 
 // --- CFI resolution (restore) ----------------------------------------------
 

@@ -1,6 +1,54 @@
 import { describe, expect, it } from "vitest";
 import * as CFI from "../vendor/foliate-js/epubcfi.js";
-import { spineFromCfi } from "./scroll-cfi";
+import { cfiToRange, selectionCfi, spineFromCfi } from "./scroll-cfi";
+
+// Minimal html>body>#text substrate — the REAL foliate fromRange/toRange do the
+// work (no filter passed, so NodeFilter is never touched). jsdom would only be
+// the same substrate; the project deliberately ships no DOM test dependency.
+function makeDom(text: string) {
+  const textNode: Record<string, unknown> = { nodeType: 3, nodeValue: text };
+  const body: Record<string, unknown> = { nodeType: 1, id: "", childNodes: [textNode] };
+  const html: Record<string, unknown> = { nodeType: 1, id: "", childNodes: [body] };
+  body.firstChild = textNode;
+  body.lastChild = textNode;
+  html.firstChild = body;
+  html.lastChild = body;
+  const doc: Record<string, unknown> = {
+    documentElement: html,
+    getElementById: () => null,
+    createRange() {
+      return {
+        startContainer: null as unknown,
+        startOffset: 0,
+        endContainer: null as unknown,
+        endOffset: 0,
+        setStart(n: unknown, o: number) { this.startContainer = n; this.startOffset = o; },
+        setEnd(n: unknown, o: number) { this.endContainer = n; this.endOffset = o; },
+        toString() {
+          return ((this.startContainer as { nodeValue?: string })?.nodeValue ?? "").slice(
+            this.startOffset,
+            this.endOffset,
+          );
+        },
+      };
+    },
+  };
+  for (const n of [textNode, body, html]) n.ownerDocument = doc;
+  textNode.parentNode = body;
+  body.parentNode = html;
+  html.parentNode = null;
+  return { doc: doc as unknown as Document, textNode };
+}
+
+function selectionRange(textNode: unknown, start: number, end: number): Range {
+  return {
+    startContainer: textNode,
+    startOffset: start,
+    endContainer: textNode,
+    endOffset: end,
+    collapsed: start === end,
+  } as unknown as Range;
+}
 
 /**
  * scroll-cfi.ts's core logic (getVisibleRange / cfiToRange / resolveCfiScrollTop)
@@ -59,6 +107,25 @@ describe("CFI building blocks for scroll resume", () => {
     // toIndex takes an indirection array and reads its last part's index.
     const idx = CFI.fake.toIndex(parts[0]);
     expect(idx).toBe(2);
+  });
+});
+
+describe("selectionCfi (scroll selection → range-CFI)", () => {
+  it("round-trips a selection through cfiToRange back to the same text", () => {
+    const { doc, textNode } = makeDom("零一二三四五六七");
+    const baseCfi = CFI.fake.fromIndex(3); // epubcfi(/6/8)
+    const cfi = selectionCfi(baseCfi, selectionRange(textNode, 2, 6));
+    expect(cfi).not.toBeNull();
+    expect(CFI.isCFI.test(cfi as string)).toBe(true);
+    expect((cfi as string).startsWith("epubcfi(/6/8!")).toBe(true);
+    const range = cfiToRange(doc, cfi as string);
+    expect(range?.toString()).toBe("二三四五");
+  });
+
+  it("returns null for a null or collapsed range", () => {
+    const { textNode } = makeDom("abc");
+    expect(selectionCfi("epubcfi(/6/8)", null)).toBeNull();
+    expect(selectionCfi("epubcfi(/6/8)", selectionRange(textNode, 1, 1))).toBeNull();
   });
 });
 

@@ -140,10 +140,21 @@ Plans:
 
 Plans:
 
+**Wave 1**
+
 - [ ] 05-01-PLAN.md — Persistence + ledger: schema V7 (annotation + sync_meta) + annotation-store CRUD/tombstone/change_log + content_hash [Wave 1, autonomous]
 - [ ] 05-02-PLAN.md — Composite self-healing resolver (CFI→text_context→fraction) + locator text_pre/post + scroll selection→CFI [Wave 1, autonomous]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 05-03-PLAN.md — Selection + drawing mechanics both modes (foliate draw-annotation / CSS Custom Highlight) + restore/replay [Wave 2, autonomous]
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 05-04-PLAN.md — Annotation UI: selection bubble + note editor + annotations sheet + bookmark toggle + 朱砂 palette [Wave 3, autonomous]
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 05-05-PLAN.md — Android emulator acceptance gate + 200+ annotation perf stress [Wave 4, checkpoint]
 
 ### Phase 6: TXT Format & Format-Abstraction Validation

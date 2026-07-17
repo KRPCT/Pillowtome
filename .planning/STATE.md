@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: between phases — reconcile via GSD, then execute Phase 05
-stopped_at: Phase 5 context gathered
-last_updated: "2026-07-17T12:30:48.911Z"
-last_activity: "2026-07-17 -- multi-format + metadata shipped; PR #1 merged to main"
+status: executing
+stopped_at: Phase 5 UI-SPEC approved
+last_updated: "2026-07-17T13:52:25.826Z"
+last_activity: 2026-07-17 -- Phase 05 planning complete
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 18
+  total_plans: 23
   completed_plans: 18
   percent: 57
 ---
@@ -34,8 +34,8 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 04 (local-library) — DELIVERED (ad-hoc). Phase 06 (formats) — bulk DELIVERED ahead of sequence. Phase 05 (annotations) — PLANNED, next.
-Status: between phases — reconcile via GSD, then execute Phase 05
-Last activity: 2026-07-17 -- multi-format + metadata shipped; PR #1 merged to main
+Status: Ready to execute
+Last activity: 2026-07-17 -- Phase 05 planning complete
 
 Progress: [██████░░░░] ~60% (Phases 1–4 done; Phase 6 formats done ahead; Phase 5 planned)
 
@@ -131,7 +131,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-17T12:30:48.902Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-annotations-composite-locator/05-CONTEXT.md
+Last session: 2026-07-17T13:00:32.164Z
+Stopped at: Phase 5 UI-SPEC approved
+Resume file: .planning/phases/05-annotations-composite-locator/05-UI-SPEC.md
 Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

@@ -18,7 +18,7 @@ export interface ReaderChromeProps {
 }
 
 export function ReaderChrome({
-  title = "示例书籍",
+  title = "",
   fraction = null,
   chromeVisible = true,
   onBack,
@@ -26,15 +26,9 @@ export function ReaderChrome({
   onOpenSearch,
   onOpenSettings,
 }: ReaderChromeProps) {
-  if (!chromeVisible) return null;
-
-  const percent =
-    fraction != null && Number.isFinite(fraction)
-      ? Math.round(Math.max(0, Math.min(1, fraction)) * 100)
-      : null;
-
+  // Always mounted so show/hide can fade+slide (chromeVisible toggles a data attr).
   return (
-    <div className="reader__chrome">
+    <div className="reader__chrome" data-visible={chromeVisible}>
       <header className="reader__toolbar">
         <div className="reader__toolbar-left">
           <Button
@@ -54,9 +48,6 @@ export function ReaderChrome({
         </div>
 
         <div className="reader__toolbar-right">
-          {percent != null ? (
-            <span className="reader__progress-caption">{`进度 ${percent}%`}</span>
-          ) : null}
           <Button
             type="button"
             variant="ghost"

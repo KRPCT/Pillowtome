@@ -42,6 +42,9 @@ describe("DEFAULT_PREFS / constants", () => {
       cjkPunctTrim: true,
       cjkAutospace: true,
       cjkKinsoku: true,
+      cleanTitles: true,
+      wordKeep: false,
+      cnConvert: "off",
     });
   });
 
@@ -128,6 +131,21 @@ describe("buildReadingCss", () => {
     expect(css).not.toContain("text-spacing-trim");
     expect(css).not.toContain("text-autospace");
     expect(css).not.toContain("line-break: strict");
+  });
+
+  it("caps image/media size to column width + one screen (--pillow-vh)", () => {
+    const css = buildReadingCss(DEFAULT_PREFS, "", SYSTEM_CJK_STACK);
+    // width cap + height cap via injected viewport px var
+    expect(css).toMatch(/img[^{}]*,[^{}]*svg[\s\S]*max-width:\s*100%\s*!important/);
+    expect(css).toContain("max-height: var(--pillow-vh, 100vh) !important");
+    // aspect-ratio preserved: width/height plain auto (NOT !important → no CLS)
+    expect(css).toMatch(/width:\s*auto;/);
+    expect(css).not.toContain("width: auto !important");
+    // SVG-wrapped raster covers, standalone centering, table/pre overflow guard
+    expect(css).toContain("svg image");
+    expect(css).toContain("margin-inline: auto");
+    expect(css).toMatch(/table\s*\{[^}]*max-width:\s*100%/);
+    expect(css).toMatch(/pre\s*\{[^}]*overflow-x:\s*auto/);
   });
 });
 

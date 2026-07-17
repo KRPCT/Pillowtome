@@ -29,3 +29,13 @@ export function pillowUrl(id: string): string {
 export function pillowFontUrl(fontId: string): string {
   return convertFileSrc(`fonts/${fontId}`, "pillow");
 }
+
+/**
+ * Build the `pillow://` URL for a library cover file under `covers/{name}`.
+ *
+ * `name` is the stored cover file name (`{workId}.{ext}`) written by the Rust
+ * ingest. Served by the same pillow handler, confined to app_data/covers.
+ */
+export function pillowCoverUrl(coverFile: string): string {
+  return convertFileSrc(`covers/${coverFile}`, "pillow");
+}

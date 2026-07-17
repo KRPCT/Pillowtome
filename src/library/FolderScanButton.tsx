@@ -13,10 +13,12 @@ import {
   libraryHasWorkId,
 } from "./library-store";
 import { ensureWorkRow } from "../reader/locator-store";
-import { Button } from "@/components/ui/button";
+import MuiButton from "@mui/material/Button";
 
 export interface FolderScanButtonProps {
   onDone?: () => void;
+  /** Toolbar variant reports status here (Snackbar) instead of inline. */
+  onStatus?: (msg: string | null) => void;
   variant?: "default" | "toolbar";
   className?: string;
 }
@@ -37,11 +39,17 @@ function newItemId(): string {
  */
 export function FolderScanButton({
   onDone,
+  onStatus,
   variant = "default",
   className,
 }: FolderScanButtonProps) {
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatusState] = useState<string | null>(null);
+
+  const setStatus = (msg: string | null) => {
+    setStatusState(msg);
+    onStatus?.(msg);
+  };
 
   async function handleScan() {
     setBusy(true);
@@ -85,22 +93,15 @@ export function FolderScanButton({
 
   if (variant === "toolbar") {
     return (
-      <div className={className}>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => void handleScan()}
-        >
-          {label}
-        </Button>
-        {status ? (
-          <p className="library-status" role="status">
-            {status}
-          </p>
-        ) : null}
-      </div>
+      <MuiButton
+        className={className}
+        variant="outlined"
+        size="small"
+        disabled={busy}
+        onClick={() => void handleScan()}
+      >
+        {label}
+      </MuiButton>
     );
   }
 

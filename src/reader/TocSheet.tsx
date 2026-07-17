@@ -4,7 +4,7 @@
  * Clean-room from UI-SPEC (T-02-agpl).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -71,6 +71,16 @@ export function TocSheet({
   const isDesktop = useIsDesktop();
   const flat = useMemo(() => flattenToc(items), [items]);
   const empty = flat.length === 0;
+  const activeRef = useRef<HTMLButtonElement | null>(null);
+
+  // Long TOCs open at the top otherwise — scroll the current chapter into view.
+  useEffect(() => {
+    if (!open) return;
+    const el = activeRef.current;
+    if (!el) return;
+    const id = setTimeout(() => el.scrollIntoView({ block: "center" }), 80);
+    return () => clearTimeout(id);
+  }, [open, activeLabel]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -110,6 +120,7 @@ export function TocSheet({
                   <li key={`${item.href}-${idx}-${item.depth}`}>
                     <button
                       type="button"
+                      ref={isActive ? activeRef : undefined}
                       className={
                         isActive
                           ? "reader-toc-item reader-toc-item--active"

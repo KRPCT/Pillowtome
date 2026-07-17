@@ -29,6 +29,12 @@ export interface ReadingPrefs {
   cjkAutospace: boolean;
   /** 禁则 (CJK-03 / D-32). */
   cjkKinsoku: boolean;
+  /** 书名清洗：书架显示时去掉来源站名尾巴（display-only；不改存储的原始书名）。 */
+  cleanTitles: boolean;
+  /** 词不拆行：用 Intl.Segmenter 保证 CJK 词不跨行/页被拆（display-only, PoC）。 */
+  wordKeep: boolean;
+  /** 简繁显示转换（display-only, OpenCC）：off 原文 / s2t 简→繁 / t2s 繁→简。 */
+  cnConvert: "off" | "s2t" | "t2s";
 }
 
 /** UI-SPEC defaults: paginate / day / system CJK / 18px / 1.75 / 24px margins. */
@@ -43,6 +49,9 @@ export const DEFAULT_PREFS: ReadingPrefs = {
   cjkPunctTrim: true,
   cjkAutospace: true,
   cjkKinsoku: true,
+  cleanTitles: true,
+  wordKeep: false,
+  cnConvert: "off",
 };
 
 /** Default reading body stack — never Geist (chrome-only). Includes TC names (D-44/D-47). */
@@ -242,6 +251,43 @@ export function buildReadingCss(
     a {
       color: inherit !important;
     }
+    /*
+     * Image / media auto-fit (READER images). Book content lives in separate
+     * blob-URL iframes, so ONLY this injected CSS reaches it. Cap width to the
+     * column and height to one screen, keeping aspect ratio.
+     * - width/height stay plain 'auto' (NOT !important) so the browser derives
+     *   aspect-ratio from an img's width/height attributes → box reserved before
+     *   the bitmap loads → no layout shift that would corrupt scroll-offset math.
+     * - max-height uses --pillow-vh (real viewport px, injected per scroll iframe)
+     *   because vh/svh mean the whole content height inside a height-expanded
+     *   iframe, not one screen. Fallback 100vh only bites transiently / in
+     *   paginate (where foliate's setImageSize overrides with inline !important).
+     */
+    img, svg, video, image {
+      max-width: 100% !important;
+      max-height: var(--pillow-vh, 100vh) !important;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      object-position: center;
+      box-sizing: border-box;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+    }
+    /* SVG covers often wrap a raster: <svg><image/></svg> — fit both. */
+    svg image { max-width: 100% !important; max-height: 100% !important; }
+    /* Center standalone / figure images; keep inline images inline. */
+    figure { margin: 1em 0; text-align: center; }
+    figure img, figure svg,
+    p > img:only-child, div > img:only-child,
+    body > img, body > svg {
+      display: block;
+      margin-inline: auto;
+    }
+    /* Stop wide tables / pre forcing horizontal overflow in scroll mode. */
+    table { max-width: 100% !important; box-sizing: border-box; }
+    pre { max-width: 100% !important; overflow-x: auto; }
     ${cjk}
   `;
 }

@@ -49,6 +49,7 @@ export function LibrarySettingsSheet({
       onOpenChange={onOpenChange}
       prefs={prefs}
       onPrefsChange={onPrefsChange}
+      showLibraryPrefs
       fonts={fonts.map((f) => ({ id: f.id, familyName: f.familyName }))}
       fontStatus={fontStatus}
       onImportFont={async () => {

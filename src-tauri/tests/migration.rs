@@ -6,7 +6,9 @@
 //! columns, and the locator UNIQUE index. Uses the SAME sqlx binding
 //! tauri-plugin-sql resolves (single SQLite binding, Pitfall 6).
 
-use pillowtome_lib::migrations::{migrations, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4};
+use pillowtome_lib::migrations::{
+    migrations, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6,
+};
 use sqlx::{Connection, Row, SqliteConnection};
 
 async fn fresh_db_v1() -> SqliteConnection {
@@ -44,6 +46,24 @@ async fn fresh_db_v4() -> SqliteConnection {
         .execute(&mut conn)
         .await
         .expect("apply SCHEMA_V4");
+    conn
+}
+
+async fn fresh_db_v5() -> SqliteConnection {
+    let mut conn = fresh_db_v4().await;
+    sqlx::raw_sql(SCHEMA_V5)
+        .execute(&mut conn)
+        .await
+        .expect("apply SCHEMA_V5");
+    conn
+}
+
+async fn fresh_db_v6() -> SqliteConnection {
+    let mut conn = fresh_db_v5().await;
+    sqlx::raw_sql(SCHEMA_V6)
+        .execute(&mut conn)
+        .await
+        .expect("apply SCHEMA_V6");
     conn
 }
 
@@ -197,6 +217,39 @@ async fn schema_v3_adds_cjk_toggle_columns_with_defaults_on() {
 }
 
 #[tokio::test]
+async fn schema_v5_adds_clean_titles_column_default_on() {
+    let mut conn = fresh_db_v5().await;
+    assert!(
+        has_column(&mut conn, "reading_prefs", "clean_titles").await,
+        "schema v5 missing reading_prefs.clean_titles"
+    );
+
+    let row = sqlx::query("SELECT clean_titles FROM reading_prefs WHERE id = 'global'")
+        .fetch_optional(&mut conn)
+        .await
+        .expect("select global prefs after v5")
+        .expect("seed row id=global must still exist");
+
+    assert_eq!(row.get::<i64, _>("clean_titles"), 1);
+}
+
+#[tokio::test]
+async fn schema_v6_adds_wordkeep_and_convert_columns() {
+    let mut conn = fresh_db_v6().await;
+    assert!(has_column(&mut conn, "reading_prefs", "word_keep").await);
+    assert!(has_column(&mut conn, "reading_prefs", "cn_convert").await);
+
+    let row = sqlx::query("SELECT word_keep, cn_convert FROM reading_prefs WHERE id = 'global'")
+        .fetch_optional(&mut conn)
+        .await
+        .expect("select global prefs after v6")
+        .expect("seed row id=global must still exist");
+
+    assert_eq!(row.get::<i64, _>("word_keep"), 0);
+    assert_eq!(row.get::<String, _>("cn_convert"), "off");
+}
+
+#[tokio::test]
 async fn schema_v4_creates_library_item_with_unique_work_id() {
     let mut conn = fresh_db_v4().await;
     let names = table_names(&mut conn).await;
@@ -244,9 +297,9 @@ async fn schema_v4_creates_library_item_with_unique_work_id() {
 }
 
 #[test]
-fn migration_set_is_v1_through_v4_up() {
+fn migration_set_is_v1_through_v6_up() {
     let set = migrations();
-    assert_eq!(set.len(), 4, "exactly four migrations (v1..v4)");
+    assert_eq!(set.len(), 6, "exactly six migrations (v1..v6)");
     assert_eq!(set[0].version, 1);
     assert_eq!(set[0].description, "seed_stub_schema");
     assert_eq!(set[0].sql, SCHEMA_V1, "v1 SQL is SCHEMA_V1 (one source of truth)");
@@ -276,4 +329,16 @@ fn migration_set_is_v1_through_v4_up() {
     assert!(set[3].sql.contains("work_id"));
     assert!(set[3].sql.contains("source_id"));
     assert!(set[3].sql.contains("idx_library_last_read"));
+
+    assert_eq!(set[4].version, 5);
+    assert_eq!(set[4].description, "library_title_cleaning_pref");
+    assert_eq!(set[4].sql, SCHEMA_V5, "v5 SQL is SCHEMA_V5 (one source of truth)");
+    assert!(set[4].sql.contains("clean_titles"));
+    assert!(set[4].sql.contains("DEFAULT 1"));
+
+    assert_eq!(set[5].version, 6);
+    assert_eq!(set[5].description, "cjk_wordkeep_and_convert_prefs");
+    assert_eq!(set[5].sql, SCHEMA_V6, "v6 SQL is SCHEMA_V6 (one source of truth)");
+    assert!(set[5].sql.contains("word_keep"));
+    assert!(set[5].sql.contains("cn_convert"));
 }

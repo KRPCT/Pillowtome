@@ -11,6 +11,10 @@ export interface LibraryGridProps {
   onOpen: (item: LibraryItem) => void;
   onRefresh: () => void;
   onImportedOpen?: (sourceId: string) => void;
+  /** Long-press / right-click → 删除 a book. */
+  onDelete?: (item: LibraryItem) => void;
+  /** Strip source-site tail from shelf titles (display-only). */
+  cleanTitles?: boolean;
   /** When true, hide empty-state import buttons (chrome already has them). */
   chromeHasActions?: boolean;
 }
@@ -20,6 +24,8 @@ export function LibraryGrid({
   onOpen,
   onRefresh,
   onImportedOpen,
+  onDelete,
+  cleanTitles,
   chromeHasActions = false,
 }: LibraryGridProps) {
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -61,7 +67,13 @@ export function LibraryGrid({
       />
       <div className="library-grid">
         {view.map((item) => (
-          <LibraryCard key={item.itemId} item={item} onOpen={onOpen} />
+          <LibraryCard
+            key={item.itemId}
+            item={item}
+            onOpen={onOpen}
+            onDelete={onDelete}
+            cleanTitles={cleanTitles}
+          />
         ))}
       </div>
     </section>

@@ -36,3 +36,8 @@ target/
 *.njsproj
 *.sln
 *.sw?
+
+# Dev artifacts (device QA screenshots, pulled dev DB, local tool cache)
+pillowtome-*.png
+pillow-device.db
+.zcode/

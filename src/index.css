@@ -5,42 +5,180 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Dual-layer theming (UI-SPEC): home shell keeps :root/.dark below;
-   reader root uses data-theme paper-feel tokens. */
+/* ==========================================================================
+   Material Design 3 token foundation (m3.material.io) — the app's design
+   language. Source color = 朱砂 (vermilion #B4472F); tonal palettes below are
+   seeded from it. Color ROLES are per-theme (below, under .reader[data-theme]).
+   The book PAGE keeps its paper reading tones (--page-*) for reading comfort;
+   MD3 owns every chrome surface (app bars, sheets, cards, controls).
+   ========================================================================== */
+:root {
+  /* Shape scale (corner radii) */
+  --md-shape-none: 0px;
+  --md-shape-xs: 4px;
+  --md-shape-sm: 8px;
+  --md-shape-md: 12px;
+  --md-shape-lg: 16px;
+  --md-shape-xl: 28px;
+  --md-shape-full: 999px;
+
+  /* State-layer opacities */
+  --md-state-hover: 0.08;
+  --md-state-focus: 0.10;
+  --md-state-pressed: 0.10;
+  --md-state-drag: 0.16;
+
+  /* Type scale (role → size / line-height / weight / tracking) */
+  --md-type-display-l: 400 3.5rem/4rem;
+  --md-type-headline-m: 400 1.75rem/2.25rem;
+  --md-type-headline-s: 400 1.5rem/2rem;
+  --md-type-title-l: 400 1.375rem/1.75rem;
+  --md-type-title-m: 500 1rem/1.5rem;
+  --md-type-title-s: 500 0.875rem/1.25rem;
+  --md-type-body-l: 400 1rem/1.5rem;
+  --md-type-body-m: 400 0.875rem/1.25rem;
+  --md-type-body-s: 400 0.75rem/1rem;
+  --md-type-label-l: 500 0.875rem/1.25rem;
+  --md-type-label-m: 500 0.75rem/1rem;
+  --md-type-label-s: 500 0.6875rem/1rem;
+  --md-type-tracking-label: 0.03125em;
+
+  /* Elevation (MD3 = surface tint + shadow). Shadows: */
+  --md-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --md-elev-2: 0 1px 2px rgba(0, 0, 0, 0.30), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --md-elev-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.30);
+}
+
+/* Dual-layer theming: MD3 chrome via md-sys-color roles (per-theme below),
+   book page via --page-* paper tones. */
 
 /* Reader paper-feel tokens — applied only under .reader[data-theme] */
 .reader[data-theme="day"] {
-  --reader-bg: #f7f3eb;
-  --reader-chrome: #efe8db;
-  --reader-accent: #8b6914;
-  --reader-fg: #1c1915;
-  --reader-muted: #6b6458;
-  --reader-border: #e0d6c4;
+  /* Chrome tokens now alias MD3 roles (defined below) so all existing chrome CSS
+     adopts Material Design 3 colors; the book PAGE keeps its paper tones. */
+  --reader-bg: var(--md-surface);
+  --reader-chrome: var(--md-surface-container);
+  --reader-accent: var(--md-primary);
+  --reader-accent-soft: color-mix(in srgb, var(--md-primary) 14%, transparent);
+  --reader-fg: var(--md-on-surface);
+  --reader-muted: var(--md-on-surface-variant);
+  --reader-border: var(--md-outline-variant);
   --page-bg: #fffef9;
   --page-fg: #1c1915;
+
+  /* MD3 color roles — light (朱砂 seed) */
+  --md-primary: #b4472f;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #ffdad2;
+  --md-on-primary-container: #3a0a02;
+  --md-secondary: #77574f;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #ffdad2;
+  --md-on-secondary-container: #2c150f;
+  --md-tertiary: #6d5e2f;
+  --md-on-tertiary: #ffffff;
+  --md-tertiary-container: #f8e2a6;
+  --md-on-tertiary-container: #231b00;
+  --md-error: #ba1a1a;
+  --md-on-error: #ffffff;
+  --md-error-container: #ffdad6;
+  --md-on-error-container: #410002;
+  --md-surface: #fff8f6;
+  --md-on-surface: #231917;
+  --md-surface-variant: #f5ded8;
+  --md-on-surface-variant: #53433f;
+  --md-surface-container-lowest: #ffffff;
+  --md-surface-container-low: #fff1ed;
+  --md-surface-container: #fceae5;
+  --md-surface-container-high: #f6e4df;
+  --md-surface-container-highest: #f0ded9;
+  --md-outline: #85736e;
+  --md-outline-variant: #d8c2bb;
+  --md-scrim: #000000;
 }
 
 .reader[data-theme="night"] {
-  --reader-bg: #1a1814;
-  /* Slightly lighter than page so floating toolbar separates from text */
-  --reader-chrome: #2c2822;
-  --reader-accent: #d4b36a;
-  --reader-fg: #f0ebe3;
-  --reader-muted: #c2b8a6;
-  --reader-border: #4a4338;
+  --reader-bg: var(--md-surface);
+  --reader-chrome: var(--md-surface-container);
+  --reader-accent: var(--md-primary);
+  --reader-accent-soft: color-mix(in srgb, var(--md-primary) 22%, transparent);
+  --reader-fg: var(--md-on-surface);
+  --reader-muted: var(--md-on-surface-variant);
+  --reader-border: var(--md-outline-variant);
   --page-bg: #12100e;
   --page-fg: #e8e2d6;
+
+  /* MD3 color roles — dark (朱砂 seed) */
+  --md-primary: #ffb4a4;
+  --md-on-primary: #5f1607;
+  --md-primary-container: #8f2f1a;
+  --md-on-primary-container: #ffdad2;
+  --md-secondary: #e7bdb2;
+  --md-on-secondary: #442a22;
+  --md-secondary-container: #5d3f37;
+  --md-on-secondary-container: #ffdad2;
+  --md-tertiary: #dbc68d;
+  --md-on-tertiary: #3b2f05;
+  --md-tertiary-container: #534619;
+  --md-on-tertiary-container: #f8e2a6;
+  --md-error: #ffb4ab;
+  --md-on-error: #690005;
+  --md-error-container: #93000a;
+  --md-on-error-container: #ffdad6;
+  --md-surface: #1a1210;
+  --md-on-surface: #f0ded9;
+  --md-surface-variant: #53433f;
+  --md-on-surface-variant: #d8c2bb;
+  --md-surface-container-lowest: #140c0a;
+  --md-surface-container-low: #231917;
+  --md-surface-container: #271d1a;
+  --md-surface-container-high: #322825;
+  --md-surface-container-highest: #3d322f;
+  --md-outline: #a08c86;
+  --md-outline-variant: #53433f;
+  --md-scrim: #000000;
 }
 
 .reader[data-theme="sepia"] {
-  --reader-bg: #f0e6d2;
-  --reader-chrome: #e5d8c0;
-  --reader-accent: #9a6b2f;
-  --reader-fg: #3b2f1e;
-  --reader-muted: #7a6e5a;
-  --reader-border: #d4c6ae;
+  --reader-bg: var(--md-surface);
+  --reader-chrome: var(--md-surface-container);
+  --reader-accent: var(--md-primary);
+  --reader-accent-soft: color-mix(in srgb, var(--md-primary) 14%, transparent);
+  --reader-fg: var(--md-on-surface);
+  --reader-muted: var(--md-on-surface-variant);
+  --reader-border: var(--md-outline-variant);
   --page-bg: #f4ecd8;
   --page-fg: #3b2f1e;
+
+  /* MD3 color roles — light on warm sepia paper (朱砂 seed) */
+  --md-primary: #a8442a;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #ffdad2;
+  --md-on-primary-container: #3a0a02;
+  --md-secondary: #77574f;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #f6ddc6;
+  --md-on-secondary-container: #2c150f;
+  --md-tertiary: #6d5e2f;
+  --md-on-tertiary: #ffffff;
+  --md-tertiary-container: #f0e0a2;
+  --md-on-tertiary-container: #231b00;
+  --md-error: #ba1a1a;
+  --md-on-error: #ffffff;
+  --md-error-container: #ffdad6;
+  --md-on-error-container: #410002;
+  --md-surface: #f4ecd8;
+  --md-on-surface: #3b2f1e;
+  --md-surface-variant: #e5d8c0;
+  --md-on-surface-variant: #53433f;
+  --md-surface-container-lowest: #fbf3df;
+  --md-surface-container-low: #f0e7d0;
+  --md-surface-container: #ece2c8;
+  --md-surface-container-high: #e6dabd;
+  --md-surface-container-highest: #e0d4b4;
+  --md-outline: #8a7a5f;
+  --md-outline-variant: #d4c6ae;
+  --md-scrim: #000000;
 }
 
 @theme inline {

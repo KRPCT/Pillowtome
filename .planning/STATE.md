@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 4 delivered + multi-format (Phase 6 scope) landed ad-hoc; Phase 5 planned
-last_updated: "2026-07-17T11:30:00.000Z"
-last_activity: 2026-07-17 -- Phase 4 + multi-format (PDF/MOBI/AZW3/TXT) + metadata shipped; PR #1 merged to main; Phase 5 annotations plan written
+status: between phases — reconcile via GSD, then execute Phase 05
+stopped_at: Phase 5 context gathered
+last_updated: "2026-07-17T12:30:48.911Z"
+last_activity: "2026-07-17 -- multi-format + metadata shipped; PR #1 merged to main"
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 18
-  completed_plans: 14
-  percent: 60
+  completed_plans: 18
+  percent: 57
 ---
 
 <!-- NOTE (2026-07-17): the 2026-07-16..17 work ran AD-HOC (outside GSD) at the
@@ -21,7 +21,6 @@ progress:
      — see docs/READER-PHASE5-ANNOTATIONS-PLAN.md. Next GSD session should
      reconcile phase status (e.g. an audit) before executing, then plan/execute
      Phase 5. All work is on `main` (PR #1), all commits GitHub-Verified. -->
-
 
 # Project State
 
@@ -41,6 +40,7 @@ Last activity: 2026-07-17 -- multi-format + metadata shipped; PR #1 merged to ma
 Progress: [██████░░░░] ~60% (Phases 1–4 done; Phase 6 formats done ahead; Phase 5 planned)
 
 Delivered 2026-07-16..17 (ad-hoc, verified on Android AVD, all formats + both modes):
+
 - Phase 4 Local Library: cover grid + filters, dual ingest, continuous-scroll CFI position core (READER-POS resolved), 朱砂 UI/UX, draggable scrubber.
 - Phase 6 (formats, ahead of sequence): PDF (pdf.js), MOBI, AZW3, TXT (custom adapter) rendering; engine title/author/cover backfill; in-book links (filepos:/kindle:); 简繁/词不拆行 for all formats incl. TXT.
 - Phase 5 (annotations): plan only — docs/READER-PHASE5-ANNOTATIONS-PLAN.md.
@@ -131,7 +131,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-17 (ad-hoc, outside GSD, at user direction)
-Stopped at: Phase 4 + multi-format delivered & merged to main (PR #1); Phase 5 planned
-Resume file: docs/READER-PHASE5-ANNOTATIONS-PLAN.md
+Last session: 2026-07-17T12:30:48.902Z
+Stopped at: Phase 5 context gathered
+Resume file: .planning/phases/05-annotations-composite-locator/05-CONTEXT.md
 Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

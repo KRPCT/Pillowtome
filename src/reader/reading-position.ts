@@ -110,6 +110,25 @@ export function positionFromLocatorCfi(
 }
 
 /**
+ * Match a section id against an href path for spine resolution.
+ *
+ * `sectionId` is unknown on purpose: EPUB/MOBI give string hrefs, but PDF
+ * gives a numeric ref `{num, gen}` with no `.endsWith`. The typeof guard
+ * silently skips those instead of throwing `id.endsWith is not a function`.
+ */
+export function matchSectionByHref(
+  sectionId: unknown,
+  hrefPath: string,
+): boolean {
+  if (typeof sectionId !== "string") return false;
+  return (
+    sectionId === hrefPath ||
+    sectionId.endsWith(hrefPath) ||
+    hrefPath.endsWith(sectionId)
+  );
+}
+
+/**
  * Map spine index → linear list index (skip linear="no").
  * Returns -1 when not found.
  */

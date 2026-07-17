@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pillowtome CJK coverage sheet</title>
+    <style>
+      /* Placeholder family; 03-03 wires PillowBundledCJK @font-face. No network fonts. */
+      body {
+        font-family: "PillowBundledCJK", system-ui, "PingFang SC", "Microsoft YaHei",
+          "Noto Sans CJK SC", "Noto Sans CJK TC", sans-serif;
+        font-size: 18px;
+        line-height: 1.75;
+        margin: 24px;
+        max-width: 42em;
+      }
+      h1 {
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+      section {
+        margin-bottom: 1.5em;
+      }
+      .label {
+        color: #666;
+        font-size: 0.85rem;
+        margin-bottom: 0.25em;
+      }
+      .ransom {
+        letter-spacing: 0.02em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CJK 覆盖样本 / Coverage sheet</h1>
+
+    <section>
+      <div class="label">简体 (SC)</div>
+      <p>
+        天地玄黄，宇宙洪荒。日月盈昃，辰宿列张。寒来暑往，秋收冬藏。闰余成岁，律吕调阳。
+        云对雨，雪对风，晚照对晴空。来鸿对去燕，宿鸟对鸣虫。三尺剑，六钧弓，岭北对江东。
+      </p>
+    </section>
+
+    <section>
+      <div class="label">繁體 (TC) — TC-only samples 體/國/說</div>
+      <p>
+        天地玄黃，宇宙洪荒。日月盈昃，辰宿列張。寒來暑往，秋收冬藏。閏餘成歲，律呂調陽。
+        雲對雨，雪對風，晚照對晴空。來鴻對去燕，宿鳥對鳴蟲。三尺劍，六鈞弓，嶺北對江東。
+        繁體專用：這個國家的整體體制與說明文件（體、國、說）必須清晰無豆腐。
+      </p>
+    </section>
+
+    <section>
+      <div class="label">中英 / 中数混排</div>
+      <p>
+        今天升级到Pillowtome 0.1.0，阅读EPUB时默认18px行高1.75。API级别Android 14可用，
+        WebView Chromium 120+ 与 iOS WKWebView 均需覆盖检测。价格约¥128或$19.9。
+      </p>
+    </section>
+
+    <section>
+      <div class="label">标点串</div>
+      <p>「引号」、『书名』、《篇名》、【着重】……——？！；：，。、“”‘’（）</p>
+    </section>
+
+    <section>
+      <div class="label">ransom-note 压力行（混字重/混脚本）</div>
+      <p class="ransom">
+        AaBbCc 123 天地人 天地人 々〇ー・／＼ ㊙①②③ 漢字Kanji カタカナ ABC xyz 999
+      </p>
+    </section>
+  </body>
+</html>

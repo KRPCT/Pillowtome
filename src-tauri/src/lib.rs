@@ -6,6 +6,8 @@
 //! resolves the moment Plan 04 drops the file.
 
 pub mod commands;
+pub mod covers;
+pub mod fonts;
 pub mod migrations;
 pub mod protocol;
 pub mod storage;
@@ -29,6 +31,14 @@ use storage::SourceRegistry;
 /// Real books arrive as a `BookSource` (file picker / Android SAF) in Plan 01-05.
 const SAMPLE_EPUB: &[u8] = include_bytes!("../assets/sample/sample.epub");
 
+/// Bundled Noto Sans CJK SC/TC variable OTFs (OFL) — same Android materialize
+/// path as the sample EPUB (CJK-05 / D-43..D-45). Served via pillow fonts ids
+/// `bundled-noto-sc` / `bundled-noto-tc` (never IPC bytes).
+const BUNDLED_NOTO_SC: &[u8] =
+    include_bytes!("../assets/fonts/noto-cjk/NotoSansCJKsc-VF.otf");
+const BUNDLED_NOTO_TC: &[u8] =
+    include_bytes!("../assets/fonts/noto-cjk/NotoSansCJKtc-VF.otf");
+
 /// Sample id registered in the [`SourceRegistry`]; the reader fetches
 /// `pillow://.../sample`.
 const SAMPLE_ID: &str = "sample";
@@ -50,6 +60,27 @@ fn materialize_sample(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Box<
     Ok(path)
 }
 
+/// Materialize bundled Noto SC+TC into `app_data_dir/fonts` (soft-fail).
+///
+/// Size match skips rewrite so multi-MB fonts are not rewritten every launch.
+fn materialize_bundled_cjk_fonts(app: &tauri::AppHandle) {
+    match fonts::fonts_dir(app) {
+        Ok(dir) => {
+            for (id, bytes) in [
+                (fonts::BUNDLED_NOTO_SC_ID, BUNDLED_NOTO_SC),
+                (fonts::BUNDLED_NOTO_TC_ID, BUNDLED_NOTO_TC),
+            ] {
+                if let Err(err) = fonts::materialize_bundled_font(&dir, id, bytes) {
+                    eprintln!("[pillowtome] bundled CJK font materialize failed ({id}): {err}");
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!("[pillowtome] fonts_dir for bundled CJK failed: {err}");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -62,7 +93,12 @@ pub fn run() {
         // Desktop file picker for import (returns a filesystem path). On Android
         // import uses the SAF picker instead (persistable grants), so this is a
         // desktop convenience; the frontend gates on `is_android`.
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        // Open external links (http(s)/mailto/...) in the user's default app /
+        // system browser. Used by the reader's in-book link handling - the
+        // WebView itself would otherwise trap these. Cross-platform (desktop +
+        // Android) via the official opener plugin (exact-pinned, =2.5.4).
+        .plugin(tauri_plugin_opener::init());
 
     // Android SAF: picker + persistable URI grants (FND-03). Behind the plugin's
     // Rust API only — the capability surface is scoped in `capabilities/` and no
@@ -87,6 +123,26 @@ pub fn run() {
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
 
+            // Custom fonts: `pillow://…/fonts/{id}` confined under app_data/fonts
+            // (D-30 / T-02-path). Not SourceRegistry — separate allowlist.
+            if let Some(font_id) = protocol::parse_font_path(&path) {
+                let fonts_dir = fonts::fonts_dir(app).ok();
+                let response =
+                    protocol::serve_font(fonts_dir.as_deref(), &font_id, range.as_deref());
+                responder.respond(response);
+                return;
+            }
+
+            // Library covers: `pillow://…/covers/{work_id}.{ext}` confined under
+            // app_data/covers. Separate allowlist, not the SourceRegistry.
+            if let Some(cover_name) = protocol::parse_cover_path(&path) {
+                let covers_dir = crate::covers::covers_dir(app).ok();
+                let response =
+                    protocol::serve_cover(covers_dir.as_deref(), &cover_name, range.as_deref());
+                responder.respond(response);
+                return;
+            }
+
             #[cfg(target_os = "android")]
             {
                 use pillowtome_core::source::BookSource;
@@ -102,13 +158,20 @@ pub fn run() {
             let response = protocol::serve(&registry, &path, range.as_deref());
             responder.respond(response);
         })
-        // Small structured IPC only (D-06): DRM verdict, import id/name, the
-        // imported-books list, and the platform flag. Never book bytes.
+        // Small structured IPC only (D-06): DRM verdict, import id/name, font
+        // metadata, the imported-books list, and the platform flag. Never book
+        // or font file bytes (T-02-ipc).
         .invoke_handler(tauri::generate_handler![
             commands::check_protection,
+            commands::ensure_work,
             commands::import,
             commands::imported_books,
+            commands::library_ingest,
+            commands::library_scan_folder,
+            commands::save_cover,
             commands::is_android,
+            fonts::import_font,
+            fonts::remove_font,
         ])
         .setup(|app| {
             // Materialize the embedded sample to a real filesystem path and
@@ -119,6 +182,10 @@ pub fn run() {
             let sample_path = materialize_sample(app.handle())?;
             app.state::<SourceRegistry>()
                 .register(SAMPLE_ID, sample_path);
+
+            // Bundled Noto Sans CJK SC+TC → app_data/fonts (CJK-05). Soft-fail
+            // so a font write issue never blocks reader open (system stack still works).
+            materialize_bundled_cjk_fonts(app.handle());
 
             // Re-hydrate persisted SAF grants so a previously imported book
             // reopens after a restart without re-granting (FND-03).

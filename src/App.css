@@ -1,10 +1,3 @@
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
-}
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
@@ -19,84 +12,177 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+
+  /*
+   * Safe area: env() works on notched iOS; Android WebView often returns 0.
+   * Floor keeps content below the system status bar (approx 24–28dp).
+   */
+  --safe-top: max(28px, env(safe-area-inset-top, 0px));
+  --safe-right: max(0px, env(safe-area-inset-right, 0px));
+  --safe-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+  --safe-left: max(0px, env(safe-area-inset-left, 0px));
+  /* Toolbar row height (icons); total chrome = this + --safe-top */
+  --reader-toolbar-row: 48px;
+  --reader-chrome-height: calc(var(--safe-top) + var(--reader-toolbar-row) + 2px);
 }
 
-.container {
+html,
+body,
+#root {
+  height: 100%;
   margin: 0;
-  padding-top: 10vh;
+}
+
+/* --- Library shell (aligned with reader paper-feel) --- */
+.library-shell {
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  text-align: center;
+  background: var(--reader-bg, #f7f3eb);
+  color: var(--reader-fg, #1c1915);
+  box-sizing: border-box;
+  padding-top: var(--safe-top);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
+.library-chrome {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--reader-chrome, #efe8db);
+  border-bottom: 1px solid var(--reader-border, #e0d6c4);
+  flex-shrink: 0;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+.library-chrome__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
 }
 
-a:hover {
-  color: #535bf2;
+.library-chrome__icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  color: var(--reader-accent, #b4472f);
+  flex-shrink: 0;
 }
 
-h1 {
-  text-align: center;
+.library-chrome__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--reader-fg, #1c1915);
 }
 
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+.library-chrome__sub {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--reader-muted, #6b6458);
 }
 
-button {
-  cursor: pointer;
+.library-chrome__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
+.library-chrome__sample {
+  color: var(--reader-fg, #1c1915) !important;
 }
 
-input,
-button {
-  outline: none;
+.library-shell__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
-#greet-input {
-  margin-right: 5px;
+.library-banner,
+.library-status {
+  margin: 0.5rem 0.85rem 0;
+  font-size: 0.85rem;
+  color: var(--reader-muted, #6b6458);
+  text-align: left;
 }
 
-.open-sample {
-  font-size: 1.05em;
+.library-shell .library {
+  margin: 0;
+  max-width: none;
+  padding: 0.85rem 0.85rem 1.5rem;
+}
+
+.library-shell .library-chip {
+  border-color: var(--md-outline, #85736e);
+  background: transparent;
+  color: var(--md-on-surface-variant, #53433f);
+  border-radius: var(--md-shape-sm, 8px);
+}
+
+.library-shell .library-chip--active {
+  background: var(--md-secondary-container, #ffdad2);
+  border-color: transparent;
+  color: var(--md-on-secondary-container, #2c150f);
+}
+
+.library-shell .library-toolbar__sort select {
+  border-color: var(--reader-border, #e0d6c4);
+  background: var(--page-bg, #fffef9);
+  color: var(--reader-fg, #1c1915);
+}
+
+.library-shell .library-card__cover {
+  background: var(--reader-chrome, #efe8db);
+  border-color: var(--reader-border, #e0d6c4);
+}
+
+.library-shell .library-card__placeholder {
+  color: var(--reader-muted, #6b6458);
+  background: linear-gradient(
+    160deg,
+    var(--page-bg, #fffef9),
+    var(--reader-chrome, #efe8db)
+  );
+}
+
+.library-shell .library-card__progress-fill {
+  background: var(--reader-accent, #b4472f);
+}
+
+.library-shell .library-card__title {
+  color: var(--reader-fg, #1c1915);
+}
+
+.library-shell .library-card__author {
+  color: var(--reader-muted, #6b6458);
+}
+
+.library-shell .library-empty__text,
+.library-shell .library-empty__hint {
+  color: var(--reader-muted, #6b6458);
+}
+
+.library-empty__hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.home-header {
+  margin-bottom: 0.5rem;
+}
+
+.actions--row {
+  margin-bottom: 0.5rem;
 }
 
 /* --- Home actions + imported library list --- */
@@ -123,17 +209,27 @@ button {
 }
 
 .library {
-  margin: 2em auto 0;
-  max-width: 28em;
+  margin: 1.5em auto 0;
+  max-width: 48em;
   width: 100%;
   text-align: left;
+  padding: 0 1rem 2rem;
+  box-sizing: border-box;
+}
+
+.library__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .library__title {
-  font-size: 1em;
-  opacity: 0.7;
-  margin: 0 0 0.5em;
-  text-align: center;
+  font-size: 1.1em;
+  font-weight: 600;
+  opacity: 0.85;
+  margin: 0;
+  text-align: left;
 }
 
 .library__list {
@@ -150,41 +246,1131 @@ button {
   text-align: left;
 }
 
-/* --- Reader slice (foliate-js render surface) --- */
-.reader {
-  position: fixed;
-  inset: 0;
+.library-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  justify-content: space-between;
+}
+
+.library-toolbar__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.library-chip {
+  border: 1px solid #e0d6c4;
+  background: #f7f3eb;
+  color: #1c1915;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.library-chip--active {
+  background: #b4472f;
+  border-color: #b4472f;
+  color: #fffef9;
+}
+
+.library-toolbar__sort select {
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #e0d6c4;
+  background: #fffef9;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 0.75rem;
+  /* Breathing room between the filter/sort toolbar and the first book row. */
+  margin-top: 1.15rem;
+}
+
+@media (min-width: 640px) {
+  .library-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .library-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.library-card {
   display: flex;
   flex-direction: column;
-  background-color: #ffffff;
+  gap: 0.4rem;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.library-card__cover {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--md-shape-md, 12px);
+  overflow: hidden;
+  background: var(--md-surface-container-high, #efe8db);
+  border: 1px solid var(--md-outline-variant, #e0d6c4);
+}
+
+.library-card__placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #6b6458;
+  background: linear-gradient(160deg, #f4ecd8, #e8dfc8);
+}
+
+/* Real cover image overlays the placeholder; onError hides it → placeholder shows. */
+.library-card__cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.library-card__badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(28, 25, 21, 0.72);
+  color: #fffef9;
+}
+
+.library-card__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.library-card__progress-fill {
+  height: 100%;
+  background: #b4472f;
+}
+
+.library-card__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-card__author {
+  font-size: 0.8rem;
+  color: #6b6458;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library--empty {
+  text-align: center;
+  max-width: 28em;
+}
+
+.library-empty__text {
+  margin: 0 0 1rem;
+  color: #6b6458;
+  line-height: 1.5;
+}
+
+.library-empty__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Reader shell (UI-SPEC layout contract) --- */
+.reader {
+  position: fixed;
+  /* Sit below the system status bar; never draw under it */
+  top: var(--safe-top);
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
+  left: var(--safe-left);
+  display: flex;
+  flex-direction: column;
+  background: var(--reader-bg, #f7f3eb);
+  color: var(--reader-fg, #1c1915);
+  overflow: hidden;
+}
+
+/* Paint status-bar region with page color so it matches the reader */
+.reader::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--safe-top);
+  background: var(--page-bg, var(--reader-bg, #f7f3eb));
+  z-index: 20;
+  pointer-events: none;
+}
+
+/*
+ * Toolbar overlays the page — never participates in flex height.
+ * Showing/hiding chrome must not resize .reader__view (avoids reflow / re-pagination).
+ * Top page air is sized so the first line sits below this bar when it appears.
+ */
+.reader__chrome {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  /* Solid-enough paper chrome so icons stay legible in night/sepia too */
+  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 96%, var(--reader-fg, #1c1915) 4%);
+  color: var(--reader-fg, #1c1915);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 var(--reader-border, #e0d6c4);
 }
 
 .reader__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75em;
-  padding: 0.5em 0.75em;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  flex: 0 0 auto;
+  gap: 8px;
+  height: var(--reader-toolbar-row);
+  box-sizing: border-box;
+  padding: 0 8px;
+  background: transparent;
+  border-bottom: none;
+  color: var(--reader-fg, #1c1915);
 }
 
-.reader__progress {
-  font-size: 0.9em;
-  opacity: 0.7;
+.reader__toolbar-left,
+.reader__toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: inherit;
 }
 
-/* foliate-js paginates into this box, so it MUST have an explicit size or the
-   render surface collapses to zero height and the page shows blank. */
+.reader__toolbar-right {
+  flex-shrink: 0;
+}
+
+.reader__title {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--reader-fg, #1c1915);
+}
+
+.reader__progress-caption {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--reader-muted, #6b6458);
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+/*
+ * 44×44 hit targets. Ghost Button uses shadcn text tokens which ignore
+ * reader data-theme — force icon + svg to --reader-fg so night mode is visible.
+ * Target both class and data-slot so Tailwind button variants cannot win.
+ */
+.reader__chrome .reader__icon-btn,
+.reader__chrome button.reader__icon-btn,
+.reader__chrome [data-slot="button"].reader__icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  color: var(--reader-fg, #1c1915) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  opacity: 1 !important;
+}
+
+.reader__chrome .reader__icon-btn svg,
+.reader__chrome .reader__icon-btn svg * {
+  color: var(--reader-fg, #1c1915) !important;
+  fill: none !important;
+  stroke: var(--reader-fg, #1c1915) !important;
+  width: 22px;
+  height: 22px;
+  opacity: 1 !important;
+}
+
+.reader__chrome .reader__icon-btn:hover,
+.reader__chrome .reader__icon-btn:focus-visible,
+.reader__chrome .reader__icon-btn[aria-expanded="true"],
+.reader__chrome .reader__icon-btn:active {
+  color: var(--reader-fg, #1c1915) !important;
+  background: color-mix(
+    in srgb,
+    var(--reader-fg, #1c1915) 14%,
+    var(--reader-chrome, #efe8db) 86%
+  ) !important;
+}
+
+/* Night: lift chrome bar + ensure near-white icons */
+.reader[data-theme="night"] .reader__chrome {
+  background: #2f2a24 !important;
+  color: #f5f0e8 !important;
+  box-shadow: 0 1px 0 #5a5246;
+}
+
+.reader[data-theme="night"] .reader__title,
+.reader[data-theme="night"] .reader__progress-caption {
+  color: #f5f0e8 !important;
+}
+
+.reader[data-theme="night"] .reader__progress-caption {
+  color: #cfc4b2 !important;
+}
+
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn,
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn svg,
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn svg * {
+  color: #f5f0e8 !important;
+  stroke: #f5f0e8 !important;
+}
+
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn:hover,
+.reader[data-theme="night"] .reader__chrome .reader__icon-btn:focus-visible {
+  background: rgba(245, 240, 232, 0.14) !important;
+}
+
+/* 2px hairline progress under toolbar (still inside overlay chrome) */
+.reader__progress-bar {
+  height: 2px;
+  width: 100%;
+  background: color-mix(in srgb, var(--reader-border, #e0d6c4) 60%, transparent);
+  overflow: hidden;
+}
+
+.reader__progress-bar-fill {
+  height: 100%;
+  background: var(--reader-accent, #b4472f);
+  transition: width 120ms linear;
+}
+
+/* Chrome fade+slide — always mounted; data-visible toggles immersion. */
+.reader__chrome {
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.reader__chrome[data-visible="false"] {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+/* --- Bottom navigation: scrubber + chapter ticks + undo pill --- */
+.reader__bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 6px 12px calc(8px + var(--safe-bottom, 0px));
+  background: color-mix(
+    in srgb,
+    var(--reader-chrome, #efe8db) 96%,
+    var(--reader-fg, #1c1915) 4%
+  );
+  box-shadow: 0 -1px 0 var(--reader-border, #e0d6c4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.reader__bottom[data-visible="false"] {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+.reader[data-theme="night"] .reader__bottom {
+  background: #2f2a24;
+  box-shadow: 0 -1px 0 #5a5246;
+}
+
+.reader__undo-pill {
+  position: absolute;
+  right: 12px;
+  top: -46px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--reader-border, #e0d6c4);
+  border-radius: 999px;
+  background: var(--reader-bg, #f7f3eb);
+  color: var(--reader-accent, #b4472f);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+}
+.reader__undo-pill svg {
+  width: 15px;
+  height: 15px;
+}
+
+.reader__bottom-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.reader__scrub-caption {
+  align-self: center;
+  max-width: 82%;
+  border: 0;
+  background: transparent;
+  color: var(--reader-muted, #6b6458);
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 2px 6px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.reader__scrub-track {
+  position: relative;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  touch-action: none;
+  cursor: pointer;
+}
+.reader__scrub-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--reader-border, #e0d6c4) 70%, transparent);
+}
+.reader__scrub-fill {
+  position: absolute;
+  left: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--reader-accent, #b4472f);
+  pointer-events: none;
+}
+.reader__scrub-tick {
+  position: absolute;
+  width: 2px;
+  height: 9px;
+  transform: translateX(-1px);
+  background: color-mix(in srgb, var(--reader-fg, #1c1915) 22%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+.reader__scrub-handle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  transform: translateX(-8px);
+  border-radius: 50%;
+  background: var(--reader-accent, #b4472f);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.reader__scrub-tooltip {
+  position: absolute;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--reader-fg, #1c1915);
+  color: var(--page-bg, #fffef9);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader__chrome,
+  .reader__bottom {
+    transition: none;
+  }
+}
+
+.reader__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--reader-muted, #6b6458);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* foliate-js needs an explicit sized host (Phase 1 height lesson).
+   Always fills the reader; chrome overlays on top and must not shrink this. */
 .reader__view {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
+  position: relative;
+  background: var(--page-bg, #fffef9);
 }
 
-.reader__view foliate-view {
+.reader__view foliate-view,
+foliate-view {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/*
+ * foliate-paginator grid places the content row between header/footer bands.
+ * With margin=0 and max-block-size ≈ host height the content fills the view.
+ * ::part(filter) is the full-bleed background layer — match page color.
+ */
+.reader__view foliate-view::part(filter) {
+  background: var(--page-bg, #fffef9) !important;
+}
+
+/* Continuous scroll stream surface + section frames match page theme */
+.reader-continuous-scroll {
+  background: var(--page-bg, #fffef9) !important;
+  /* Jump/resume veil: fade out while the window reseeds + the target loads +
+     scroll is applied (all off-screen), then fade in at the landing — hides the
+     blank→pop flicker. */
+  transition: opacity 150ms ease;
+}
+.reader-continuous-scroll--jumping {
+  opacity: 0;
+}
+
+.reader-continuous-scroll__section {
+  background: var(--page-bg, #fffef9) !important;
+}
+
+.reader-continuous-scroll iframe {
+  background: var(--page-bg, #fffef9) !important;
+}
+
+/* Immersive tap-zone overlay (paginate only) sits above foliate-view host */
+.reader__tap-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: transparent;
+  /* Let vertical pans attempt to reach engine; we resolve swipe on pointerup */
+  touch-action: pan-y;
+}
+
+/* TOC sheet (READ-05) — paper-feel tokens under reader theme */
+.reader-toc-sheet {
+  background: var(--reader-bg, #f7f3eb);
+  color: var(--reader-fg, #1c1915);
+  border-color: var(--reader-border, #e0d6c4);
+}
+
+.reader-toc-sheet__title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.reader-toc-sheet__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Height comes from flex parent (.reader-sheet); do not use max-height alone. */
+  padding: 0 0 16px;
+}
+
+/* Shared sheet body: native overflow for Android WebView (see CLAUDE.md touch/scroll gate). */
+.reader-sheet {
+  overscroll-behavior: contain;
+}
+
+.reader-sheet__body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.reader-toc-sheet__ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reader-toc-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 16px;
+  margin: 0;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--reader-fg, #1c1915);
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.reader-toc-item:hover:not(:disabled) {
+  background: var(--reader-chrome, #efe8db);
+}
+
+.reader-toc-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.reader-toc-item--active {
+  color: var(--reader-accent, #b4472f);
+  font-weight: 600;
+  border-left-color: var(--reader-accent, #b4472f);
+  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 80%, transparent);
+}
+
+.reader-toc-item__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-toc-sheet__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 160px;
+  padding: 24px 16px 32px;
+  text-align: center;
+}
+
+.reader-toc-sheet__empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--reader-fg, #1c1915);
+}
+
+.reader-toc-sheet__empty-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--reader-muted, #6b6458);
+}
+
+/* --- Settings (Aa) sheet — Material Design 3 --- */
+.reader-settings-sheet {
+  background: var(--md-surface-container-low, #f7f3eb) !important;
+  color: var(--md-on-surface, #1c1915);
+  border-color: transparent !important;
+  /* MD3 bottom sheet: extra-large top corners */
+  border-radius: var(--md-shape-xl, 28px) var(--md-shape-xl, 28px) 0 0 !important;
+}
+/* MD3 drag handle */
+.reader-settings-sheet::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 4px;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-on-surface-variant, #53433f);
+  opacity: 0.4;
+  z-index: 2;
+}
+.reader-settings-sheet .reader-sheet__header {
+  padding-top: 22px !important;
+}
+.reader-settings-sheet [data-slot="sheet-title"],
+.reader-settings-sheet .reader-toc-sheet__title {
+  color: var(--md-on-surface, #1c1915);
+}
+
+/* --- Search sheet (READ-07) --- */
+.reader-search-sheet {
+  background: var(--reader-bg, #f7f3eb);
+  color: var(--reader-fg, #1c1915);
+  border-color: var(--reader-border, #e0d6c4);
+}
+
+.reader-search-sheet__sticky {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--reader-bg, #f7f3eb);
+}
+
+.reader-search-sheet__status {
+  margin: 12px 16px;
+  font-size: 12px;
+  color: var(--reader-muted, #6b6458);
+}
+
+.reader-search-sheet__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 160px;
+  padding: 24px 16px 32px;
+  text-align: center;
+}
+
+.reader-search-sheet__empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--reader-fg, #1c1915);
+}
+
+.reader-search-sheet__empty-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--reader-muted, #6b6458);
+}
+
+.reader-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 16px;
+}
+
+.reader-search-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--reader-border, #e0d6c4);
+  background: transparent;
+  color: var(--reader-fg, #1c1915);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.reader-search-result:hover {
+  background: var(--reader-chrome, #efe8db);
+}
+
+.reader-search-result__snippet {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--reader-fg, #1c1915);
+}
+
+.reader-search-result__match {
+  background: color-mix(in srgb, var(--reader-accent, #b4472f) 28%, transparent);
+  color: inherit;
+  font-weight: 600;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.reader-search-result__caption {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--reader-muted, #6b6458);
+}
+
+.reader-settings-section__title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  color: var(--md-on-surface-variant, #6b6458);
+  margin: 0 0 12px;
+}
+
+.reader-settings-section__hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--reader-muted, #6b6458);
+}
+
+.reader-settings-section__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.reader-settings-section__title--inline {
+  margin: 0;
+}
+
+.reader-settings-section__value {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--reader-muted, #6b6458);
+}
+
+/* Live CJK typography preview strip (Aa sheet) — MD3 outlined card, paper inside */
+.reader-aa-preview {
+  border: 1px solid var(--md-outline-variant, #e0d6c4);
+  border-radius: var(--md-shape-md, 12px);
+  padding: 14px 16px;
+  background: var(--page-bg, #fffef9);
+  color: var(--page-fg, #1c1915);
+  text-indent: 2em;
+  overflow-wrap: break-word;
+}
+
+/* Theme color swatches */
+.reader-theme-swatches {
+  display: flex;
+  gap: 12px;
+}
+.reader-theme-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.reader-theme-swatch__chip {
+  width: 100%;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border-radius: var(--md-shape-md, 12px);
+  border: 2px solid var(--md-outline-variant, #e0d6c4);
+  box-sizing: border-box;
+}
+.reader-theme-swatch--selected .reader-theme-swatch__chip {
+  border-color: var(--md-primary, #b4472f);
+  box-shadow: 0 0 0 2px var(--md-primary, #b4472f);
+}
+.reader-theme-swatch__label {
+  font-size: 12px;
+  color: var(--md-on-surface-variant, #6b6458);
+}
+.reader-theme-swatch--selected .reader-theme-swatch__label {
+  color: var(--md-primary, #b4472f);
+  font-weight: 600;
+}
+
+/* 版式预设 — MD3 filter chips */
+.reader-preset-chips {
+  display: flex;
+  gap: 8px;
+}
+.reader-preset-chip {
+  flex: 1;
+  min-height: 32px;
+  border: 1px solid var(--md-outline, #85736e);
+  border-radius: var(--md-shape-sm, 8px);
+  background: transparent;
+  color: var(--md-on-surface-variant, #53433f);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.reader-preset-chip--active {
+  border-color: transparent;
+  color: var(--md-on-secondary-container, #2c150f);
+  background: var(--md-secondary-container, #ffdad2);
+  font-weight: 500;
+}
+
+/* MD3 segmented buttons (阅读模式) */
+.reader-settings-sheet [data-slot="toggle-group"] {
+  border: 1px solid var(--md-outline, #85736e);
+  border-radius: var(--md-shape-full, 999px);
+  overflow: hidden;
+}
+.reader-settings-sheet [data-slot="toggle-group-item"] {
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--md-on-surface, #1c1915) !important;
+  background: transparent !important;
+}
+.reader-settings-sheet [data-slot="toggle-group-item"][data-state="on"] {
+  background: var(--md-secondary-container, #ffdad2) !important;
+  color: var(--md-on-secondary-container, #2c150f) !important;
+}
+
+/* MD3 slider */
+.reader-settings-sheet [data-slot="slider-track"] {
+  background: var(--md-surface-variant, #e0d6c4) !important;
+}
+.reader-settings-sheet [data-slot="slider-range"] {
+  background: var(--md-primary, #b4472f) !important;
+}
+.reader-settings-sheet [data-slot="slider-thumb"] {
+  background: var(--md-primary, #b4472f) !important;
+  border-color: var(--md-primary, #b4472f) !important;
+}
+
+/* MD3 selected list item (字体) */
+.reader-settings-sheet .reader-font-list__item--selected {
+  border-color: var(--md-primary, #b4472f);
+  color: var(--md-primary, #b4472f);
+  box-shadow: inset 2px 0 0 var(--md-primary, #b4472f);
+}
+.reader-settings-sheet .reader-settings-section__value {
+  color: var(--md-on-surface-variant, #6b6458);
+}
+
+/* CJK typography rows in Aa sheet (03-UI-SPEC) */
+.reader-cjk-row {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  gap: 8px;
+}
+
+.reader-cjk-row__label {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--reader-fg, #1c1915);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-cjk-row__info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--reader-muted, #6b6458);
+  cursor: pointer;
+}
+
+.reader-cjk-row__info:hover {
+  color: var(--reader-fg, #1c1915);
+  background: color-mix(in srgb, var(--reader-chrome, #efe8db) 70%, transparent);
+}
+
+.reader-cjk-row__switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Switch checked = reader accent under themed reader surface */
+.reader .reader-settings-sheet [data-slot="switch"][data-state="checked"],
+.reader .reader-settings-sheet [data-slot="switch"].data-checked,
+.reader-settings-sheet [data-slot="switch"][data-checked],
+.reader-settings-sheet [data-slot="switch"]:where([data-state="checked"]) {
+  background: var(--md-primary, #b4472f) !important;
+  border-color: var(--md-primary, #b4472f) !important;
+}
+
+.reader-settings-sheet [data-slot="switch"][data-state="unchecked"],
+.reader-settings-sheet [data-slot="switch"]:where([data-state="unchecked"]) {
+  background: var(--md-surface-variant, #e0d6c4) !important;
+  border: 2px solid var(--md-outline, #85736e) !important;
+}
+
+.reader-cjk-popover {
+  max-width: 320px;
+  padding: 16px !important;
+  background: var(--reader-chrome, #efe8db) !important;
+  color: var(--reader-fg, #1c1915) !important;
+  border-color: var(--reader-border, #e0d6c4) !important;
+}
+
+.reader-cjk-popover__body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--reader-muted, #6b6458);
+}
+
+.reader-font-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reader-font-list__row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.reader-font-list__row .reader-font-list__item {
+  flex: 1;
+  min-width: 0;
+}
+
+.reader-font-list__item {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--reader-fg, #1c1915);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reader-font-list__item:hover {
+  background: color-mix(
+    in srgb,
+    var(--reader-chrome, #efe8db) 70%,
+    var(--reader-fg, #1c1915) 6%
+  );
+}
+
+.reader-font-list__item--selected {
+  border-color: var(--reader-accent, #b4472f);
+  color: var(--reader-accent, #b4472f);
+  box-shadow: inset 2px 0 0 var(--reader-accent, #b4472f);
+}
+
+.reader-font-list__remove {
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--reader-muted, #6b6458);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reader-font-list__remove:hover {
+  color: var(--reader-fg, #1c1915);
+  background: color-mix(
+    in srgb,
+    var(--reader-chrome, #efe8db) 70%,
+    var(--reader-fg, #1c1915) 6%
+  );
+}
+
+/* --- MD3 bottom sheets: TOC (bottom variant) + Search share the Aa treatment --- */
+.reader-toc-sheet--bottom,
+.reader-search-sheet {
+  background: var(--md-surface-container-low, #f7f3eb) !important;
+  border-color: transparent !important;
+  border-radius: var(--md-shape-xl, 28px) var(--md-shape-xl, 28px) 0 0 !important;
+}
+.reader-toc-sheet--bottom::before,
+.reader-search-sheet::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 4px;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-on-surface-variant, #53433f);
+  opacity: 0.4;
+  z-index: 2;
+}
+.reader-toc-sheet--bottom .reader-sheet__header {
+  padding-top: 22px !important;
+}
+/* MD3 left drawer (desktop TOC): rounded end corners, surface-container-low */
+.reader-toc-sheet--drawer {
+  background: var(--md-surface-container-low, #f7f3eb) !important;
+  border-color: transparent !important;
+  border-radius: 0 var(--md-shape-lg, 16px) var(--md-shape-lg, 16px) 0 !important;
+}
+/* MD3 active TOC row: secondary-container pill */
+.reader-toc-item--active {
+  color: var(--md-on-secondary-container, #2c150f);
+  border-left-color: var(--md-primary, #b4472f);
+  background: color-mix(in srgb, var(--md-secondary-container, #ffdad2) 60%, transparent);
+}
+.reader-search-result__match {
+  background: color-mix(in srgb, var(--md-tertiary-container, #f8e2a6) 70%, transparent);
 }
 
 /* --- DRM/damaged error card (D-10) --- */
@@ -198,12 +1384,14 @@ button {
   gap: 0.5em;
   padding: 2em;
   text-align: center;
+  background: var(--md-surface, #f7f3eb);
+  color: var(--md-on-surface, #1c1915);
 }
 
 .error-card__icon {
   font-size: 2.5em;
   margin: 0;
-  color: #d9822b;
+  color: var(--md-error, #d9822b);
 }
 
 .error-card__message {
@@ -213,32 +1401,4 @@ button {
 
 .error-card__dismiss {
   margin-top: 0.5em;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-
-  .reader {
-    background-color: #1e1e1e;
-  }
-
-  .reader__toolbar {
-    border-bottom-color: rgba(255, 255, 255, 0.12);
-  }
 }

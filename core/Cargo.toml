@@ -15,6 +15,9 @@ blake3 = "=1.8.5"
 zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
 thiserror = "=2.0.18"
 serde = { version = "=1.0.228", features = ["derive"] }
+# Robust, namespace-aware OPF parsing (title/author/cover). Already resolved in
+# Cargo.lock as a transitive dep of `zip`, so this adds no new supply-chain surface.
+quick-xml = "=0.41.0"
 
 [dev-dependencies]
 # Same exact pin/features as the runtime dep (no new Cargo.lock entries): the

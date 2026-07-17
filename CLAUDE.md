@@ -17,6 +17,13 @@
 - **Architecture**：多格式 + 同步从设计日起纳入边界，避免 Lithium 式后期硬拆
 - **Tech stack**：待研究锁定；优先可维护的跨端方案，避免无必要的双写 UI
 - **License**：待定（若借鉴 AGPL 组件如 foliate-js 周边需审许可证传染面）
+- **Android emulator gate (mandatory)**：任何改动阅读壳层 / `pillow://` / 导入 / 主题 / 排版 / 字体 / 搜索 / 协议的任务，在声称完成前 **必须** 在 AVD `Medium_Phone_API_36.1`（或物理机）上跑通 `pnpm tauri android dev` 并人工/截图验收。桌面绿 + unit 绿 **不等于** Android 正确（Phase 1/2 已多次踩坑：CORS、Resource/APK、symlink、foliate 分页器在高屏上居中成「悬浮卡片」）。详见 `docs/ANDROID-BUILD.md` § Device gate。
+- **Touch / scroll gate (global UI rule)**：
+  1. **禁止**在可滚动内容上盖全屏透明 `pointer-events: auto` 层（会吞掉 pan；滚动阅读与 sheet 均已踩坑）。
+  2. **禁止**只给 Radix `ScrollArea` 设 `max-height` 而不给 flex 父级 `min-h-0` + 明确高度约束——Viewport 是 `height:100%`，会随内容撑开、**永远不滚**（设置/目录/搜索 sheet 在 Android 上表现为“内容被裁但滑不动”）。
+  3. 底部/侧栏 sheet 优先：`SheetContent` = `flex flex-col max-h-[…]`，固定 header `shrink-0`，body = `flex-1 min-h-0 overflow-y-auto` + `touch-action: pan-y` + `-webkit-overflow-scrolling: touch`（见 `.reader-sheet__body`）。
+  4. 任何“可滚动列表/面板”改动后，必须在模拟器上 **手指竖滑** 验证（不仅是桌面滚轮）。
+  5. 大改 reader/sheet 依赖后若出现 **白屏**：先查 logcat `Uncaught ReferenceError` / Vite `Internal server error`（常见于 HMR 半更新）。必须以 `tsc`+`pnpm build` 绿为准，并在模拟器上 **force-stop 后冷启动** 再验，不要只靠 HMR。
 
 <!-- GSD:project-end -->
 

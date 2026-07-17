@@ -1,31 +1,45 @@
-//! Publication model (seam stub).
+//! Publication model (seam).
 //!
-//! Filled by plan 01-03 (D-07): a `Publication` trait (per-format
-//! metadata/cover/TOC/spine/content-hash) plus a `Format` enum. EPUB is the
-//! only implementor in P1; the seam keeps TXT/MOBI/PDF purely additive.
+//! Plan 01-03 (D-07): `Publication` trait + `Format` enum. EPUB is the only
+//! implementor in v1; TXT/MOBI/PDF stay additive later.
+//!
+//! Phase 4: real EPUB metadata/cover extraction via [`epub_meta`].
+
+mod epub_meta;
+
+pub use epub_meta::{extract_epub_cover, extract_epub_meta, CoverImage, EpubMeta};
 
 use serde::{Deserialize, Serialize};
 
+/// True when the bytes are an EPUB (OCF zip carrying `META-INF/container.xml`).
+///
+/// Other formats (MOBI/AZW3/PDF/TXT/FB2/CBZ) are rendered by foliate-js in the
+/// WebView; callers use this only to route EPUBs through the OCF DRM gate + OPF
+/// metadata/cover path and everything else through the generic import path.
+pub fn is_epub(bytes: &[u8]) -> bool {
+    match zip::ZipArchive::new(std::io::Cursor::new(bytes)) {
+        Ok(mut zip) => zip.by_name("META-INF/container.xml").is_ok(),
+        Err(_) => false,
+    }
+}
+
 /// Book container format.
 ///
-/// EPUB is the only P1 implementor (D-07). `Txt`/`Mobi`/`Pdf` are deliberately
-/// reserved — added by later phases (P6) so new formats are additive against
-/// this seam rather than a late refactor.
+/// EPUB is the only v1 implementor (D-07). `Txt`/`Mobi`/`Pdf` are reserved for
+/// later phases so new formats stay additive against this seam.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Format {
-    /// EPUB (OCF/zip) — the only format rendered in P1.
+    /// EPUB (OCF/zip) — the only format rendered in v1.
     Epub,
-    // Txt, Mobi, Pdf — reserved for Phase 6; not implemented in P1 (D-07).
+    // Txt, Mobi, Pdf — reserved for Phase 6; not implemented yet (D-07).
 }
 
 /// A format-agnostic publication.
 ///
-/// P1 exposes only the two seam methods every format must answer: its
-/// [`Format`] and a stable content hash for dedup/identity (D-09). Heavier
-/// metadata/cover/TOC/spine extraction lands in Phase 4 and is intentionally
-/// **not** part of this trait yet — keeping the seam minimal is the whole
-/// anti-refactor game.
+/// Core seam: [`Format`] + content hash (D-09). Phase 4 adds convenience
+/// extractors on [`EpubPublication`] without forcing every future format to
+/// implement cover/TOC on the trait yet.
 pub trait Publication {
     /// The container format of this publication.
     fn format(&self) -> Format;
@@ -35,11 +49,7 @@ pub trait Publication {
     fn content_hash(&self) -> String;
 }
 
-/// Minimal EPUB implementor — the only [`Publication`] in P1 (D-07).
-///
-/// It is a marker carrying the precomputed content hash; real EPUB
-/// metadata/cover/TOC extraction is deferred to Phase 4. No parsing happens
-/// here beyond hashing the bytes.
+/// EPUB implementor — hashes content and can extract OPF metadata/cover (P4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EpubPublication {
     content_hash: String,
@@ -56,6 +66,16 @@ impl EpubPublication {
         Self {
             content_hash: blake3::hash(bytes).to_hex().to_string(),
         }
+    }
+
+    /// Title / author / language from OPF (soft-fail title `未知书名`).
+    pub fn metadata_from_bytes(bytes: &[u8]) -> EpubMeta {
+        extract_epub_meta(bytes)
+    }
+
+    /// Cover image bytes when present in the package.
+    pub fn cover_from_bytes(bytes: &[u8]) -> Option<CoverImage> {
+        extract_epub_cover(bytes)
     }
 }
 
@@ -88,6 +108,16 @@ mod tests {
         let hash = pubn.content_hash();
         assert_eq!(hash.len(), 64);
         assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_eq!(hash, EpubPublication::from_bytes(b"PK\x03\x04 tiny epub bytes").content_hash());
+        assert_eq!(
+            hash,
+            EpubPublication::from_bytes(b"PK\x03\x04 tiny epub bytes").content_hash()
+        );
+    }
+
+    #[test]
+    fn clean_fixture_metadata_title() {
+        let bytes = include_bytes!("../../tests/fixtures/clean.epub");
+        let meta = EpubPublication::metadata_from_bytes(bytes);
+        assert_eq!(meta.title, "Pillowtome Fixture");
     }
 }

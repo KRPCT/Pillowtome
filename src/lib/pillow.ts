@@ -19,3 +19,23 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 export function pillowUrl(id: string): string {
   return convertFileSrc(id, "pillow");
 }
+
+/**
+ * Build the `pillow://` URL for a custom font face under `fonts/{id}` (D-30).
+ *
+ * Served by the same pillow protocol handler, confined to app_data/fonts.
+ * Use `convertFileSrc` — do not hand-roll platform hosts (Phase 1 lesson).
+ */
+export function pillowFontUrl(fontId: string): string {
+  return convertFileSrc(`fonts/${fontId}`, "pillow");
+}
+
+/**
+ * Build the `pillow://` URL for a library cover file under `covers/{name}`.
+ *
+ * `name` is the stored cover file name (`{workId}.{ext}`) written by the Rust
+ * ingest. Served by the same pillow handler, confined to app_data/covers.
+ */
+export function pillowCoverUrl(coverFile: string): string {
+  return convertFileSrc(`covers/${coverFile}`, "pillow");
+}

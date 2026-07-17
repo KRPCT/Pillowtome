@@ -18,13 +18,13 @@
 
 ### Reading Experience（阅读体验）
 
-- [ ] **READ-01**: 用户可在分页与滚动两种阅读模式间实时切换
-- [ ] **READ-02**: 用户可调整字体、字号、行距、页边距
-- [ ] **READ-03**: 用户可在日间 / 夜间 / Sepia 主题间切换
-- [ ] **READ-04**: 用户可进入沉浸式全屏阅读（隐藏界面 chrome、点触翻页区）
-- [ ] **READ-05**: 用户可通过目录（TOC）跳转到任意章节
-- [ ] **READ-06**: 用户可导入并在阅读中启用自定义字体
-- [ ] **READ-07**: 用户可在书内搜索文本，且搜索对中文分词友好（无空格分隔也能命中）
+- [x] **READ-01**: 用户可在分页与滚动两种阅读模式间实时切换
+- [x] **READ-02**: 用户可调整字体、字号、行距、页边距
+- [x] **READ-03**: 用户可在日间 / 夜间 / Sepia 主题间切换
+- [x] **READ-04**: 用户可进入沉浸式全屏阅读（隐藏界面 chrome、点触翻页区）
+- [x] **READ-05**: 用户可通过目录（TOC）跳转到任意章节
+- [x] **READ-06**: 用户可导入并在阅读中启用自定义字体
+- [x] **READ-07**: 用户可在书内搜索文本，且搜索对中文分词友好（无空格分隔也能命中）
 
 ### Chinese Typography（中文排版差异化 · 核心 moat）
 
@@ -114,13 +114,13 @@
 | FND-02 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete (emulator per D-13; physical device pending) |
 | FND-03 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete (emulator per D-13) |
 | FND-04 | Phase 1 — Foundation & Cross-Platform Skeleton | Complete |
-| READ-01 | Phase 2 — EPUB Reading Core | Pending |
-| READ-02 | Phase 2 — EPUB Reading Core | Pending |
-| READ-03 | Phase 2 — EPUB Reading Core | Pending |
-| READ-04 | Phase 2 — EPUB Reading Core | Pending |
-| READ-05 | Phase 2 — EPUB Reading Core | Pending |
-| READ-06 | Phase 2 — EPUB Reading Core | Pending |
-| READ-07 | Phase 2 — EPUB Reading Core | Pending |
+| READ-01 | Phase 2 — EPUB Reading Core | Complete |
+| READ-02 | Phase 2 — EPUB Reading Core | Complete |
+| READ-03 | Phase 2 — EPUB Reading Core | Complete |
+| READ-04 | Phase 2 — EPUB Reading Core | Complete |
+| READ-05 | Phase 2 — EPUB Reading Core | Complete |
+| READ-06 | Phase 2 — EPUB Reading Core | Complete |
+| READ-07 | Phase 2 — EPUB Reading Core | Complete |
 | CJK-01 | Phase 3 — CJK Typography Differentiation | Pending |
 | CJK-02 | Phase 3 — CJK Typography Differentiation | Pending |
 | CJK-03 | Phase 3 — CJK Typography Differentiation | Pending |
@@ -142,6 +142,7 @@
 | SYNC-05 | Phase 7 — WebDAV Self-Hosted Sync | Pending |
 
 **Coverage:**
+
 - v1 requirements: 30 total（FND 4 · READ 7 · CJK 5 · LIB 4 · ANNO 4 · FMT 1 · SYNC 5）
 - Mapped to phases: 30 ✓（每条恰好一个 phase，无重复）
 - Unmapped: 0 ✓

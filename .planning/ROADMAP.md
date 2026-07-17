@@ -134,7 +134,7 @@ Plans:
   4. Reopening a book restores the exact last reading position, and highlights/bookmarks stay anchored to their text after font-size/margin changes and across devices (composite locator: CFI → text_context → progress fraction).
   5. Every annotation and position record carries a stable UUID and change-log entry (unsynced), so Phase 7 sync can reconcile without data loss.
 
-**Plans**: 5 plans
+**Plans**: 8 plans (5 original + 3 gap-closure from the 05-05 device gate)
 **UI hint**: yes
 **Research flag**: no — the composite locator is well-specified in ARCHITECTURE; design is decided, execution is standard.
 
@@ -156,6 +156,12 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 05-05-PLAN.md — Android emulator acceptance gate + 200+ annotation perf stress [Wave 4, checkpoint]
+
+**Gap closure** *(from the 05-05 device-gate findings — DEFECT 1/2 + process fix)*
+
+- [ ] 05-06-PLAN.md — DEFECT 2: guard PDF numeric-ref section ids in resolveSpineIndex (matchSectionByHref + unit test) [Wave 1, autonomous]
+- [ ] 05-07-PLAN.md — DEFECT 1: native TYPE_FLOATING ActionMode suppression (onWebViewCreate reparent → FrameLayout) + git-track durability + production-APK device-gate process fix [Wave 1, non-autonomous]
+- [ ] 05-08-PLAN.md — Re-run the blocked 05-05 8-step device acceptance (ANNO-01..04) via the standalone production APK [Wave 2, checkpoint, depends 05-07]
 
 ### Phase 6: TXT Format & Format-Abstraction Validation
 
@@ -211,6 +217,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 4/4 | Complete   | 2026-07-16 |
 | 4. Local Library | 4/4 | Complete   | 2026-07-16 |
-| 5. Annotations & Composite Locator | 4/5 | In Progress|  |
+| 5. Annotations & Composite Locator | 4/8 | In Progress|  |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
 | 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |

@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-07-17T14:05:43.373Z"
+last_updated: "2026-07-17T14:17:25.509Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 23
-  completed_plans: 19
+  completed_plans: 20
   percent: 57
 ---
 
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 05 (annotations-composite-locator) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-17
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 87%
 
 Delivered 2026-07-16..17 (ad-hoc, verified on Android AVD, all formats + both modes):
 
@@ -78,6 +78,7 @@ Next GSD entry point: reconcile phase status (audit), then `/gsd-plan-phase` / `
 | Phase 02 P03 | 3 min | 2 tasks | 7 files |
 | Phase 02 P04 | 6 min | 2 tasks | 13 files |
 | Phase 05 P01 | 12 | 2 tasks | 4 files |
+| Phase 05 P02 | 8min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Search uses view.search whole book + buildSearchOpts without matchWholeWords — READ-07/D-31 CJK grapheme path
 - [Phase ?]: [05-01] annotation content_hash = WebCrypto SHA-256 (frontend, no IPC, no new dep), hash_algo tagged per change_log row; two-algorithm split from work.content_hash blake3 — P7 reads hash_algo per record
 - [Phase ?]: [05-01] change_log monotonic clock = COALESCE(MAX(logical_clock) per device)+1 computed inside a single atomic INSERT; sync_meta holds device_id only (logical_clock reserved). Delete is a tombstone (deleted=1), never physical DELETE
+- [Phase ?]: [05-02] resolveAnchor: one shared CFI→text_context→fraction self-healing chain (D-77) for both locator + annotation restore; never a bare percentage (D-78)
+- [Phase ?]: [05-02] anchor text search normalizes to Simplified (convertText t2s), maps offsets only when t2s length-preserving; no jsdom added — minimal in-test DOM + real foliate fromRange/toRange round-trip
 
 ### Pending Todos
 
@@ -135,7 +138,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-17T14:05:11.289Z
+Last session: 2026-07-17T14:16:55.612Z
 Stopped at: Phase 5 UI-SPEC approved
 Resume file: None
 Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

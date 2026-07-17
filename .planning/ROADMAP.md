@@ -143,7 +143,7 @@ Plans:
 **Wave 1**
 
 - [x] 05-01-PLAN.md — Persistence + ledger: schema V7 (annotation + sync_meta) + annotation-store CRUD/tombstone/change_log + content_hash [Wave 1, autonomous]
-- [ ] 05-02-PLAN.md — Composite self-healing resolver (CFI→text_context→fraction) + locator text_pre/post + scroll selection→CFI [Wave 1, autonomous]
+- [x] 05-02-PLAN.md — Composite self-healing resolver (CFI→text_context→fraction) + locator text_pre/post + scroll selection→CFI [Wave 1, autonomous]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -211,6 +211,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 4/4 | Complete   | 2026-07-16 |
 | 4. Local Library | 4/4 | Complete   | 2026-07-16 |
-| 5. Annotations & Composite Locator | 1/5 | In Progress|  |
+| 5. Annotations & Composite Locator | 2/5 | In Progress|  |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
 | 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |

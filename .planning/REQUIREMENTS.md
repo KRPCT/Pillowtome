@@ -46,7 +46,7 @@
 - [x] **ANNO-01**: 用户可对选中文本添加高亮
 - [x] **ANNO-02**: 用户可为高亮附加笔记
 - [x] **ANNO-03**: 用户可添加书签
-- [ ] **ANNO-04**: 重新打开书籍时精确恢复到上次阅读位置（复合稳定 locator：CFI + 进度百分比 + 文本上下文，抗重排/跨设备）
+- [x] **ANNO-04**: 重新打开书籍时精确恢复到上次阅读位置（复合稳定 locator：CFI + 进度百分比 + 文本上下文，抗重排/跨设备）
 
 ### Formats（格式 · v1 硬核 + TXT）
 
@@ -133,7 +133,7 @@
 | ANNO-01 | Phase 5 — Annotations & Composite Locator | Complete |
 | ANNO-02 | Phase 5 — Annotations & Composite Locator | Complete |
 | ANNO-03 | Phase 5 — Annotations & Composite Locator | Complete |
-| ANNO-04 | Phase 5 — Annotations & Composite Locator | Pending |
+| ANNO-04 | Phase 5 — Annotations & Composite Locator | Complete |
 | FMT-01 | Phase 6 — TXT Format & Format-Abstraction Validation | Pending |
 | SYNC-01 | Phase 7 — WebDAV Self-Hosted Sync | Pending |
 | SYNC-02 | Phase 7 — WebDAV Self-Hosted Sync | Pending |

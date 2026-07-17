@@ -11,6 +11,18 @@ pub use epub_meta::{extract_epub_cover, extract_epub_meta, CoverImage, EpubMeta}
 
 use serde::{Deserialize, Serialize};
 
+/// True when the bytes are an EPUB (OCF zip carrying `META-INF/container.xml`).
+///
+/// Other formats (MOBI/AZW3/PDF/TXT/FB2/CBZ) are rendered by foliate-js in the
+/// WebView; callers use this only to route EPUBs through the OCF DRM gate + OPF
+/// metadata/cover path and everything else through the generic import path.
+pub fn is_epub(bytes: &[u8]) -> bool {
+    match zip::ZipArchive::new(std::io::Cursor::new(bytes)) {
+        Ok(mut zip) => zip.by_name("META-INF/container.xml").is_ok(),
+        Err(_) => false,
+    }
+}
+
 /// Book container format.
 ///
 /// EPUB is the only v1 implementor (D-07). `Txt`/`Mobi`/`Pdf` are reserved for

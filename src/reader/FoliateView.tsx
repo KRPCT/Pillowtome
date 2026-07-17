@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ThemeProvider } from "@mui/material/styles";
 import { invoke } from "@tauri-apps/api/core";
-import "../vendor/foliate-js/view.js";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { getMuiTheme } from "../theme/mui";
+import { makeBook } from "../vendor/foliate-js/view.js";
+import {
+  coerceToString,
+  isHtmlType,
+  needsTransform,
+  transformSectionHtml,
+} from "./cjk-content-transform";
 import { pillowUrl } from "../lib/pillow";
 import { ErrorCard } from "./error-card";
 import { ReaderChrome } from "./ReaderChrome";
@@ -45,10 +54,13 @@ import {
   shouldInstallAutospaceShim,
 } from "./cjk-autospace-shim";
 import type {
+  FoliateBook,
   FoliateBookSection,
   FoliateViewElement,
   RelocateDetail,
 } from "./foliate-types";
+import { makeTxtBook } from "./txt-book";
+import { updateLibraryItemMeta } from "../library/library-store";
 import type { TocItem } from "./toc";
 import {
   encodeScrollPosition,
@@ -64,11 +76,14 @@ import {
   positionForTocSpine,
   spineFromResolvedNav,
 } from "./position-bus";
+import { spineFromCfi } from "./scroll-cfi";
 import {
   ContinuousScrollStream,
   type ContinuousScrollApi,
   type ContinuousSection,
+  type ScrollAnchorResolver,
 } from "./ContinuousScrollStream";
+import { ReaderBottomBar } from "./ReaderBottomBar";
 
 /**
  * foliate-js 阅读视图 + immersive chrome + TOC + locator progress (READ-01..05).
@@ -111,6 +126,85 @@ export interface FoliateViewProps {
 
 type Status = "loading" | "reading" | "error";
 
+/** Works whose engine metadata has already been backfilled this session. */
+const metaBackfilled = new Set<string>();
+
+/**
+ * EPUB sniff (OCF): a zip whose uncompressed first entry is `mimetype` holding
+ * `application/epub+zip`, so the literal string sits in the first bytes. EPUB
+ * gets real metadata at import; MOBI/AZW3 also expose `transformTarget`, so that
+ * is not a usable discriminator — this is.
+ */
+async function isEpubBlob(blob: Blob): Promise<boolean> {
+  try {
+    const head = new Uint8Array(await blob.slice(0, 200).arrayBuffer());
+    if (head[0] !== 0x50 || head[1] !== 0x4b) return false; // not a zip
+    return new TextDecoder("latin1")
+      .decode(head)
+      .includes("mimetypeapplication/epub+zip");
+  } catch {
+    return false;
+  }
+}
+
+/** foliate metadata.author is a string, a creator object, or an array of them. */
+function authorToString(a: unknown): string | null {
+  const nameOf = (x: unknown): string =>
+    typeof x === "string"
+      ? x
+      : x && typeof x === "object" && "name" in x
+        ? String((x as { name: unknown }).name ?? "")
+        : "";
+  const names = (Array.isArray(a) ? a : [a]).map(nameOf).filter(Boolean);
+  return names.length ? names.join("、").trim() || null : null;
+}
+
+/**
+ * Backfill real title/author/cover for engine-parsed formats (Phase B). EPUB
+ * alone exposes `transformTarget` (epub.js Loader) and already carries metadata
+ * from import, so it is skipped. Best-effort and non-blocking.
+ */
+async function backfillMetadata(
+  book: FoliateBook & { getCover?: () => Promise<Blob | null | undefined> },
+  workId: string | null,
+  isEpub: boolean,
+): Promise<void> {
+  if (!workId || isEpub || metaBackfilled.has(workId)) return;
+  metaBackfilled.add(workId);
+  try {
+    const meta = (book.metadata ?? {}) as { title?: string; author?: unknown };
+    const title = typeof meta.title === "string" ? meta.title.trim() : "";
+    const author = authorToString(meta.author);
+
+    // Cover extraction is the flaky part (render/parse); isolate it so a failure
+    // never blocks the title/author backfill.
+    let coverFile: string | null = null;
+    try {
+      if (typeof book.getCover === "function") {
+        const blob = await book.getCover();
+        if (blob && blob.size > 0) {
+          const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+          const ext = blob.type.includes("png")
+            ? "png"
+            : blob.type.includes("webp")
+              ? "webp"
+              : "jpg";
+          coverFile = await invoke<string>("save_cover", { workId, bytes, ext });
+        }
+      }
+    } catch (coverErr) {
+      console.warn("[FoliateView] cover backfill failed", coverErr);
+    }
+
+    if (title || author || coverFile) {
+      await updateLibraryItemMeta(workId, { title, author, coverFile });
+    }
+  } catch (err) {
+    console.warn("[FoliateView] metadata backfill failed", err);
+    metaBackfilled.delete(workId); // allow a retry next open
+  }
+}
+
 export function FoliateView({
   id = "sample",
   onClose,
@@ -138,7 +232,7 @@ export function FoliateView({
   const [tocOpen, setTocOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [fxlLocked, setFxlLocked] = useState(false);
-  const [bookTitle, setBookTitle] = useState("示例书籍");
+  const [bookTitle, setBookTitle] = useState("");
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
   const [fontStatus, setFontStatus] = useState<string | null>(null);
@@ -150,6 +244,9 @@ export function FoliateView({
   const continuousStartRef = useRef(0);
   const continuousOffsetRef = useRef(0);
   const streamApiRef = useRef<ContinuousScrollApi | null>(null);
+  /** Set when a scroll-mode seed already ran (handlePrefsChange / open restore)
+   *  so the mode-switch effect doesn't re-seed + remount the stream a 2nd time. */
+  const pendingSwitchSeedRef = useRef(false);
   /** Increment to force ContinuousScrollStream jump (TOC / resume / mode switch). */
   const [scrollJumpKey, setScrollJumpKey] = useState(0);
   const [scrollJumpSpine, setScrollJumpSpine] = useState<number | null>(null);
@@ -161,18 +258,45 @@ export function FoliateView({
   const [initialCfi, setInitialCfi] = useState<string | null>(null);
   /** Bump to remount ContinuousScrollStream with fresh initial* props. */
   const [streamMountKey, setStreamMountKey] = useState(0);
+  /** Bumped to re-open the book when 简繁/词不拆行 changes (content transform is
+   *  applied at load via transformTarget, so it needs a fresh open to re-run). */
+  const [reopenTick, setReopenTick] = useState(0);
+  /** Cache the fetched EPUB bytes so a 简繁/词不拆行 re-open reuses them instead of
+   *  re-streaming the whole (image-heavy) book over pillow:// each toggle. */
+  const bookBlobRef = useRef<{ id: string; blob: Blob } | null>(null);
+  /** Set when a re-open is a 简繁/词不拆行 toggle → load() uses in-memory prefs
+   *  instead of re-reading the (possibly not-yet-flushed) DB. */
+  const skipPrefsReloadRef = useRef(false);
   /** Session-cached CJK CSS caps (D-35) — probe once per reader open. */
   const cjkCapsRef = useRef<CjkCssCaps | null>(null);
   /** Disposers for paginate render-doc autospace shims. */
   const autospaceDisposersRef = useRef<Array<() => void>>([]);
   const [autospaceShimEnabled, setAutospaceShimEnabled] = useState(false);
+  /** Chapter tick fractions (0..1) for the bottom scrubber. */
+  const [chapterTicks, setChapterTicks] = useState<number[]>([]);
+  /** "返回原位" undo pill visibility + captured pre-jump position. */
+  const [undoVisible, setUndoVisible] = useState(false);
+  const undoPosRef = useRef<ReadingPosition | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   prefsRef.current = prefs;
   locationRef.current = location;
 
   const anySheetOpen = settingsOpen || tocOpen || searchOpen;
+  const anySheetOpenRef = useRef(false);
+  anySheetOpenRef.current = anySheetOpen;
   const useContinuousScroll =
     prefs.mode === "scroll" && !fxlLocked && continuousSections.length > 0;
+
+  // Stable identities: inline handlers change every render, which makes the
+  // stream's onReady effect re-run and briefly null streamApiRef — a jump command
+  // arriving in that window is lost (READER-POS C5).
+  const handleStreamReady = useCallback((api: ContinuousScrollApi | null) => {
+    streamApiRef.current = api;
+  }, []);
+  const handleStreamTap = useCallback(() => {
+    if (!anySheetOpenRef.current) setChromeVisible((v) => !v);
+  }, []);
 
   const ensureCjkCaps = useCallback((): CjkCssCaps => {
     if (!cjkCapsRef.current) {
@@ -191,6 +315,7 @@ export function FoliateView({
     }
     autospaceDisposersRef.current = [];
   }, []);
+
 
   const buildCss = useCallback(
     (next: ReadingPrefs) => {
@@ -234,6 +359,11 @@ export function FoliateView({
       renderer.setStyles?.(css);
 
       // Re-install autospace shim on paginate docs when needed (D-36/D-37).
+      // NOTE: 简繁转换/词不拆行 are applied in SCROLL mode via the stream's own
+      // per-iframe shim. They are NOT wired for paginate yet: foliate's paginator
+      // iframe lives inside a CLOSED shadow root (paginator.js/view.js) that a DOM
+      // shim can't reach — paginate needs foliate's `book.transformTarget`
+      // content-transform hook (epub.js Loader.createURL) instead. See report.
       clearAutospaceShims();
       if (wantShim) {
         try {
@@ -319,14 +449,92 @@ export function FoliateView({
     [flushLocator],
   );
 
+  /**
+   * Synchronously resolve the current reading position → continuous linear start,
+   * so switching paginate→scroll seeds the stream at the right section instead of
+   * mounting at book start (READER-POS C6). Spine precedence: relocate
+   * section.current → engine resolveCFI → pure spineFromCfi.
+   */
+  const readCurrentScrollStart = useCallback((): {
+    spineIndex: number;
+    linearIdx: number;
+    offset: number;
+    cfi: string | null;
+  } | null => {
+    const view = viewRef.current;
+    const loc = locationRef.current;
+    const last = (view as unknown as { lastLocation?: RelocateDetail })
+      ?.lastLocation;
+    const cfi =
+      (typeof loc?.cfi === "string" ? loc.cfi : null) ??
+      (typeof last?.cfi === "string" ? last.cfi : null);
+    let spine: number | null =
+      typeof loc?.section?.current === "number"
+        ? loc.section.current
+        : typeof last?.section?.current === "number"
+          ? last.section.current
+          : null;
+    if (spine == null && isRealCfi(cfi)) {
+      try {
+        const r = view?.resolveCFI?.(cfi!);
+        if (typeof r?.index === "number") spine = r.index;
+      } catch {
+        /* soft-fail */
+      }
+      if (spine == null) spine = spineFromCfi(cfi);
+    }
+    if (spine == null) return null;
+    const li = spineToLinearIndex(spine, continuousSections);
+    return {
+      spineIndex: spine,
+      linearIdx: li >= 0 ? li : 0,
+      offset: continuousOffsetRef.current || 0,
+      cfi: isRealCfi(cfi) ? cfi : null,
+    };
+  }, [continuousSections]);
+
   const handlePrefsChange = useCallback(
     (partial: Partial<ReadingPrefs> | ReadingPrefs) => {
-      const next: ReadingPrefs = { ...prefsRef.current, ...partial };
+      const prev = prefsRef.current;
+      const next: ReadingPrefs = { ...prev, ...partial };
+      // 简繁/词不拆行 rewrite section content at load (transformTarget) — a live
+      // change needs a fresh open (foliate caches the transformed blob per href).
+      const transformChanged =
+        next.wordKeep !== prev.wordKeep || next.cnConvert !== prev.cnConvert;
+      if (transformChanged) {
+        prefsRef.current = next; // transform handler reads this on re-open
+        setPrefs(next);
+        scheduleSave(next);
+        skipPrefsReloadRef.current = true; // re-open must use these prefs, not stale DB
+        setReopenTick((k) => k + 1);
+        return;
+      }
+      // Fully seed the stream BEFORE the switch commits so it mounts once, at the
+      // right position (not book start, no double-mount). The mode-switch effect
+      // sees pendingSwitchSeedRef and skips its own re-seed + remount.
+      if (
+        next.mode === "scroll" &&
+        prefsRef.current.mode !== "scroll" &&
+        !fxlRef.current
+      ) {
+        const start = readCurrentScrollStart();
+        if (start) {
+          continuousStartRef.current = start.linearIdx;
+          continuousOffsetRef.current = start.offset;
+          setInitialCfi(start.cfi);
+          setScrollJumpCfi(start.cfi);
+          setScrollJumpOffset(start.offset);
+          setScrollJumpSpine(start.spineIndex);
+          setStreamMountKey((k) => k + 1);
+          setScrollJumpKey((k) => k + 1);
+          pendingSwitchSeedRef.current = true;
+        }
+      }
       setPrefs(next);
       applyPrefsToRenderer(next);
       scheduleSave(next);
     },
-    [applyPrefsToRenderer, scheduleSave],
+    [applyPrefsToRenderer, scheduleSave, readCurrentScrollStart],
   );
 
   const refreshFonts = useCallback(async () => {
@@ -437,7 +645,12 @@ export function FoliateView({
   }, [continuousSections]);
 
   const jumpContinuousToSpine = useCallback(
-    (spineIndex: number, offsetFraction = 0, cfi: string | null = null) => {
+    (
+      spineIndex: number,
+      offsetFraction = 0,
+      cfi: string | null = null,
+      anchor: ScrollAnchorResolver | null = null,
+    ) => {
       // Single jump bus (READER-POS): plan then apply imperatively.
       const plan = planJump(
         {
@@ -457,10 +670,12 @@ export function FoliateView({
       }
       continuousStartRef.current = li;
       continuousOffsetRef.current = plan.offsetFraction;
-      const linear = continuousSections.filter((s) => s.linear !== "no");
-      const sec = linear[li];
-      const resolvedCfi =
-        (isRealCfi(cfi) ? cfi : null) ?? sec?.cfi ?? null;
+      // Only a REAL fine cfi is a usable anchor. The section BASE cfi has no local
+      // path, so resolveCfiScrollTop can't anchor it — and worse, it resolved to a
+      // non-rendered node whose rect was NaN, overwriting the good offset target →
+      // scrollTop=NaN → the jump silently no-op'd. For TOC/scrub (cfi=null) use the
+      // offset math (base + offset*height) instead.
+      const resolvedCfi = isRealCfi(cfi) ? cfi : null;
 
       // Prefer imperative API (no remount/jumpKey race).
       if (streamApiRef.current) {
@@ -468,6 +683,7 @@ export function FoliateView({
           plan.spineIndex,
           plan.offsetFraction,
           resolvedCfi,
+          anchor,
         );
         return;
       }
@@ -483,11 +699,34 @@ export function FoliateView({
     [continuousSections],
   );
 
+  /** Snapshot the current position before a jump so "返回原位" can restore it. */
+  const captureUndo = useCallback(() => {
+    const loc = locationRef.current;
+    if (!loc) return;
+    const cfi = typeof loc.cfi === "string" ? loc.cfi : null;
+    const spine =
+      typeof loc.section?.current === "number"
+        ? loc.section.current
+        : isRealCfi(cfi)
+          ? spineFromCfi(cfi)
+          : null;
+    undoPosRef.current = {
+      spineIndex: spine ?? 0,
+      offsetFraction: continuousOffsetRef.current || 0,
+      cfi: isRealCfi(cfi) ? cfi : null,
+      fraction: typeof loc.fraction === "number" ? loc.fraction : null,
+    };
+    setUndoVisible(true);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setUndoVisible(false), 6000);
+  }, []);
+
   const handleTocNavigate = useCallback(
     async (href: string) => {
       const view = viewRef.current;
       setTocOpen(false);
       if (!view || !href) return;
+      captureUndo();
 
       if (useContinuousScroll) {
         let spine = resolveSpineIndex(href);
@@ -535,7 +774,76 @@ export function FoliateView({
         }
       }
     },
-    [useContinuousScroll, resolveSpineIndex, jumpContinuousToSpine],
+    [useContinuousScroll, resolveSpineIndex, jumpContinuousToSpine, captureUndo],
+  );
+
+  // In-book link clicked in a scroll-mode section iframe (paginate is handled by
+  // foliate's own renderer). Resolve internal targets (filepos:/kindle:/#frag)
+  // to a section + anchor and jump; open external URLs in the system browser.
+  const handleInternalLink = useCallback(
+    async (rawHref: string, fromLinearIdx: number) => {
+      const view = viewRef.current;
+      if (!view || !rawHref) return;
+      const book = view.book as
+        | {
+            sections?: Array<{ resolveHref?: (h: string) => string | undefined }>;
+            isExternal?: (uri: string) => boolean;
+          }
+        | undefined;
+
+      // Section-relative resolution for EPUB relative hrefs; mobi/kf8 sections
+      // have no resolveHref so filepos:/kindle: pass through untouched.
+      const linearSecs = continuousSections.filter((s) => s.linear !== "no");
+      const fromSpine = linearSecs[fromLinearIdx]?.index;
+      const section =
+        typeof fromSpine === "number" ? book?.sections?.[fromSpine] : undefined;
+      const href = section?.resolveHref?.(rawHref) ?? rawHref;
+
+      if (book?.isExternal?.(href) || /^(https?|mailto|tel):/i.test(href)) {
+        try {
+          await openUrl(href);
+        } catch (err) {
+          console.warn("[FoliateView] open external link failed", href, err);
+        }
+        return;
+      }
+
+      // Resolve href → { index, anchor } (kf8 resolveHref is async).
+      let nav:
+        | { index?: number; anchor?: ScrollAnchorResolver }
+        | null
+        | undefined;
+      try {
+        nav = (await view.resolveNavigation?.(href)) as typeof nav;
+      } catch (err) {
+        console.warn("[FoliateView] link resolveNavigation threw", href, err);
+      }
+      let spine = typeof nav?.index === "number" ? nav.index : null;
+      if (spine == null) spine = resolveSpineIndex(href);
+
+      if (!useContinuousScroll) {
+        try {
+          await view.goTo(href);
+        } catch (err) {
+          console.warn("[FoliateView] link goTo failed", href, err);
+        }
+        return;
+      }
+      if (spine == null) {
+        console.warn("[FoliateView] internal link resolve failed", href);
+        return;
+      }
+      captureUndo();
+      const anchor = typeof nav?.anchor === "function" ? nav.anchor : null;
+      jumpContinuousToSpine(spine, 0, null, anchor);
+    },
+    [
+      continuousSections,
+      useContinuousScroll,
+      resolveSpineIndex,
+      jumpContinuousToSpine,
+      captureUndo,
+    ],
   );
 
   const openSearch = useCallback(() => {
@@ -548,6 +856,7 @@ export function FoliateView({
       const view = viewRef.current;
       setSearchOpen(false);
       if (!view || !cfi) return;
+      captureUndo();
 
       if (useContinuousScroll) {
         const spine = resolveSpineIndex(cfi);
@@ -563,8 +872,63 @@ export function FoliateView({
         console.warn("[FoliateView] search goTo(cfi) failed", err);
       }
     },
-    [useContinuousScroll, resolveSpineIndex, jumpContinuousToSpine],
+    [useContinuousScroll, resolveSpineIndex, jumpContinuousToSpine, captureUndo],
   );
+
+  const jumpToWholeFraction = useCallback(
+    (frac: number) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const clamped = Math.max(0, Math.min(1, frac));
+      if (useContinuousScroll) {
+        const linear = continuousSections.filter((s) => s.linear !== "no");
+        const n = linear.length || 1;
+        const pos = Math.max(0, Math.min(n - 1e-6, clamped * n));
+        const li = Math.floor(pos);
+        const spine = linear[li]?.index;
+        if (spine != null) jumpContinuousToSpine(spine, pos - li, null);
+      } else {
+        void view.goToFraction(clamped).catch(() => {
+          /* soft-fail */
+        });
+      }
+    },
+    [useContinuousScroll, continuousSections, jumpContinuousToSpine],
+  );
+
+  const handleScrub = useCallback(
+    (frac: number) => {
+      captureUndo();
+      jumpToWholeFraction(frac);
+    },
+    [captureUndo, jumpToWholeFraction],
+  );
+
+  const handleUndo = useCallback(() => {
+    const pos = undoPosRef.current;
+    setUndoVisible(false);
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    const view = viewRef.current;
+    if (!pos || !view) return;
+    if (useContinuousScroll) {
+      jumpContinuousToSpine(
+        pos.spineIndex,
+        pos.offsetFraction,
+        isRealCfi(pos.cfi ?? null) ? (pos.cfi ?? null) : null,
+      );
+    } else if (isRealCfi(pos.cfi ?? null)) {
+      void view.goTo(pos.cfi as string).catch(() => {
+        /* soft-fail */
+      });
+    } else if (pos.fraction != null) {
+      void view.goToFraction(pos.fraction).catch(() => {
+        /* soft-fail */
+      });
+    }
+  }, [useContinuousScroll, jumpContinuousToSpine]);
 
   // Keep max-block-size in sync with host height so short pages don't float on tall screens.
   useEffect(() => {
@@ -638,6 +1002,10 @@ export function FoliateView({
           } catch {
             /* soft-fail */
           }
+          const fromCfi = spineFromCfi(cfi);
+          if (fromCfi != null) {
+            return { ...captured, spineIndex: fromCfi, cfi };
+          }
         }
         return captured;
       }
@@ -656,7 +1024,7 @@ export function FoliateView({
     };
 
     if (useContinuousScroll) {
-      if (switchedToScroll) {
+      if (switchedToScroll && !pendingSwitchSeedRef.current) {
         const pos = readSsot();
         if (pos) {
           const li = spineToLinearIndex(pos.spineIndex, continuousSections);
@@ -687,6 +1055,7 @@ export function FoliateView({
           console.warn("[FoliateView] paginate->scroll: no SSOT spine; stream starts at 0");
         }
       }
+      pendingSwitchSeedRef.current = false;
       view.style.visibility = "hidden";
       view.style.pointerEvents = "none";
       setContinuousCss(buildCss(prefsRef.current));
@@ -806,6 +1175,26 @@ export function FoliateView({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [status, settingsOpen, tocOpen, searchOpen, chromeVisible, openSearch]);
 
+  // Chapter tick marks for the bottom scrubber (section-start whole-book fractions).
+  useEffect(() => {
+    if (status !== "reading") return;
+    const view = viewRef.current;
+    const raw = view?.getSectionFractions?.() ?? [];
+    let ticks = raw.filter((f) => f > 0.002 && f < 0.998);
+    if (ticks.length > 50) {
+      const step = Math.ceil(ticks.length / 40);
+      ticks = ticks.filter((_, i) => i % step === 0);
+    }
+    setChapterTicks(ticks);
+  }, [status, tocItems]);
+
+  useEffect(
+    () => () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    },
+    [],
+  );
+
   useEffect(() => {
     let cancelled = false;
     let created: FoliateViewElement | null = null;
@@ -813,7 +1202,14 @@ export function FoliateView({
     async function load() {
       try {
         // Prefs + fonts load in parallel with DRM/open (D-20). Fail-soft → defaults.
-        const prefsPromise = loadReadingPrefs();
+        // On a 简繁/词不拆行 re-open, use the in-memory prefs — the debounced save
+        // may not have flushed yet, so re-reading the DB would revert the toggle
+        // (the "繁体 needs two taps" bug) and cost an extra DB round-trip.
+        const reusePrefs = skipPrefsReloadRef.current;
+        skipPrefsReloadRef.current = false;
+        const prefsPromise = reusePrefs
+          ? Promise.resolve({ ...prefsRef.current })
+          : loadReadingPrefs();
         const fontsPromise = listCustomFonts();
 
         // DRM/damage gate — classify before any book bytes (D-10).
@@ -858,10 +1254,15 @@ export function FoliateView({
         const host = hostRef.current;
         if (!host) return;
 
-        // Book bytes stream only via custom protocol — never IPC (D-06).
-        const res = await fetch(pillowUrl(id));
-        if (!res.ok) throw new Error(`pillow fetch failed: ${res.status}`);
-        const blob = await res.blob();
+        // Book bytes stream only via custom protocol — never IPC (D-06). Reuse
+        // the cached blob across re-opens (简繁/词不拆行 toggle) — same bytes.
+        let blob = bookBlobRef.current?.id === id ? bookBlobRef.current.blob : null;
+        if (!blob) {
+          const res = await fetch(pillowUrl(id));
+          if (!res.ok) throw new Error(`pillow fetch failed: ${res.status}`);
+          blob = await res.blob();
+          bookBlobRef.current = { id, blob };
+        }
         if (cancelled) return;
 
         const view = document.createElement("foliate-view") as FoliateViewElement;
@@ -885,19 +1286,68 @@ export function FoliateView({
           scheduleLocatorUpsert(next);
         });
 
-        await view.open(new File([blob], `${id}.epub`));
-        if (cancelled) return;
-
-        const isFxl = view.book?.rendition?.layout === "pre-paginated";
-        fxlRef.current = Boolean(isFxl);
-        setFxlLocked(Boolean(isFxl));
-
+        // Resolve prefs BEFORE opening so the transformTarget handler + first
+        // section render see the correct 简繁/词不拆行 state (no first-section race).
         const loaded = await prefsPromise;
         const fonts = await fontsPromise;
         if (cancelled) return;
         setPrefs(loaded);
         prefsRef.current = loaded;
         setCustomFonts(fonts);
+
+        // Parse the book ourselves so we can hook `transformTarget` BEFORE the
+        // view renders the first section — this is how 简繁转换 / 词不拆行 reach
+        // BOTH paginate + scroll (foliate's paginate iframe is in a closed shadow
+        // a DOM shim can't touch), transforming content pre-render so CFI stays
+        // stable. The pref is read live; toggling it re-opens the book (reopenTick).
+        // foliate-js sniffs by content (EPUB/MOBI/AZW3/FB2/CBZ/PDF); plain text
+        // has no handler and throws, so fall back to our txt→book adapter. The
+        // adapter self-validates it is decodable text and returns null otherwise,
+        // in which case we re-surface foliate's original error.
+        let book: FoliateBook;
+        try {
+          book = await makeBook(new File([blob], `${id}.epub`));
+        } catch (openErr) {
+          // txt has no foliate transformTarget, so bake 简繁/词不拆行 into each
+          // chapter's HTML here (reopenTick rebuilds with fresh prefs on toggle).
+          const txtOpts = {
+            convert: loaded.cnConvert,
+            wordKeep: loaded.wordKeep,
+            lang: "zh",
+          };
+          const txtBook = await makeTxtBook(blob, {
+            transformHtml: needsTransform(txtOpts)
+              ? (html) => transformSectionHtml(html, txtOpts)
+              : undefined,
+          });
+          if (!txtBook) throw openErr;
+          book = txtBook;
+        }
+        if (cancelled) return;
+        book.transformTarget?.addEventListener("data", (ev: Event) => {
+          const detail = (ev as CustomEvent<{ data: unknown; type?: string }>)
+            .detail;
+          if (!detail || !isHtmlType(detail.type)) return;
+          const prefs = prefsRef.current;
+          const opts = {
+            convert: prefs.cnConvert,
+            wordKeep: prefs.wordKeep,
+            lang: book.metadata?.language,
+          };
+          if (!needsTransform(opts)) return;
+          const original = detail.data;
+          detail.data = coerceToString(original).then((str) =>
+            str == null ? original : transformSectionHtml(str, opts),
+          );
+          detail.type = "text/html";
+        });
+
+        await view.open(book);
+        if (cancelled) return;
+
+        const isFxl = view.book?.rendition?.layout === "pre-paginated";
+        fxlRef.current = Boolean(isFxl);
+        setFxlLocked(Boolean(isFxl));
 
         // Live flow + layout + typography + theme + custom face + CJK (READ-01/02/03/06).
         if (!isFxl) {
@@ -933,6 +1383,10 @@ export function FoliateView({
         setContinuousCss(buildCss(loaded));
 
         // Restore locator (D-25) via ReadingPosition SSOT helpers.
+        // Fixed-layout (PDF/FXL comics) always renders through the paginated
+        // engine even when the persisted mode is "scroll" — otherwise the FXL
+        // renderer opens but is never navigated to a page and stays blank.
+        const resumeScroll = loaded.mode === "scroll" && !isFxl;
         let restored = false;
         if (savedLoc?.cfi) {
           // Try resolve spine for real CFI up front.
@@ -944,6 +1398,7 @@ export function FoliateView({
             } catch {
               /* soft-fail */
             }
+            if (spineHint == null) spineHint = spineFromCfi(savedLoc.cfi);
           }
           const pos = positionFromLocatorCfi(
             savedLoc.cfi,
@@ -951,7 +1406,7 @@ export function FoliateView({
             spineHint,
           );
 
-          if (loaded.mode === "scroll" && pos) {
+          if (resumeScroll && pos) {
             const li = spineToLinearIndex(pos.spineIndex, continuous);
             continuousStartRef.current = li >= 0 ? li : 0;
             continuousOffsetRef.current = pos.offsetFraction;
@@ -961,8 +1416,9 @@ export function FoliateView({
             setScrollJumpSpine(pos.spineIndex);
             setStreamMountKey((k) => k + 1);
             setScrollJumpKey((k) => k + 1);
+            pendingSwitchSeedRef.current = true;
             restored = true;
-          } else if (loaded.mode !== "scroll" && pos) {
+          } else if (!resumeScroll && pos) {
             if (isRealCfi(savedLoc.cfi)) {
               try {
                 restored = Boolean(await view.goTo(savedLoc.cfi));
@@ -988,7 +1444,7 @@ export function FoliateView({
             section: pos ? { current: pos.spineIndex } : undefined,
           });
         }
-        if (!restored && loaded.mode !== "scroll") {
+        if (!restored && !resumeScroll) {
           try {
             await view.goToTextStart();
           } catch (err) {
@@ -1004,12 +1460,23 @@ export function FoliateView({
           setBookTitle(metaTitle.trim());
         }
 
+        // Phase B: backfill real title/author/cover for engine-parsed formats
+        // (MOBI/AZW3/PDF import with only a filename title; the Rust core can't
+        // parse them). EPUB already has meta from import, so skip it (detected by
+        // byte sniff — MOBI/AZW3 also expose transformTarget). Once per work.
+        void isEpubBlob(blob).then((isEpub) =>
+          backfillMetadata(book, workIdRef.current, isEpub),
+        );
+
         // Immersive default when status becomes reading (READ-04).
         setChromeVisible(false);
         setStatus("reading");
       } catch (err) {
         if (cancelled) return;
-        console.error("[FoliateView] 打开书籍失败", err);
+        // pdf.js and other engines throw non-Error objects that log as
+        // "[object Object]"; surface name/message so failures are diagnosable.
+        const e = err as { name?: string; message?: string };
+        console.error("[FoliateView] 打开书籍失败", e?.name, e?.message, err);
         setMessage("文件已损坏或无法读取。");
         setStatus("error");
       }
@@ -1043,7 +1510,10 @@ export function FoliateView({
       created?.remove();
       viewRef.current = null;
     };
-  }, [id, scheduleLocatorUpsert, buildCss, clearAutospaceShims, ensureCjkCaps]);
+    // reopenTick: re-run (re-open the book) when 简繁/词不拆行 toggles so the
+    // transformTarget content transform re-applies; position restores from the
+    // saved locator.
+  }, [id, reopenTick, scheduleLocatorUpsert, buildCss, clearAutospaceShims, ensureCjkCaps]);
 
   // Also flush locator when parent closes via onClose path — onClose may unmount us;
   // wrap onBack to flush first.
@@ -1151,8 +1621,15 @@ export function FoliateView({
     [continuousSections, flushLocator],
   );
 
+  // Cached per-theme MUI theme (no createTheme on switch → no theme-switch lag).
+  const muiTheme = getMuiTheme(prefs.theme);
+
   if (status === "error") {
-    return <ErrorCard message={message} onDismiss={onClose} />;
+    return (
+      <ThemeProvider theme={muiTheme}>
+        <ErrorCard message={message} onDismiss={onClose} />
+      </ThemeProvider>
+    );
   }
 
   const activeTocLabel =
@@ -1161,22 +1638,27 @@ export function FoliateView({
       : null;
 
   return (
-    <div className="reader" data-theme={prefs.theme}>
-      <ReaderChrome
-        title={bookTitle}
-        fraction={location?.fraction ?? null}
-        chromeVisible={chromeVisible}
-        onBack={handleBack}
-        onOpenToc={() => {
-          setChromeVisible(true);
-          setTocOpen(true);
-        }}
-        onOpenSearch={openSearch}
-        onOpenSettings={() => {
-          setChromeVisible(true);
-          setSettingsOpen(true);
-        }}
-      />
+    <ThemeProvider theme={muiTheme}>
+      <div className="reader" data-theme={prefs.theme}>
+        {/* Chrome only once reading — during load it would flash the default
+            (day) theme bar + a placeholder title before saved prefs apply. */}
+        {status === "reading" ? (
+          <ReaderChrome
+            title={bookTitle}
+            fraction={location?.fraction ?? null}
+            chromeVisible={chromeVisible}
+            onBack={handleBack}
+            onOpenToc={() => {
+              setChromeVisible(true);
+              setTocOpen(true);
+            }}
+            onOpenSearch={openSearch}
+            onOpenSettings={() => {
+              setChromeVisible(true);
+              setSettingsOpen(true);
+            }}
+          />
+        ) : null}
 
       {status === "loading" ? (
         <div className="reader__loading" aria-live="polite">
@@ -1198,23 +1680,34 @@ export function FoliateView({
             targetCfi={scrollJumpCfi}
             readingCss={continuousCss}
             autospaceShimEnabled={autospaceShimEnabled}
-            onTap={() => {
-              if (!anySheetOpen) setChromeVisible((v) => !v);
-            }}
+            onTap={handleStreamTap}
+            onLinkClick={handleInternalLink}
             onProgress={handleContinuousProgress}
-            onReady={(api) => {
-              streamApiRef.current = api;
-            }}
+            onReady={handleStreamReady}
           />
         ) : null}
         {status === "reading" && !useContinuousScroll ? (
           <ReaderTapZones
             enabled={!anySheetOpen}
-            mode={prefs.mode}
+            // FXL always paginates; without this a persisted "scroll" pref would
+            // null out the overlay and taps/swipes couldn't turn the page.
+            mode={fxlLocked ? "paginate" : prefs.mode}
             onAction={handleTapAction}
           />
         ) : null}
       </div>
+
+      {status === "reading" ? (
+        <ReaderBottomBar
+          visible={chromeVisible}
+          fraction={location?.fraction ?? null}
+          chapterLabel={activeTocLabel}
+          ticks={chapterTicks}
+          onScrub={handleScrub}
+          undoVisible={undoVisible}
+          onUndo={handleUndo}
+        />
+      ) : null}
 
       <SettingsSheet
         open={settingsOpen}
@@ -1249,7 +1742,8 @@ export function FoliateView({
         view={viewRef.current}
         onJump={handleSearchJump}
       />
-    </div>
+      </div>
+    </ThemeProvider>
   );
 }
 

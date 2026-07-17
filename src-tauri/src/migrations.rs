@@ -117,11 +117,32 @@ CREATE INDEX IF NOT EXISTS idx_library_last_read ON library_item(last_read_at DE
 CREATE INDEX IF NOT EXISTS idx_library_title ON library_item(title);
 "#;
 
+/// Schema v5 DDL — library title cleaning toggle on reading_prefs.
+///
+/// Append-only: never rewrite prior schemas. Existing `global` seed row gets
+/// DEFAULT 1 (strip source-site tail from shelf titles ON). Display-only pref;
+/// stored raw titles are never mutated.
+pub const SCHEMA_V5: &str = r#"
+ALTER TABLE reading_prefs ADD COLUMN clean_titles INTEGER NOT NULL DEFAULT 1;
+"#;
+
+/// Schema v6 DDL — reader CJK processing toggles on reading_prefs.
+///
+/// Append-only. `word_keep` = keep CJK words unbroken across line/page (0/1,
+/// default off); `cn_convert` = display Simplified↔Traditional ('off'|'s2t'|'t2s',
+/// default off). Both display-only; stored book text is never mutated.
+pub const SCHEMA_V6: &str = r#"
+ALTER TABLE reading_prefs ADD COLUMN word_keep INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE reading_prefs ADD COLUMN cn_convert TEXT NOT NULL DEFAULT 'off';
+"#;
+
 /// The migration set applied to `sqlite:pillow.db` at startup.
 ///
 /// Schema v1 seeds identity tables; schema v2 appends prefs/fonts + locator unique
-/// index; schema v3 appends CJK toggle columns; schema v4 adds library catalog.
-/// Later phases append higher versions; they never rewrite prior schemas.
+/// index; schema v3 appends CJK toggle columns; schema v4 adds library catalog;
+/// schema v5 adds the title-cleaning toggle; schema v6 adds the CJK word-keep +
+/// simp/trad conversion toggles. Later phases append higher versions; they never
+/// rewrite prior schemas.
 pub fn migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -146,6 +167,18 @@ pub fn migrations() -> Vec<Migration> {
             version: 4,
             description: "local_library_catalog",
             sql: SCHEMA_V4,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "library_title_cleaning_pref",
+            sql: SCHEMA_V5,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "cjk_wordkeep_and_convert_prefs",
+            sql: SCHEMA_V6,
             kind: MigrationKind::Up,
         },
     ]

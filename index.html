@@ -8,6 +8,9 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>枕籍 Pillowtome</title>
+    <!-- pdf.js 5.5.207 uses JS methods newer than the Android WebView baseline;
+         patch them before any app/pdf code runs (see public/pdfjs/pdf-polyfills.js). -->
+    <script src="/pdfjs/pdf-polyfills.js"></script>
   </head>
 
   <body>

@@ -31,6 +31,9 @@ interface ReadingPrefsRow {
   cjk_punct_trim?: number | null;
   cjk_autospace?: number | null;
   cjk_kinsoku?: number | null;
+  clean_titles?: number | null;
+  word_keep?: number | null;
+  cn_convert?: string | null;
 }
 
 function isMode(v: string): v is ReadingMode {
@@ -39,6 +42,10 @@ function isMode(v: string): v is ReadingMode {
 
 function isTheme(v: string): v is ReadingTheme {
   return v === "day" || v === "night" || v === "sepia";
+}
+
+function isCnConvert(v: string | null | undefined): v is ReadingPrefs["cnConvert"] {
+  return v === "off" || v === "s2t" || v === "t2s";
 }
 
 /** Missing/undefined columns soft-fail to ON (D-32 / D-34). */
@@ -68,6 +75,10 @@ function rowToPrefs(row: ReadingPrefsRow): ReadingPrefs {
     cjkPunctTrim: cjkFlagOn(row.cjk_punct_trim),
     cjkAutospace: cjkFlagOn(row.cjk_autospace),
     cjkKinsoku: cjkFlagOn(row.cjk_kinsoku),
+    cleanTitles: cjkFlagOn(row.clean_titles),
+    // New PoC toggles default OFF (opt-in), unlike the CJK flags above.
+    wordKeep: row.word_keep == null ? false : row.word_keep !== 0,
+    cnConvert: isCnConvert(row.cn_convert) ? row.cn_convert : DEFAULT_PREFS.cnConvert,
   };
 }
 
@@ -80,7 +91,7 @@ export async function loadReadingPrefs(): Promise<ReadingPrefs> {
   try {
     const db = await openDb();
     const rows = await db.select<ReadingPrefsRow[]>(
-      "SELECT id, mode, theme, font_family_key, font_size_px, line_height, margin_px, active_font_id, updated_at, cjk_punct_trim, cjk_autospace, cjk_kinsoku FROM reading_prefs WHERE id = $1",
+      "SELECT id, mode, theme, font_family_key, font_size_px, line_height, margin_px, active_font_id, updated_at, cjk_punct_trim, cjk_autospace, cjk_kinsoku, clean_titles, word_keep, cn_convert FROM reading_prefs WHERE id = $1",
       [GLOBAL_ID],
     );
     if (!rows?.length) return { ...DEFAULT_PREFS };
@@ -98,8 +109,8 @@ export async function saveReadingPrefs(prefs: ReadingPrefs): Promise<void> {
   await db.execute(
     `INSERT INTO reading_prefs (
       id, mode, theme, font_family_key, font_size_px, line_height, margin_px, active_font_id, updated_at,
-      cjk_punct_trim, cjk_autospace, cjk_kinsoku
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      cjk_punct_trim, cjk_autospace, cjk_kinsoku, clean_titles, word_keep, cn_convert
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     ON CONFLICT(id) DO UPDATE SET
       mode = excluded.mode,
       theme = excluded.theme,
@@ -111,7 +122,10 @@ export async function saveReadingPrefs(prefs: ReadingPrefs): Promise<void> {
       updated_at = excluded.updated_at,
       cjk_punct_trim = excluded.cjk_punct_trim,
       cjk_autospace = excluded.cjk_autospace,
-      cjk_kinsoku = excluded.cjk_kinsoku`,
+      cjk_kinsoku = excluded.cjk_kinsoku,
+      clean_titles = excluded.clean_titles,
+      word_keep = excluded.word_keep,
+      cn_convert = excluded.cn_convert`,
     [
       GLOBAL_ID,
       prefs.mode,
@@ -125,6 +139,9 @@ export async function saveReadingPrefs(prefs: ReadingPrefs): Promise<void> {
       prefs.cjkPunctTrim ? 1 : 0,
       prefs.cjkAutospace ? 1 : 0,
       prefs.cjkKinsoku ? 1 : 0,
+      prefs.cleanTitles ? 1 : 0,
+      prefs.wordKeep ? 1 : 0,
+      prefs.cnConvert,
     ],
   );
 }

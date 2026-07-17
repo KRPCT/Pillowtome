@@ -119,6 +119,22 @@ export async function insertLibraryItem(item: {
   }
 }
 
+/**
+ * Remove a book from the shelf by work_id (long-press → 删除).
+ * Drops the library_item row (what the shelf shows) and its locator/progress.
+ * ponytail: leaves the on-disk registered file + cover; add a Rust
+ * `library_delete` reap when disk bloat matters.
+ */
+export async function deleteLibraryItem(workId: string): Promise<void> {
+  const db = await openDb();
+  await db.execute(`DELETE FROM library_item WHERE work_id = $1`, [workId]);
+  try {
+    await db.execute(`DELETE FROM locator WHERE work_id = $1`, [workId]);
+  } catch (err) {
+    console.warn("[library-store] locator cleanup failed", err);
+  }
+}
+
 /** Touch last_opened_at (D-65). */
 export async function touchLastOpened(workId: string, at = Date.now()): Promise<void> {
   try {
@@ -142,5 +158,30 @@ export async function touchLastRead(workId: string, at = Date.now()): Promise<vo
     );
   } catch (err) {
     console.warn("[library-store] touchLastRead failed", err);
+  }
+}
+
+/**
+ * Upgrade a library item's engine-extracted metadata (Phase B). MOBI/AZW3/PDF
+ * import with only a filename title; foliate parses the real title/author/cover
+ * at open time, and this backfills them. COALESCE keeps existing values when a
+ * field is not provided, and title only overwrites when a non-empty one arrives.
+ */
+export async function updateLibraryItemMeta(
+  workId: string,
+  meta: { title?: string | null; author?: string | null; coverFile?: string | null },
+): Promise<void> {
+  try {
+    const db = await openDb();
+    await db.execute(
+      `UPDATE library_item
+         SET title = CASE WHEN $1 IS NOT NULL AND $1 != '' THEN $1 ELSE title END,
+             author = COALESCE($2, author),
+             cover_file = COALESCE($3, cover_file)
+       WHERE work_id = $4`,
+      [meta.title ?? null, meta.author ?? null, meta.coverFile ?? null, workId],
+    );
+  } catch (err) {
+    console.warn("[library-store] updateLibraryItemMeta failed", err);
   }
 }

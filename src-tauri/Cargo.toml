@@ -23,6 +23,7 @@ tauri-plugin-sql = { version = "=2.4.0", features = ["sqlite"] }
 tauri-plugin-dialog = "=2.7.1"
 pillowtome-core = { path = "../core" }
 serde = { version = "=1.0.228", features = ["derive"] }
+tauri-plugin-opener = "=2.5.4"
 
 # Android SAF (FND-03): picker + persistable URI grants. Audited + exact-pinned
 # per docs/decisions/DEC-004-android-saf-mechanism.md (=28.2.2, the soaked

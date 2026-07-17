@@ -133,6 +133,16 @@ pub fn run() {
                 return;
             }
 
+            // Library covers: `pillow://…/covers/{work_id}.{ext}` confined under
+            // app_data/covers. Separate allowlist, not the SourceRegistry.
+            if let Some(cover_name) = protocol::parse_cover_path(&path) {
+                let covers_dir = crate::covers::covers_dir(app).ok();
+                let response =
+                    protocol::serve_cover(covers_dir.as_deref(), &cover_name, range.as_deref());
+                responder.respond(response);
+                return;
+            }
+
             #[cfg(target_os = "android")]
             {
                 use pillowtome_core::source::BookSource;
@@ -158,6 +168,7 @@ pub fn run() {
             commands::imported_books,
             commands::library_ingest,
             commands::library_scan_folder,
+            commands::save_cover,
             commands::is_android,
             fonts::import_font,
             fonts::remove_font,

@@ -7,42 +7,42 @@ import tailwindcss from "@tailwindcss/vite";
 const host = process.env.TAURI_DEV_HOST;
 
 /**
- * Stub foliate-js's `pdf.js` out of the bundle.
+ * Wire foliate-js's `pdf.js` to load its runtime assets from `/pdfjs/`.
  *
- * foliate-js dynamically `import('./pdf.js')` only for PDF files; that module in
- * turn does `new URL(`vendor/pdfjs/${path}`, import.meta.url)`, a bare (no `./`)
- * glob that Vite's import-analysis rejects at build time. P1 renders EPUB only
- * (PDF is a later phase per STACK.md), so we replace the PDF entrypoint with a
- * throw-on-use stub. This keeps the vendored submodule pristine (no edits) and
- * never loads for the EPUB path. Remove when the PDF phase wires pdf.js properly.
+ * foliate-js dynamically `import('./pdf.js')` for PDFs; that module resolves the
+ * pdf.js worker / cmaps / standard-fonts / CSS via
+ * `new URL(`vendor/pdfjs/${path}`, import.meta.url)`, a template-literal glob
+ * that Vite's asset-import-analysis mangles (and its `cmaps/`/`standard_fonts/`
+ * base-URL uses can't survive the glob rewrite). We instead serve those assets
+ * verbatim from `public/pdfjs/` and rewrite `pdfjsPath` to an absolute
+ * same-origin `/pdfjs/…` URL — no glob, CSP-`self`-clean, identical in dev and
+ * build. The submodule stays pristine on disk (this is a build-time transform).
+ * The pdf.mjs lib itself keeps loading via the static `import './vendor/…'`.
  */
-function stubFoliatePdf(): Plugin {
-  const STUB_ID = "\0foliate-pdf-stub";
+function wireFoliatePdf(): Plugin {
   return {
-    name: "pillowtome:stub-foliate-pdf",
+    name: "pillowtome:wire-foliate-pdf",
     enforce: "pre",
-    resolveId(source, importer) {
-      if (
-        source === "./pdf.js" &&
-        importer &&
-        importer.replace(/\\/g, "/").includes("/vendor/foliate-js/")
-      ) {
-        return STUB_ID;
+    transform(code, id) {
+      if (!id.replace(/\\/g, "/").endsWith("/vendor/foliate-js/pdf.js")) {
+        return null;
       }
-      return null;
-    },
-    load(id) {
-      if (id === STUB_ID) {
-        return 'export const makePDF = () => { throw new Error("PDF 渲染属于后续阶段，尚未启用。"); };\n';
-      }
-      return null;
+      const patched = code
+        .replace(
+          /const pdfjsPath = path =>[^\n]*/,
+          "const pdfjsPath = path => '/pdfjs/' + path",
+        )
+        // Route the worker through the polyfilled entry (older WebViews lack
+        // Uint8Array.prototype.toHex, which pdf.js's worker calls).
+        .replace("pdfjsPath('pdf.worker.mjs')", "pdfjsPath('pdf.worker.entry.mjs')");
+      return patched === code ? null : { code: patched, map: null };
     },
   };
 }
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [stubFoliatePdf(), react(), tailwindcss()],
+  plugins: [wireFoliatePdf(), react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

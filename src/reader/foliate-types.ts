@@ -43,6 +43,14 @@ export interface FoliateBook {
   toc?: FoliateBookTocItem[];
   rendition?: { layout?: string };
   sections?: FoliateBookSection[];
+  metadata?: { language?: string; title?: string };
+  /**
+   * EventTarget that fires a `data` event before each resource blob URL is
+   * created (foliate epub.js Loader). Listeners may rewrite `event.detail.data`
+   * (string, awaitable) to transform section content before render — the hook
+   * used for 简繁转换 / 词不拆行 (works for both paginate + scroll, CFI-stable).
+   */
+  transformTarget?: EventTarget;
   resolveHref?(
     href: string,
   ): { index: number; anchor?: unknown } | null | undefined;
@@ -52,16 +60,22 @@ export interface FoliateBook {
 }
 
 export interface FoliateViewElement extends HTMLElement {
-  open(book: File | Blob | string): Promise<void>;
+  open(book: File | Blob | string | FoliateBook): Promise<void>;
   close?(): void;
   renderer?: FoliateRenderer;
   book?: FoliateBook;
   goTo(target: string): Promise<unknown>;
   goToTextStart(): Promise<unknown>;
+  /** Jump to a whole-book fraction 0..1 (scrubber, paginate surface). */
+  goToFraction(frac: number): Promise<unknown>;
+  /** Whole-book start fraction of each spine section (for chapter tick marks). */
+  getSectionFractions?(): number[];
   goLeft(): Promise<unknown>;
   goRight(): Promise<unknown>;
   /** Resolve href/CFI to spine index without navigating (when available). */
   resolveNavigation?(target: string): { index?: number } | null | undefined;
+  /** Resolve a CFI string to { index, anchor } without navigating. */
+  resolveCFI?(cfi: string): { index: number; anchor?: unknown } | null | undefined;
   search(opts: {
     query: string;
     index?: number;

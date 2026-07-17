@@ -15,7 +15,7 @@ use tauri::{AppHandle, State};
 
 use pillowtome_core::error::CoreError;
 use pillowtome_core::protection::{detect_protection, Protection};
-use pillowtome_core::publication::{EpubPublication, Publication};
+use pillowtome_core::publication::{is_epub, EpubPublication, Publication};
 use pillowtome_core::source::BookSource;
 
 use crate::storage::{resolve_bytes, SourceRegistry};
@@ -80,6 +80,10 @@ pub fn check_protection(
     // Bytes are read in Rust (from disk, or a SAF content:// URI on Android);
     // only the verdict crosses IPC (D-06).
     match resolve_bytes(&source, &app) {
+        // The OCF DRM gate only applies to EPUB. MOBI/AZW3/PDF/TXT/FB2/CBZ are
+        // rendered by foliate-js — let them through (a DRM-locked Kindle book
+        // will fail to render there with its own clear message).
+        Ok(bytes) if !is_epub(&bytes) => ProtectionDecision::render(),
         Ok(bytes) => decide(detect_protection(&bytes)),
         Err(_) => ProtectionDecision::refuse("无法读取书籍文件。"),
     }
@@ -312,6 +316,20 @@ pub async fn library_ingest(
     Ok(ingest_source(&app, &registry, source, known_hashes.as_deref()))
 }
 
+/// Persist a cover image extracted client-side (Phase B): MOBI/AZW3/PDF covers
+/// come from foliate-js (`book.getCover()`) at open time, since the Rust core
+/// has no parser for those formats. Path-confined to `covers/{work_id}.{ext}`.
+#[tauri::command]
+pub fn save_cover(
+    app: AppHandle,
+    work_id: String,
+    bytes: Vec<u8>,
+    ext: String,
+) -> Result<String, String> {
+    let dir = crate::covers::covers_dir(&app)?;
+    crate::covers::write_cover_file(&dir, &work_id, &bytes, &ext)
+}
+
 /// Desktop: recursive scan of a folder for `.epub` (D-50, D-53).
 ///
 /// Android SAF tree walk is not fully wired here — returns a clear message so
@@ -397,6 +415,16 @@ fn collect_epubs(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     }
 }
 
+/// Display title for a non-EPUB import: the file name without its extension.
+/// (Per-format metadata — MOBI header, PDF info dict — is a later phase.)
+fn filename_title(app: &AppHandle, source: &BookSource) -> String {
+    let name = source_name(app, source);
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && ext.len() <= 5 => stem.to_string(),
+        _ => name,
+    }
+}
+
 fn ingest_source(
     app: &AppHandle,
     registry: &SourceRegistry,
@@ -407,39 +435,50 @@ fn ingest_source(
         Ok(b) => b,
         Err(_) => return IngestResult::refused("无法读取书籍文件。"),
     };
-    let decision = decide(detect_protection(&bytes));
-    if !decision.can_render {
-        return IngestResult::refused(
-            decision
-                .message
-                .as_deref()
-                .unwrap_or("无法打开：不支持的书籍。"),
-        );
-    }
-    let pubn = EpubPublication::from_bytes(&bytes);
-    let content_hash = pubn.content_hash();
+    // Content hash is format-agnostic (blake3 of raw bytes) — dedup works for any
+    // format. Only EPUB gets the OCF DRM gate + OPF metadata/cover extraction.
+    let content_hash = EpubPublication::from_bytes(&bytes).content_hash();
     let work_id = work_id_from_hash(&content_hash);
+    let epub = is_epub(&bytes);
+
     if let Some(known) = known_hashes {
         if known.iter().any(|h| h == &content_hash || h == &work_id) {
-            let meta = EpubPublication::metadata_from_bytes(&bytes);
-            return IngestResult::skipped_duplicate(work_id, &meta.title);
+            let title = if epub {
+                EpubPublication::metadata_from_bytes(&bytes).title
+            } else {
+                filename_title(app, &source)
+            };
+            return IngestResult::skipped_duplicate(work_id, &title);
         }
     }
-    let meta = EpubPublication::metadata_from_bytes(&bytes);
-    let cover_file = EpubPublication::cover_from_bytes(&bytes).and_then(|cover| {
-        let dir = crate::covers::covers_dir(app).ok()?;
-        crate::covers::write_cover_file(&dir, &work_id, &cover.bytes, cover.ext).ok()
-    });
-    let id = book_id(&source);
-    registry.register(id.clone(), source);
-    IngestResult::imported(
-        id,
-        work_id,
-        content_hash,
-        meta.title,
-        meta.author,
-        cover_file,
-    )
+
+    if epub {
+        let decision = decide(detect_protection(&bytes));
+        if !decision.can_render {
+            return IngestResult::refused(
+                decision
+                    .message
+                    .as_deref()
+                    .unwrap_or("无法打开：不支持的书籍。"),
+            );
+        }
+        let meta = EpubPublication::metadata_from_bytes(&bytes);
+        let cover_file = EpubPublication::cover_from_bytes(&bytes).and_then(|cover| {
+            let dir = crate::covers::covers_dir(app).ok()?;
+            crate::covers::write_cover_file(&dir, &work_id, &cover.bytes, cover.ext).ok()
+        });
+        let id = book_id(&source);
+        registry.register(id.clone(), source);
+        IngestResult::imported(id, work_id, content_hash, meta.title, meta.author, cover_file)
+    } else {
+        // MOBI / AZW3 / PDF / TXT / FB2 / CBZ — foliate-js renders these by
+        // content sniffing; use the filename as the title (no cover yet). A
+        // DRM-locked Kindle book will simply fail to render with a clear message.
+        let title = filename_title(app, &source);
+        let id = book_id(&source);
+        registry.register(id.clone(), source);
+        IngestResult::imported(id, work_id, content_hash, title, None, None)
+    }
 }
 
 /// A stable id derived from the handle, so a freshly imported book and the same
@@ -489,9 +528,22 @@ async fn pick_source(_app: &AppHandle, path: Option<String>) -> Result<BookSourc
 async fn pick_source(app: &AppHandle, _path: Option<String>) -> Result<BookSource, String> {
     use tauri_plugin_android_fs::AndroidFsExt;
 
+    // Accept all supported book formats. Many sideloaded ebooks report a generic
+    // MIME (octet-stream), so include it too; the ingest classifies by content.
     let picker = app.android_fs_async().file_picker();
     let uri = picker
-        .pick_file(None, &["application/epub+zip"], false)
+        .pick_file(
+            None,
+            &[
+                "application/epub+zip",
+                "application/x-mobipocket-ebook",
+                "application/vnd.amazon.ebook",
+                "application/pdf",
+                "text/plain",
+                "application/octet-stream",
+            ],
+            false,
+        )
         .await
         .map_err(|e| format!("打开文件选择器失败：{e}"))?
         .ok_or_else(|| "已取消导入".to_string())?;
@@ -529,6 +581,18 @@ mod tests {
         let d = decide(Err(CoreError::Corrupt));
         assert!(!d.can_render);
         assert_eq!(d.message.as_deref(), Some("文件已损坏，无法打开。"));
+    }
+
+    #[test]
+    fn is_epub_only_true_for_ocf_zip() {
+        // PDF / MOBI(PalmDB) / plain text / random bytes are NOT epub → they take
+        // the "render-anything" ingest path instead of the EPUB DRM/meta gate.
+        assert!(!is_epub(b"%PDF-1.7\n..."));
+        assert!(!is_epub(b"BOOKMOBI kindle-ish header"));
+        assert!(!is_epub("第一章 纯文本小说\n正文……".as_bytes()));
+        assert!(!is_epub(b"not a zip at all"));
+        // A zip without META-INF/container.xml is not an epub either.
+        assert!(!is_epub(b"PK\x03\x04 truncated zip"));
     }
 
     #[test]

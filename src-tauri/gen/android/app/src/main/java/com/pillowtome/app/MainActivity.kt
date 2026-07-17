@@ -2,6 +2,7 @@ package com.pillowtome.app
 
 import android.os.Bundle
 import android.view.ViewGroup
+import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
 
 class MainActivity : TauriActivity() {
@@ -14,7 +15,7 @@ class MainActivity : TauriActivity() {
   // text-selection ActionMode, so the DOM SelectionBubble (05-04) is reachable.
   // The wrapper does NOT consume window insets — they keep passing through to the
   // WebView, preserving enableEdgeToEdge() semantics.
-  override fun onWebViewCreate(webView: RustWebView) {
+  override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
     val parent = webView.parent as? ViewGroup ?: return
     val index = parent.indexOfChild(webView)

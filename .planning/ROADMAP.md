@@ -134,15 +134,17 @@ Plans:
   4. Reopening a book restores the exact last reading position, and highlights/bookmarks stay anchored to their text after font-size/margin changes and across devices (composite locator: CFI → text_context → progress fraction).
   5. Every annotation and position record carries a stable UUID and change-log entry (unsynced), so Phase 7 sync can reconcile without data loss.
 
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
 **Research flag**: no — the composite locator is well-specified in ARCHITECTURE; design is decided, execution is standard.
 
 Plans:
 
-- [ ] 05-01: Highlights + notes via foliate-js overlay
-- [ ] 05-02: Bookmarks + reading-position store
-- [ ] 05-03: Composite locator formalized (CFI + fraction + text_context) + per-record UUID/change-log columns
+- [ ] 05-01-PLAN.md — Persistence + ledger: schema V7 (annotation + sync_meta) + annotation-store CRUD/tombstone/change_log + content_hash [Wave 1, autonomous]
+- [ ] 05-02-PLAN.md — Composite self-healing resolver (CFI→text_context→fraction) + locator text_pre/post + scroll selection→CFI [Wave 1, autonomous]
+- [ ] 05-03-PLAN.md — Selection + drawing mechanics both modes (foliate draw-annotation / CSS Custom Highlight) + restore/replay [Wave 2, autonomous]
+- [ ] 05-04-PLAN.md — Annotation UI: selection bubble + note editor + annotations sheet + bookmark toggle + 朱砂 palette [Wave 3, autonomous]
+- [ ] 05-05-PLAN.md — Android emulator acceptance gate + 200+ annotation perf stress [Wave 4, checkpoint]
 
 ### Phase 6: TXT Format & Format-Abstraction Validation
 
@@ -198,6 +200,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 4/4 | Complete   | 2026-07-16 |
 | 4. Local Library | 4/4 | Complete   | 2026-07-16 |
-| 5. Annotations & Composite Locator | 0/TBD | Not started | - |
+| 5. Annotations & Composite Locator | 0/5 | Planned | - |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
 | 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |

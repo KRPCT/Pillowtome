@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   encodeScrollPosition,
   isRealCfi,
+  matchSectionByHref,
   parseScrollPosition,
   positionFromLocatorCfi,
   positionToLocatorCfi,
@@ -48,6 +49,35 @@ describe("positionFromLocatorCfi / positionToLocatorCfi", () => {
     expect(
       positionToLocatorCfi({ spineIndex: 1, offsetFraction: 0.25 }),
     ).toBe("pillow-scroll:1:0.2500");
+  });
+});
+
+describe("matchSectionByHref", () => {
+  it("skips numeric PDF ref ids without throwing", () => {
+    expect(() =>
+      matchSectionByHref({ num: 1439, gen: 0 }, "chapter1.html"),
+    ).not.toThrow();
+    expect(matchSectionByHref({ num: 1439, gen: 0 }, "chapter1.html")).toBe(
+      false,
+    );
+  });
+
+  it("returns false for undefined section id", () => {
+    expect(matchSectionByHref(undefined, "chapter1.html")).toBe(false);
+  });
+
+  it("matches via prefix, suffix, and equality", () => {
+    expect(matchSectionByHref("OEBPS/chapter1.html", "chapter1.html")).toBe(
+      true,
+    );
+    expect(matchSectionByHref("chapter1.html", "OEBPS/chapter1.html")).toBe(
+      true,
+    );
+    expect(matchSectionByHref("chapter1.html", "chapter1.html")).toBe(true);
+  });
+
+  it("returns false for non-matching hrefs", () => {
+    expect(matchSectionByHref("chapter2.html", "chapter1.html")).toBe(false);
   });
 });
 

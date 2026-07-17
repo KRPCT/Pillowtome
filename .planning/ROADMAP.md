@@ -147,7 +147,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-03-PLAN.md — Selection + drawing mechanics both modes (foliate draw-annotation / CSS Custom Highlight) + restore/replay [Wave 2, autonomous]
+- [x] 05-03-PLAN.md — Selection + drawing mechanics both modes (foliate draw-annotation / CSS Custom Highlight) + restore/replay [Wave 2, autonomous]
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -211,6 +211,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. EPUB Reading Core | 5/5 | Executed | 2026-07-15 |
 | 3. CJK Typography Differentiation | 4/4 | Complete   | 2026-07-16 |
 | 4. Local Library | 4/4 | Complete   | 2026-07-16 |
-| 5. Annotations & Composite Locator | 2/5 | In Progress|  |
+| 5. Annotations & Composite Locator | 3/5 | In Progress|  |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
 | 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |

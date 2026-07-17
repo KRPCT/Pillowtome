@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-07-17T14:17:25.509Z"
+stopped_at: Completed 05-03-PLAN.md
+last_updated: "2026-07-17T14:36:55.989Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 23
-  completed_plans: 20
+  completed_plans: 21
   percent: 57
 ---
 
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 ## Current Position
 
 Phase: 05 (annotations-composite-locator) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-07-17
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 91%
 
 Delivered 2026-07-16..17 (ad-hoc, verified on Android AVD, all formats + both modes):
 
@@ -79,6 +79,7 @@ Next GSD entry point: reconcile phase status (audit), then `/gsd-plan-phase` / `
 | Phase 02 P04 | 6 min | 2 tasks | 13 files |
 | Phase 05 P01 | 12 | 2 tasks | 4 files |
 | Phase 05 P02 | 8min | 3 tasks | 6 files |
+| Phase 05 P03 | 13 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [05-01] change_log monotonic clock = COALESCE(MAX(logical_clock) per device)+1 computed inside a single atomic INSERT; sync_meta holds device_id only (logical_clock reserved). Delete is a tombstone (deleted=1), never physical DELETE
 - [Phase ?]: [05-02] resolveAnchor: one shared CFI→text_context→fraction self-healing chain (D-77) for both locator + annotation restore; never a bare percentage (D-78)
 - [Phase ?]: [05-02] anchor text search normalizes to Simplified (convertText t2s), maps offsets only when t2s length-preserving; no jsdom added — minimal in-test DOM + real foliate fromRange/toRange round-trip
+- [Phase ?]: [05-03] 滚动高亮走 CSS Custom Highlight API（live Range 零手动重绘），旧机退 per-iframe foliate Overlayer；分页高亮全走闭合-shadow 事件
+- [Phase ?]: [05-03] ::highlight registry 名只从 cinnabar|ochre|green|indigo allowlist 构造（T-05-07）；Overlayer 传纯色种子（自带 opacity），滚动半透明由 --anno-*-fill CSS 给
+- [Phase ?]: [05-03] 批注重放懒式逐 section（Pitfall 9）；分页 CFI 断裂经 resolveAnchor + view.getCFI 自愈并 upsertAnnotation 回写；重放由 annotations prop 声明式驱动
 
 ### Pending Todos
 
@@ -138,7 +142,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-17T14:16:55.612Z
-Stopped at: Phase 5 UI-SPEC approved
+Last session: 2026-07-17T14:36:55.980Z
+Stopped at: Completed 05-03-PLAN.md
 Resume file: None
 Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

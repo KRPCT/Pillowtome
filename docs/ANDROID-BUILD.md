@@ -143,14 +143,43 @@ Any change that touches:
 **must** complete this checklist before claiming done:
 
 1. AVD `Medium_Phone_API_36.1` running (`adb devices` shows `device`).
-2. `pnpm tauri android dev` installs and launches `com.pillowtome.app` (on Windows: **Developer Mode
-   ON** or run elevated so `jniLibs` symlinks work — trap 1).
+2. **Build and install a standalone / production APK — not `pnpm tauri android dev`:**
+
+   ```bash
+   pnpm tauri android build --debug --target x86_64 --apk
+   adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+   adb shell am force-stop com.pillowtome.app   # cold start; do not trust half-updated HMR
+   ```
+
+   `pnpm tauri android dev` bakes the devUrl into a LAN IP the AVD cannot route to (**white screen**),
+   and dev mode masks bugs that only the packaged build exposes — e.g. the `blob:` CSP block fixed in
+   `25e9a23` sat latent for phases because the gate only ran `dev`. On Windows: **Developer Mode ON**
+   or run elevated so `jniLibs` symlinks work (trap 1). See MEMORY
+   `pillowtome-android-deploy-standalone-apk`.
 3. Manual or screenshot review of the affected surface (open sample EPUB is the minimum).
 4. **If the surface scrolls** (settings sheet, TOC, search results, scroll reading mode): **finger
    pan-y** on the device — desktop mouse wheel is not enough.
 5. Note any residual device-only risk in the plan SUMMARY / VERIFICATION.
 
 Skip only pure-Rust `core/` unit-test-only changes with no UI/protocol surface.
+
+### 固化的原生改动（force-tracked，`init` 后需 re-apply）
+
+以下两个原生文件在 `gen/android` 之内（该目录 gitignored），但通过 `git add -f` force-track 入库，
+所以**常规 `tauri android build`/`dev` 与 fresh clone 都不会丢**（只有 `cargo tauri android init` 会重刷）：
+
+- `src-tauri/gen/android/app/src/main/java/com/pillowtome/app/MainActivity.kt` —— `onWebViewCreate`
+  把 RustWebView reparent 进抑制层（不消费 window insets，保 edge-to-edge）。
+- `src-tauri/gen/android/app/src/main/java/com/pillowtome/app/SuppressSelectionActionModeFrameLayout.kt`
+  —— 覆写 `startActionModeForChild`，对 `ActionMode.TYPE_FLOATING`（文本选择工具条）返回 null 抑制。
+
+任何 `cargo tauri android init` 重刷这两个文件后，用 git 还原提交版本再继续：
+
+```bash
+git checkout -- \
+  src-tauri/gen/android/app/src/main/java/com/pillowtome/app/MainActivity.kt \
+  src-tauri/gen/android/app/src/main/java/com/pillowtome/app/SuppressSelectionActionModeFrameLayout.kt
+```
 
 ### Touch / scroll pitfalls (global)
 

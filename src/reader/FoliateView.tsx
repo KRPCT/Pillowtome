@@ -66,6 +66,7 @@ import { flattenToc, type TocItem } from "./toc";
 import {
   encodeScrollPosition,
   isRealCfi,
+  matchSectionByHref,
   positionFromLocatorCfi,
   spineToLinearIndex,
   wholeBookFraction,
@@ -984,14 +985,9 @@ export function FoliateView({
       // Path match against section.id (absolute book href).
       const hrefPath = decodeURI(target.split("#")[0] ?? "");
       if (hrefPath) {
-        const hit = continuousSections.find((s) => {
-          if (!s.id) return false;
-          return (
-            s.id === hrefPath ||
-            s.id.endsWith(hrefPath) ||
-            hrefPath.endsWith(s.id)
-          );
-        });
+        const hit = continuousSections.find((s) =>
+          matchSectionByHref(s.id, hrefPath),
+        );
         if (hit) return hit.index;
       }
     } catch (err) {

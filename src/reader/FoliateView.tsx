@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ThemeProvider } from "@mui/material/styles";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -62,7 +62,7 @@ import type {
 } from "./foliate-types";
 import { makeTxtBook } from "./txt-book";
 import { updateLibraryItemMeta } from "../library/library-store";
-import type { TocItem } from "./toc";
+import { flattenToc, type TocItem } from "./toc";
 import {
   encodeScrollPosition,
   isRealCfi,
@@ -88,6 +88,8 @@ import {
   type AnnotationRow,
 } from "./annotation-store";
 import { SelectionBubble, type BubbleSelection } from "./SelectionBubble";
+import { NoteEditorSheet } from "./NoteEditorSheet";
+import { AnnotationsSheet } from "./AnnotationsSheet";
 import {
   ContinuousScrollStream,
   type ContinuousScrollApi,
@@ -295,6 +297,10 @@ export function FoliateView({
     type?: AnnotationRow["type"];
     color?: string | null;
   } | null>(null);
+  /** Annotation whose note editor is open, or null. */
+  const [noteTarget, setNoteTarget] = useState<AnnotationRow | null>(null);
+  /** 批注 management sheet open state. */
+  const [annotationsOpen, setAnnotationsOpen] = useState(false);
   /** Linear spine for continuous scroll mode (foliate has no continuous scroll). */
   const [continuousSections, setContinuousSections] = useState<
     ContinuousSection[]
@@ -524,15 +530,18 @@ export function FoliateView({
     [reloadAnnos, rowFromBubbleSelection],
   );
 
-  // Note editor is wired in Task 2; for now 笔记 ensures a highlight exists so
-  // the note has something to hang off (D-72 — a note always attaches to a mark).
+  // 笔记 opens the editor bound to a highlight; in create context it first spawns
+  // a default highlight so the note has a mark to hang off (D-72).
   const handleBubbleNote = useCallback(() => {
     const s = bubbleSelRef.current;
     if (!s) {
       setBubble(null);
       return;
     }
-    if (!s.editId) {
+    let target: AnnotationRow | null;
+    if (s.editId) {
+      target = annosRef.current.find((a) => a.annotation_id === s.editId) ?? null;
+    } else {
       const row = rowFromBubbleSelection(
         crypto.randomUUID(),
         "highlight",
@@ -540,9 +549,23 @@ export function FoliateView({
         null,
       );
       if (row) void upsertAnnotation(row).then(reloadAnnos);
+      target = row;
     }
     setBubble(null);
+    setNoteTarget(target);
   }, [reloadAnnos, rowFromBubbleSelection]);
+
+  /** Auto-save the note on editor close; empty text keeps the highlight (D-72). */
+  const handleNoteClose = useCallback(
+    (note: string) => {
+      const t = noteTarget;
+      setNoteTarget(null);
+      if (!t) return;
+      const trimmed = note.trim();
+      void upsertAnnotation({ ...t, note: trimmed || null }).then(reloadAnnos);
+    },
+    [noteTarget, reloadAnnos],
+  );
 
   const handleBubbleCopy = useCallback(() => {
     const text = bubbleSelRef.current?.textExact;
@@ -1207,6 +1230,43 @@ export function FoliateView({
     },
     [useContinuousScroll, resolveSpineIndex, jumpContinuousToSpine, captureUndo],
   );
+
+  /** Jump to an annotation/bookmark position built by the sheet via position-bus. */
+  const handleAnnotationJump = useCallback(
+    (pos: ReadingPosition) => {
+      const view = viewRef.current;
+      setAnnotationsOpen(false);
+      if (!view) return;
+      captureUndo();
+      const plan = planJump(pos, useContinuousScroll ? "scroll" : "paginate");
+      if (useContinuousScroll) {
+        jumpContinuousToSpine(plan.spineIndex, plan.offsetFraction, pos.cfi);
+        return;
+      }
+      void view.goTo(plan.goToTarget).catch((err) => {
+        console.warn("[FoliateView] annotation goTo failed", err);
+      });
+    },
+    [useContinuousScroll, jumpContinuousToSpine, captureUndo],
+  );
+
+  const handleAnnotationDelete = useCallback(
+    (a: AnnotationRow) => {
+      void deleteAnnotation(a.annotation_id).then(reloadAnnos);
+    },
+    [reloadAnnos],
+  );
+
+  /** Best-effort spine→chapter label from the TOC (resolveNavigation), memoized. */
+  const chapterLabelMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const item of flattenToc(tocItems)) {
+      if (!item.href || !item.label) continue;
+      const spine = resolveSpineIndex(item.href);
+      if (spine != null && !map.has(spine)) map.set(spine, item.label);
+    }
+    return map;
+  }, [tocItems, resolveSpineIndex]);
 
   const jumpToWholeFraction = useCallback(
     (frac: number) => {
@@ -2135,6 +2195,19 @@ export function FoliateView({
         onOpenChange={setSearchOpen}
         view={viewRef.current}
         onJump={handleSearchJump}
+      />
+
+      <NoteEditorSheet annotation={noteTarget} onClose={handleNoteClose} />
+
+      <AnnotationsSheet
+        open={annotationsOpen}
+        onOpenChange={setAnnotationsOpen}
+        annotations={annos}
+        chapterLabel={(spine) =>
+          chapterLabelMap.get(spine) ?? `第 ${spine + 1} 章`
+        }
+        onJump={handleAnnotationJump}
+        onDelete={handleAnnotationDelete}
       />
       </div>
     </ThemeProvider>

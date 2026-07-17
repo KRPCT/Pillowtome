@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Shared spies so every openDb() shares one execute/select mock (hoisted for vi.mock).
 const { execSpy, selectSpy } = vi.hoisted(() => ({
-  execSpy: vi.fn(async () => ({ rowsAffected: 1, lastInsertId: 0 })),
-  selectSpy: vi.fn(async () => [] as unknown[]),
+  execSpy: vi.fn(async (_sql: string, _params?: unknown[]) => ({ rowsAffected: 1, lastInsertId: 0 })),
+  selectSpy: vi.fn(async (_sql: string, _params?: unknown[]) => [] as unknown[]),
 }));
 
 vi.mock("@tauri-apps/plugin-sql", () => ({

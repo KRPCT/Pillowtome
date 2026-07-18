@@ -24,6 +24,11 @@ tauri-plugin-dialog = "=2.7.1"
 pillowtome-core = { path = "../core" }
 serde = { version = "=1.0.228", features = ["derive"] }
 tauri-plugin-opener = "=2.5.4"
+# WebDAV transport (SYNC-01..05): high-level PROPFIND/GET/PUT/MKCOL; conditional
+# headers / chunking / Range go through its public `agent` (07-RESEARCH Pattern 3).
+reqwest_dav = "=0.3.3"
+# OS keychain for the WebDAV password (SYNC-01 — password never in SQLite/IPC/logs).
+keyring = { version = "=4.1.5", features = ["android-native-keyring-store"] }
 
 # Android SAF (FND-03): picker + persistable URI grants. Audited + exact-pinned
 # per docs/decisions/DEC-004-android-saf-mechanism.md (=28.2.2, the soaked
@@ -41,3 +46,5 @@ tauri-plugin-android-fs = "=28.2.2"
 # sqlx test; the same 1.52.3 is already in the workspace Cargo.lock via sqlx.
 sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "=1.52.3", default-features = false, features = ["macros", "rt"] }
+# Off-device WebDAV transport test server (Wave 1 transport tests; 07-RESEARCH Don't Hand-Roll).
+wiremock = "=0.6.5"

@@ -1,9 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Shared spies so every openDb() shares one execute/select mock (hoisted for vi.mock).
+const { execSpy, selectSpy } = vi.hoisted(() => ({
+  execSpy: vi.fn(async (_sql: string, _params?: unknown[]) => ({ rowsAffected: 1, lastInsertId: 0 })),
+  selectSpy: vi.fn(async (_sql: string, _params?: unknown[]) => [] as unknown[]),
+}));
+
+vi.mock("@tauri-apps/plugin-sql", () => ({
+  default: {
+    load: vi.fn(async () => ({ execute: execSpy, select: selectSpy })),
+  },
+}));
+
 import {
   relocateToLocatorRow,
   textContextFromRange,
   textExactFromRange,
+  upsertLocator,
 } from "./locator-store";
+
+const sqlOf = (calls: unknown[][]) => calls.map((c) => String(c[0]));
+
+beforeEach(() => {
+  execSpy.mockClear();
+  selectSpy.mockClear();
+  execSpy.mockResolvedValue({ rowsAffected: 1, lastInsertId: 0 } as never);
+  selectSpy.mockResolvedValue([] as never);
+});
 
 // jsdom-free helper: build a minimal Range stand-in for textExactFromRange.
 function fakeRange(text: string): Range {
@@ -108,5 +131,90 @@ describe("textContextFromRange", () => {
     const ctx = textContextFromRange(midRange("", "edge", ""));
     expect(ctx.text_pre).toBe("");
     expect(ctx.text_post).toBe("");
+  });
+});
+
+describe("upsertLocator change_log (SYNC-02)", () => {
+  const row = {
+    work_id: "w1",
+    cfi: "epubcfi(/6/4)",
+    progress_fraction: 0.5,
+    text_pre: "前文",
+    text_exact: "当前句",
+    text_post: "后文",
+  };
+
+  it("upsert appends one change_log row with entity 'locator' and the atomic clock", async () => {
+    await upsertLocator(row);
+    const sqls = sqlOf(execSpy.mock.calls);
+    expect(sqls.some((s) => /INSERT INTO locator/i.test(s))).toBe(true);
+    // Never assert exact call counts — touchLastRead issues extra SQL on the
+    // same mocked Database; always filter by SQL content.
+    const cl = execSpy.mock.calls.find((c) =>
+      /INSERT INTO change_log/i.test(String(c[0])),
+    );
+    expect(cl).toBeDefined();
+    expect(String(cl![0])).toContain("'locator'");
+    expect(String(cl![0])).toMatch(/COALESCE\(\(SELECT MAX\(logical_clock\)/i);
+  });
+
+  it("payload carries exactly the seven locator keys", async () => {
+    await upsertLocator(row);
+    const cl = execSpy.mock.calls.find((c) =>
+      /INSERT INTO change_log/i.test(String(c[0])),
+    )!;
+    const binds = cl[1] as unknown[];
+    expect(binds[2]).toBe("upsert");
+    const payload = JSON.parse(String(binds[3]));
+    expect(Object.keys(payload).sort()).toEqual([
+      "cfi",
+      "progress_fraction",
+      "text_exact",
+      "text_post",
+      "text_pre",
+      "updated_at",
+      "work_id",
+    ]);
+    expect(payload.work_id).toBe("w1");
+    expect(payload.progress_fraction).toBe(0.5);
+  });
+
+  it("empty upsert writes neither locator nor change_log", async () => {
+    await upsertLocator({
+      work_id: "w1",
+      cfi: null,
+      progress_fraction: null,
+      text_pre: null,
+      text_exact: null,
+      text_post: null,
+    });
+    const sqls = sqlOf(execSpy.mock.calls);
+    expect(sqls.some((s) => /INSERT INTO locator/i.test(s))).toBe(false);
+    expect(sqls.some((s) => /INSERT INTO change_log/i.test(s))).toBe(false);
+  });
+
+  it("rethrows on SQL failure (existing contract preserved)", async () => {
+    execSpy.mockRejectedValueOnce(new Error("db down") as never);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(upsertLocator(row)).rejects.toThrow("db down");
+    warn.mockRestore();
+  });
+
+  it("skips the ledger append (warn, not fatal) when device_id is unavailable", async () => {
+    // Fresh module registry so annotation-store's cachedDeviceId is cleared and
+    // ensureDevice actually issues its sync_meta SQL.
+    vi.resetModules();
+    const fresh = await import("./locator-store");
+    // First execute = locator INSERT (succeeds); second = ensureDevice's
+    // INSERT OR IGNORE INTO sync_meta (rejects → device_id null).
+    execSpy.mockResolvedValueOnce({ rowsAffected: 1, lastInsertId: 0 } as never);
+    execSpy.mockRejectedValueOnce(new Error("sync_meta down") as never);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(fresh.upsertLocator(row)).resolves.toBeUndefined();
+    const sqls = sqlOf(execSpy.mock.calls);
+    expect(sqls.some((s) => /INSERT INTO locator/i.test(s))).toBe(true);
+    expect(sqls.some((s) => /INSERT INTO change_log/i.test(s))).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

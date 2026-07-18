@@ -173,6 +173,52 @@ CREATE TABLE sync_meta (
 );
 "#;
 
+/// Schema v8 DDL — WebDAV sync state (SYNC-01..05, research Q2 ADOPTED, D-95/D-98).
+///
+/// Append-only: never rewrite prior schemas. `library_item.deleted` is the catalog
+/// tombstone (merge set-union must not resurrect deleted books; remote book files
+/// are NEVER deleted by sync); `file_sync_enabled` is the per-book opt-in flag
+/// (D-98) that travels on the state plane. `sync_config` holds NO credential
+/// column — the WebDAV secret lives in the OS keychain only (SYNC-01); the two TLS switches are
+/// independent columns (D-95). `sync_state.remote_etag` is an opaque equality
+/// token, never parsed. `sync_file_state` is the chunk-resume state the 10MB/10MB
+/// file plane (07-03) persists.
+pub const SCHEMA_V8: &str = r#"
+ALTER TABLE library_item ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE library_item ADD COLUMN file_sync_enabled INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE sync_config (
+    id                TEXT    PRIMARY KEY,   -- single row id='config'
+    server_url        TEXT    NOT NULL,
+    username          TEXT    NOT NULL,
+    remote_path       TEXT    NOT NULL DEFAULT 'pillowtome/',
+    allow_http        INTEGER NOT NULL DEFAULT 0,
+    trust_self_signed INTEGER NOT NULL DEFAULT 0,
+    device_name       TEXT,
+    updated_at        INTEGER NOT NULL
+);
+
+CREATE TABLE sync_state (
+    id           TEXT    PRIMARY KEY,        -- single row id='state'
+    remote_etag  TEXT,                        -- opaque token: equality only, never parsed
+    last_sync_at INTEGER,
+    last_error   TEXT,
+    syncing      INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE sync_file_state (
+    work_id       TEXT    PRIMARY KEY,
+    direction     TEXT    NOT NULL,           -- 'upload' | 'download'
+    transfer_uuid TEXT,
+    chunks_done   TEXT    NOT NULL DEFAULT '[]', -- JSON array of confirmed chunk numbers
+    size          INTEGER,
+    hash          TEXT,                        -- blake3 hex of the book file
+    remote_path   TEXT,
+    started_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL
+);
+"#;
+
 /// The migration set applied to `sqlite:pillow.db` at startup.
 ///
 /// Schema v1 seeds identity tables; schema v2 appends prefs/fonts + locator unique
@@ -181,6 +227,8 @@ CREATE TABLE sync_meta (
 /// simp/trad conversion toggles; schema v7 adds the annotation + sync_meta tables
 /// (reusing change_log as the sync ledger). Later phases append higher versions;
 /// they never rewrite prior schemas.
+/// Schema v8 adds the WebDAV sync state (library tombstone + file-sync flag +
+/// sync_config/sync_state/sync_file_state tables).
 pub fn migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -223,6 +271,12 @@ pub fn migrations() -> Vec<Migration> {
             version: 7,
             description: "annotations_and_sync_meta",
             sql: SCHEMA_V7,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "sync_webdav_state",
+            sql: SCHEMA_V8,
             kind: MigrationKind::Up,
         },
     ]

@@ -2,11 +2,15 @@
  * Reading-position locator load/upsert via tauri-plugin-sql (D-23, D-24, D-25).
  * Composite CFI + progress_fraction + text context — never bare percentage (D-08).
  * Parameterized `$n` binds only (T-02-sql). UNIQUE on work_id (idx_locator_work_id).
+ * Every upsert also appends one change_log row (entity='locator', op='upsert')
+ * with the same atomic monotonic-clock INSERT as annotation-store (SYNC-02), so
+ * the P7 reconcile spine sees progress writes.
  */
 
 import Database from "@tauri-apps/plugin-sql";
 import type { RelocateDetail } from "./foliate-types";
 import { touchLastRead } from "../library/library-store";
+import { ensureDevice } from "./annotation-store";
 
 /** Debounced relocate → upsert delay (D-24). */
 export const LOCATOR_DEBOUNCE_MS = 500;
@@ -82,6 +86,45 @@ export async function loadLocator(workId: string): Promise<{
   }
 }
 
+/**
+ * Append one change_log row for a locator upsert. logical_clock is computed
+ * INSIDE the INSERT as COALESCE(MAX(logical_clock for this device), 0) + 1 — a
+ * single atomic statement, mirroring annotation-store's ledger (T-05-02).
+ * Payload is exactly the locator row shape (seven keys; no hash fields).
+ */
+async function appendLocatorChangeLog(
+  db: Database,
+  deviceId: string,
+  row: {
+    work_id: string;
+    cfi: string | null;
+    progress_fraction: number | null;
+    text_pre: string | null;
+    text_exact: string | null;
+    text_post: string | null;
+  },
+  updatedAt: number,
+): Promise<void> {
+  const payload = JSON.stringify({
+    work_id: row.work_id,
+    cfi: row.cfi,
+    progress_fraction: row.progress_fraction,
+    text_pre: row.text_pre,
+    text_exact: row.text_exact,
+    text_post: row.text_post,
+    updated_at: updatedAt,
+  });
+  await db.execute(
+    `INSERT INTO change_log (id, device_id, logical_clock, entity, op, payload, created_at)
+     VALUES (
+       $1, $2,
+       COALESCE((SELECT MAX(logical_clock) FROM change_log WHERE device_id = $2), 0) + 1,
+       'locator', $3, $4, $5
+     )`,
+    [crypto.randomUUID(), deviceId, "upsert", payload, updatedAt],
+  );
+}
+
 /** Upsert locator on UNIQUE(work_id) — ON CONFLICT DO UPDATE (D-23). */
 export async function upsertLocator(row: {
   work_id: string;
@@ -120,6 +163,14 @@ export async function upsertLocator(row: {
         updatedAt,
       ],
     );
+    // SYNC-02: ledger the progress write (entity='locator'); a missing device row
+    // skips the append with a warn — the locator write already done stays.
+    const deviceId = await ensureDevice();
+    if (!deviceId) {
+      console.warn("[locator-store] change_log skipped: no device_id");
+    } else {
+      await appendLocatorChangeLog(db, deviceId, row, updatedAt);
+    }
     // D-65: refresh library last_read alongside locator (soft-fail).
     void touchLastRead(row.work_id, updatedAt);
   } catch (err) {

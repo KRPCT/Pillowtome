@@ -14,9 +14,11 @@
 //! - [`publication`] — `Publication` trait + `Format` enum (plan 01-03, D-07)
 //! - [`locator`] — composite self-healing `Locator` (plan 01-03, D-08)
 //! - [`source`] — opaque `BookSource` storage-handle (plan 01-03, D-05)
+//! - [`sync`] — WebDAV sync pure core: remote model, path hygiene, merge (plan 07-00)
 
 pub mod error;
 pub mod locator;
 pub mod protection;
 pub mod publication;
 pub mod source;
+pub mod sync;

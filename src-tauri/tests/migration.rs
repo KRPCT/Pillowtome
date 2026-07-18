@@ -1,13 +1,15 @@
-//! Off-device migration smoke test for schema v1 + v2 + v3 (D-09 / D-20 / D-34).
+//! Off-device migration smoke test for schema v1..v8 (D-09 / D-20 / D-34 / SYNC-01..05).
 //!
 //! Proves the DB migrates without booting the app: open an in-memory SQLite,
-//! apply [`SCHEMA_V1`] then [`SCHEMA_V2`] then [`SCHEMA_V3`], and assert identity /
-//! locator / change-log / reading_prefs / custom_font tables, seed row, CJK
-//! columns, and the locator UNIQUE index. Uses the SAME sqlx binding
+//! apply [`SCHEMA_V1`] through [`SCHEMA_V8`] in order, and assert identity /
+//! locator / change-log / reading_prefs / custom_font / library / annotation /
+//! sync tables, seed rows, CJK columns, the locator UNIQUE index, and the V8
+//! library tombstone + sync tables. Uses the SAME sqlx binding
 //! tauri-plugin-sql resolves (single SQLite binding, Pitfall 6).
 
 use pillowtome_lib::migrations::{
     migrations, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7,
+    SCHEMA_V8,
 };
 use sqlx::{Connection, Row, SqliteConnection};
 
@@ -73,6 +75,15 @@ async fn fresh_db_v7() -> SqliteConnection {
         .execute(&mut conn)
         .await
         .expect("apply SCHEMA_V7");
+    conn
+}
+
+async fn fresh_db_v8() -> SqliteConnection {
+    let mut conn = fresh_db_v7().await;
+    sqlx::raw_sql(SCHEMA_V8)
+        .execute(&mut conn)
+        .await
+        .expect("apply SCHEMA_V8");
     conn
 }
 
@@ -390,10 +401,146 @@ async fn schema_v7_annotation_defaults_and_fk() {
     assert_eq!(row.get::<i64, _>("deleted"), 0);
 }
 
+#[tokio::test]
+async fn schema_v8_adds_library_tombstone_and_file_sync_flag() {
+    let mut conn = fresh_db_v8().await;
+    assert!(has_column(&mut conn, "library_item", "deleted").await);
+    assert!(has_column(&mut conn, "library_item", "file_sync_enabled").await);
+
+    // V4 columns still exist forward from V7 (append-only proof).
+    for col in ["title", "source_id", "cover_file", "last_opened_at", "last_read_at"] {
+        assert!(
+            has_column(&mut conn, "library_item", col).await,
+            "library_item missing V4 column {col} after v8"
+        );
+    }
+
+    sqlx::query(
+        "INSERT INTO work (work_id, content_hash, format, created_at) VALUES ('wv8', 'h', 'epub', 0)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("seed work");
+    sqlx::query(
+        "INSERT INTO library_item (item_id, work_id, source_id, title, author, cover_file, imported_at, last_opened_at, last_read_at) \
+         VALUES ('iv8', 'wv8', 'import-1', 'Title', NULL, NULL, 0, NULL, NULL)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("insert library_item with v8 defaults");
+    let row = sqlx::query("SELECT deleted, file_sync_enabled FROM library_item WHERE item_id = 'iv8'")
+        .fetch_one(&mut conn)
+        .await
+        .expect("read library_item v8 defaults");
+    assert_eq!(row.get::<i64, _>("deleted"), 0);
+    assert_eq!(row.get::<i64, _>("file_sync_enabled"), 0);
+}
+
+#[tokio::test]
+async fn schema_v8_creates_sync_tables() {
+    let mut conn = fresh_db_v8().await;
+    let names = table_names(&mut conn).await;
+    for expected in ["sync_config", "sync_state", "sync_file_state"] {
+        assert!(
+            names.iter().any(|n| n == expected),
+            "schema v8 missing table `{expected}`; found {names:?}"
+        );
+    }
+    for col in [
+        "server_url",
+        "username",
+        "remote_path",
+        "allow_http",
+        "trust_self_signed",
+        "device_name",
+    ] {
+        assert!(
+            has_column(&mut conn, "sync_config", col).await,
+            "sync_config missing {col}"
+        );
+    }
+    for col in ["remote_etag", "last_sync_at", "last_error", "syncing"] {
+        assert!(
+            has_column(&mut conn, "sync_state", col).await,
+            "sync_state missing {col}"
+        );
+    }
+    for col in [
+        "direction",
+        "transfer_uuid",
+        "chunks_done",
+        "size",
+        "hash",
+        "remote_path",
+        "started_at",
+    ] {
+        assert!(
+            has_column(&mut conn, "sync_file_state", col).await,
+            "sync_file_state missing {col}"
+        );
+    }
+
+    // sync_config: remote_path defaults to 'pillowtome/'.
+    sqlx::query(
+        "INSERT INTO sync_config (id, server_url, username, updated_at) \
+         VALUES ('config', 'https://dav.example.com', 'reader', 0)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("insert minimal sync_config");
+    let row = sqlx::query("SELECT remote_path, allow_http, trust_self_signed FROM sync_config WHERE id = 'config'")
+        .fetch_one(&mut conn)
+        .await
+        .expect("read sync_config defaults");
+    assert_eq!(row.get::<String, _>("remote_path"), "pillowtome/");
+    assert_eq!(row.get::<i64, _>("allow_http"), 0);
+    assert_eq!(row.get::<i64, _>("trust_self_signed"), 0);
+
+    // sync_file_state: chunks_done defaults to '[]'.
+    sqlx::query(
+        "INSERT INTO sync_file_state (work_id, direction, started_at, updated_at) \
+         VALUES ('wv8', 'upload', 0, 0)",
+    )
+    .execute(&mut conn)
+    .await
+    .expect("insert minimal sync_file_state");
+    let row = sqlx::query("SELECT chunks_done FROM sync_file_state WHERE work_id = 'wv8'")
+        .fetch_one(&mut conn)
+        .await
+        .expect("read sync_file_state defaults");
+    assert_eq!(row.get::<String, _>("chunks_done"), "[]");
+
+    // sync_state: syncing defaults to 0.
+    sqlx::query("INSERT INTO sync_state (id) VALUES ('state')")
+        .execute(&mut conn)
+        .await
+        .expect("insert minimal sync_state");
+    let row = sqlx::query("SELECT syncing FROM sync_state WHERE id = 'state'")
+        .fetch_one(&mut conn)
+        .await
+        .expect("read sync_state defaults");
+    assert_eq!(row.get::<i64, _>("syncing"), 0);
+
+    // Credentials never in SQLite (SYNC-01): no password-like column anywhere
+    // on sync_config (PRAGMA table_info scan, case-insensitive).
+    let password_cols: Vec<String> = sqlx::query("PRAGMA table_info(sync_config)")
+        .fetch_all(&mut conn)
+        .await
+        .expect("pragma table_info sync_config")
+        .iter()
+        .map(|r| r.get::<String, _>("name"))
+        .filter(|n| n.to_lowercase().contains("password"))
+        .collect();
+    assert!(
+        password_cols.is_empty(),
+        "sync_config must not carry a credential column; found {password_cols:?}"
+    );
+}
+
 #[test]
-fn migration_set_is_v1_through_v7_up() {
+fn migration_set_is_v1_through_v8_up() {
     let set = migrations();
-    assert_eq!(set.len(), 7, "exactly seven migrations (v1..v7)");
+    assert_eq!(set.len(), 8, "exactly eight migrations (v1..v8)");
     assert_eq!(set[0].version, 1);
     assert_eq!(set[0].description, "seed_stub_schema");
     assert_eq!(set[0].sql, SCHEMA_V1, "v1 SQL is SCHEMA_V1 (one source of truth)");
@@ -444,4 +591,13 @@ fn migration_set_is_v1_through_v7_up() {
     assert!(set[6].sql.contains("idx_annotation_work"));
     // V1 change_log ledger is reused, not extended by V7.
     assert!(!set[6].sql.contains("change_log"));
+
+    assert_eq!(set[7].version, 8);
+    assert_eq!(set[7].description, "sync_webdav_state");
+    assert_eq!(set[7].sql, SCHEMA_V8, "v8 SQL is SCHEMA_V8 (one source of truth)");
+    assert!(set[7].sql.contains("CREATE TABLE sync_config"));
+    assert!(set[7].sql.contains("CREATE TABLE sync_state"));
+    assert!(set[7].sql.contains("CREATE TABLE sync_file_state"));
+    assert!(set[7].sql.contains("ALTER TABLE library_item ADD COLUMN deleted"));
+    assert!(set[7].sql.contains("file_sync_enabled"));
 }

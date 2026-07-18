@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 7 UI-SPEC approved
-last_updated: "2026-07-18T10:03:57.229Z"
+stopped_at: Phase 7 planned (5 plans 07-00..07-04), ready to execute
+last_updated: "2026-07-18T10:05:00.000Z"
 last_activity: 2026-07-18
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 26
+  total_plans: 31
   completed_plans: 24
   percent: 57
 ---
@@ -156,7 +156,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-18T10:03:57.221Z
-Stopped at: Phase 7 UI-SPEC approved
-Resume file: .planning/phases/07-webdav-self-hosted-sync/07-UI-SPEC.md
-Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).
+Last session: 2026-07-18T10:05:00.000Z
+Stopped at: Phase 7 planned (5 plans 07-00..07-04), ready to execute
+Resume file: .planning/phases/07-webdav-self-hosted-sync/07-00-PLAN.md
+Resume action: Phase 7 WebDAV sync planned end-to-end (07-00 wave 0 → 07-01 connect/credentials → 07-02 state plane → 07-03 file plane → 07-04 UI+scheduler+acceptance); plan-check loop passed (2 checkers, 12 cross-plan contract fixes). Phase 05 05-08 device acceptance remains open. Next entries: `/gsd-execute-phase 07` (or finish 05-08 first per roadmap order).

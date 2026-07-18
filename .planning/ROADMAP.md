@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: EPUB Reading Core** - Immersive, themeable EPUB reading (Lithium-parity milestone): modes, typography knobs, themes, TOC, search, custom fonts
 - [x] **Phase 3: CJK Typography Differentiation** - The moat: punctuation compression, autospace, kinsoku, CJK defaults, bundled font + coverage-aware fallback (completed 2026-07-16)
 - [x] **Phase 4: Local Library** - SQLite library store with covers, metadata, sort/filter; real Publication trait + stable identity (completed 2026-07-16)
-- [ ] **Phase 5: Annotations & Composite Locator** - Highlights, notes, bookmarks, precise cross-device position restore, change-log schema (sync-ready)
+- [x] **Phase 5: Annotations & Composite Locator** - Highlights, notes, bookmarks, precise cross-device position restore, change-log schema (sync-ready)
 - [ ] **Phase 6: TXT Format & Format-Abstraction Validation** - TXT (GBK/GB18030/UTF-8 detection + chapter split) added purely via the Publication abstraction
 - [ ] **Phase 7: WebDAV Self-Hosted Sync** - Progress + annotation + selective file sync over self-hosted WebDAV with non-destructive conflict resolution
 
@@ -195,16 +195,17 @@ Plans:
   4. User can selectively choose which book files sync (not a forced full-library upload), keeping large files from swamping the sync channel.
   5. Concurrent edits from multiple devices merge without data loss — progress takes the furthest position, annotations merge by UUID with tombstone dedup, and genuine conflicts resolve via a clear non-destructive strategy.
 
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
 **Research flag**: yes — the conflict/merge model is MEDIUM confidence: per-device-log CRDT-lite design, Nextcloud chunked-upload v2 semantics, and proxy/ETag edge cases need concrete design against a real proxied WebDAV server via `/gsd-plan-phase --research-phase`.
 
 Plans:
 
-- [ ] 07-01: WebDAV connect/config + keychain credential storage + TLS handling
-- [ ] 07-02: State-plane sync — per-device append-only change logs; progress + annotation merge
-- [ ] 07-03: File-plane selective book sync — resumable chunked upload, ETag/If-Match concurrency
-- [ ] 07-04: Conflict resolution (furthest-progress / OR-Set + tombstones) + background/on-close scheduling incl. Android Doze
+- [ ] 07-00-PLAN.md — Wave 0: 依赖钉版（reqwest_dav =0.3.3 / keyring =4.1.5 / wiremock =0.6.5）+ SCHEMA_V8（library_item tombstone + file_sync_enabled + sync_config/sync_state/sync_file_state）+ locator change_log 缺口 + core sync merge/remote/model 纯函数与穷举 fixtures [Wave 0, autonomous]
+- [ ] 07-01-PLAN.md — 连接与凭据（SYNC-01）：keyring（含 Android ndk-context spike + AVD 生产 APK 冒烟）+ transport（TLS 双开关、D-97 强制测试、中文四类错误分类）+ wiremock 传输矩阵 [Wave 1, non-autonomous]
+- [ ] 07-02-PLAN.md — 状态平面（SYNC-02, SYNC-03, SYNC-05）：每设备状态文件重建 + 条件 PUT + tmp-MOVE 原子写、拉取合并入库（tombstone 防复活）、D-92 撤回管道、双实例 e2e 不丢数据 [Wave 2, autonomous]
+- [ ] 07-03-PLAN.md — 文件平面（SYNC-04）：10MB 阈值、Nextcloud chunk v2 断点续传、通用服务器流式整 PUT（研究 Q1 对 D-101 的修正）、下载 Range 续传 + blake3==work_id 校验、sync_set_file_sync/sync_download_book 命令 [Wave 2, autonomous]
+- [ ] 07-04-PLAN.md — UI + 调度 + 验收（SYNC-01..05）：同步按钮+状态点、SyncSettingsSheet、占位卡+点击下载、同步此书开关、trace pill + 撤回弹窗、开书拉/合书推（D-90/D-91）、AVD 生产 APK + 真实服务器矩阵（坚果云/代理 Nextcloud/dufs）checkpoint [Wave 3, non-autonomous]
 
 ## Progress
 
@@ -219,4 +220,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Local Library | 4/4 | Complete   | 2026-07-16 |
 | 5. Annotations & Composite Locator | 5/8 | In Progress|  |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
-| 7. WebDAV Self-Hosted Sync | 0/TBD | Not started | - |
+| 7. WebDAV Self-Hosted Sync | 0/5 | Planned | - |

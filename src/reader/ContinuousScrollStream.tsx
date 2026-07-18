@@ -26,6 +26,7 @@ import {
 import { clamp01 } from "./reading-position";
 import {
   resolveCfiScrollTop,
+  sectionBaseCfi,
   selectionCfi,
   spineFromCfi,
   visibleRangeCfi,
@@ -1034,6 +1035,10 @@ export function ContinuousScrollStream({
 
                     // Selection → range-CFI (same section-doc seam as link-click /
                     // autospace, D-74 — no new full-screen pointer-capture layer).
+                    // Drive emission off selectionchange (debounced), NOT pointerup:
+                    // Chromium cancels the pointer stream (pointercancel) when the
+                    // native long-press selection gesture takes over, so a pointerup
+                    // "settle" never fires on Android touch.
                     const win = iframe.contentWindow;
                     const emitSelection = () => {
                       const selo = win?.getSelection?.();
@@ -1046,9 +1051,11 @@ export function ContinuousScrollStream({
                         onSelectionRef.current?.(null);
                         return;
                       }
-                      const baseCfi = linearRef.current[linearIdx]?.cfi;
-                      if (!baseCfi) return;
-                      const cfi = selectionCfi(baseCfi, range);
+                      const sec = linearRef.current[linearIdx];
+                      if (!sec) return;
+                      // foliate getCFI parity: sections without a package CFI
+                      // (TXT adapter) fall back to CFI.fake.fromIndex(spine).
+                      const cfi = selectionCfi(sectionBaseCfi(sec), range);
                       if (!cfi) return;
                       onSelectionRef.current?.({
                         cfi,
@@ -1058,14 +1065,24 @@ export function ContinuousScrollStream({
                         linearIndex: linearIdx,
                       });
                     };
-                    // Emit only on settle (pointerup/mouseup); selectionchange only
-                    // clears the bubble when the selection collapses.
-                    const settle = () => win?.setTimeout?.(emitSelection, 0);
-                    doc.addEventListener("pointerup", settle, { passive: true });
-                    doc.addEventListener("mouseup", settle, { passive: true });
+                    let selTimer: ReturnType<typeof setTimeout> | null = null;
                     doc.addEventListener("selectionchange", () => {
                       const s = win?.getSelection?.();
-                      if (!s || s.isCollapsed) onSelectionRef.current?.(null);
+                      if (!s || s.isCollapsed || s.rangeCount === 0) {
+                        if (selTimer) {
+                          clearTimeout(selTimer);
+                          selTimer = null;
+                        }
+                        onSelectionRef.current?.(null);
+                        return;
+                      }
+                      // Debounce: emit once the selection settles (handle drags
+                      // keep firing changes). MUST use the TOP window's timer —
+                      // this iframe is sandboxed WITHOUT allow-scripts, and
+                      // Chromium silently drops timer callbacks scheduled on a
+                      // script-disabled window (never fires, no error).
+                      if (selTimer) clearTimeout(selTimer);
+                      selTimer = setTimeout(emitSelection, 250);
                     });
 
                     // Lazy per-section annotation draw (this section only).

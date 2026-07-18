@@ -7,6 +7,9 @@ import type { ReadingMode } from "./apply-reading-styles";
 
 export type TapZone = "left" | "center" | "right";
 
+/** Actions a tap zone can trigger (paginate paging / chrome toggle). */
+export type TapZoneAction = "prev" | "next" | "toggle-chrome";
+
 /**
  * Resolve horizontal tap into left 33% / center 34% / right 33% zones.
  * Boundaries: left [0, 0.33), center [0.33, 0.67), right [0.67, 1].
@@ -27,7 +30,7 @@ export function resolveTapZone(clientX: number, width: number): TapZone {
 export function tapZoneAction(
   zone: TapZone,
   mode: ReadingMode,
-): "prev" | "next" | "toggle-chrome" {
+): TapZoneAction {
   if (mode === "scroll") return "toggle-chrome";
   if (zone === "left") return "prev";
   if (zone === "right") return "next";

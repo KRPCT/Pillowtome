@@ -122,6 +122,17 @@ export function getVisibleRange(
 // --- CFI generation (save) --------------------------------------------------
 
 /**
+ * Section base CFI with foliate's own fallback (view.js getCFI parity):
+ * `book.sections[i].cfi ?? CFI.fake.fromIndex(i)`. Engine-parsed formats whose
+ * sections carry no package CFI (TXT adapter; any loader without OPF itemrefs)
+ * still get a stable, spine-round-trippable base — `spineFromCfi` inverts it
+ * via `CFI.fake.toIndex`.
+ */
+export function sectionBaseCfi(sec: { index: number; cfi?: string }): string {
+    return sec.cfi ?? CFI.fake.fromIndex(sec.index);
+}
+
+/**
  * Build a complete EPUB CFI for the currently visible content in an iframe doc.
  *
  * The iframe is NOT scrolled internally (height expanded to content); the OUTER

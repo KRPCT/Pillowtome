@@ -800,16 +800,6 @@ foliate-view {
   background: var(--page-bg, #fffef9) !important;
 }
 
-/* Immersive tap-zone overlay (paginate only) sits above foliate-view host */
-.reader__tap-zones {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  background: transparent;
-  /* Let vertical pans attempt to reach engine; we resolve swipe on pointerup */
-  touch-action: pan-y;
-}
-
 /* TOC sheet (READ-05) — paper-feel tokens under reader theme */
 .reader-toc-sheet {
   background: var(--reader-bg, #f7f3eb);

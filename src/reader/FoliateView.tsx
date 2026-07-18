@@ -13,7 +13,7 @@ import {
 import { pillowUrl } from "../lib/pillow";
 import { ErrorCard } from "./error-card";
 import { ReaderChrome } from "./ReaderChrome";
-import { ReaderTapZones, type TapZoneAction } from "./ReaderTapZones";
+import { resolveTapZone, tapZoneAction, type TapZoneAction } from "./tap-zones";
 import { SettingsSheet } from "./SettingsSheet";
 import { SearchSheet } from "./SearchSheet";
 import { TocSheet, normalizeToc } from "./TocSheet";
@@ -130,13 +130,15 @@ interface EnsureWorkResult {
 /**
  * A settled text selection surfaced to the 05-04 bubble. `rects` are the
  * selection client rects in the section doc's own viewport; 05-04 maps them to
- * page coords via `iframe` (scroll) or the `foliate-view` host rect (paginate).
+ * page coords via the section iframe's live rect (both modes — the paginator
+ * translates its iframes horizontally, so the view host rect is never the
+ * right origin there).
  */
 export interface ReaderSelection {
   cfi: string;
   rects: DOMRect[];
   doc: Document;
-  /** Present in scroll mode only (per-section iframe). */
+  /** Per-section iframe (scroll: React-rendered; paginate: frameElement). */
   iframe?: HTMLIFrameElement;
   /** Spine index (paginate) or linear index (scroll) — mode-local carrier. */
   index: number;
@@ -164,6 +166,9 @@ type Status = "loading" | "reading" | "error";
 
 /** Works whose engine metadata has already been backfilled this session. */
 const metaBackfilled = new Set<string>();
+
+/** Max pointer travel (px) for a paginate tap to count as a zone tap. */
+const PAGINATE_TAP_SLOP = 12;
 
 /**
  * EPUB sniff (OCF): a zip whose uncompressed first entry is `mimetype` holding
@@ -251,6 +256,7 @@ export function FoliateView({
   const viewRef = useRef<FoliateViewElement | null>(null);
   const onSelectionRef = useRef<(sel: ReaderSelection | null) => void>(() => {});
   const onSelectExistingRef = useRef<(cfi: string) => void>(() => {});
+  const handleTapActionRef = useRef<(action: TapZoneAction) => void>(() => {});
   const annotationsRef = useRef<AnnotationRow[]>(annotations ?? []);
   /** Section docs handed out by the paginate `load` event (closed shadow seam). */
   const sectionDocsRef = useRef<Map<number, Document>>(new Map());
@@ -348,7 +354,7 @@ export function FoliateView({
   prefsRef.current = prefs;
   locationRef.current = location;
 
-  const anySheetOpen = settingsOpen || tocOpen || searchOpen;
+  const anySheetOpen = settingsOpen || tocOpen || searchOpen || annotationsOpen;
   const anySheetOpenRef = useRef(false);
   anySheetOpenRef.current = anySheetOpen;
   const useContinuousScroll =
@@ -450,9 +456,14 @@ export function FoliateView({
       if (doc) {
         const range = cfiToRange(doc, cfi);
         if (range) {
+          // Same translated-strip origin rule as the create path: the paginate
+          // iframe's live rect, not the foliate-view host rect.
+          const origin =
+            doc.defaultView?.frameElement?.getBoundingClientRect() ??
+            viewRef.current?.getBoundingClientRect();
           rect = anchorRectInHost(
             Array.from(range.getClientRects()),
-            viewRef.current?.getBoundingClientRect(),
+            origin,
           );
         }
       }
@@ -772,19 +783,115 @@ export function FoliateView({
           cfi,
           rects: Array.from(range.getClientRects()),
           doc,
+          // The paginator lays sections out as a horizontal strip and reveals
+          // the current page by TRANSLATING the iframe element — so the view
+          // host rect is the wrong origin (bubble lands ~pageOffset px off,
+          // i.e. off-screen). The iframe's live rect is the only correct one.
+          // frameElement crosses the closed shadow fine (same-origin).
+          iframe:
+            (doc.defaultView?.frameElement as HTMLIFrameElement | null) ??
+            undefined,
           index,
         });
       };
-      const settle = () => doc.defaultView?.setTimeout(emit, 0);
-      doc.addEventListener("pointerup", settle, { passive: true });
-      doc.addEventListener("mouseup", settle, { passive: true });
+      // Drive emission off selectionchange (debounced), NOT pointerup: Chromium
+      // cancels the pointer stream (pointercancel) when the native long-press
+      // selection gesture takes over, so a pointerup "settle" never fires on
+      // Android touch. Debounce on the TOP window's timer for uniformity with
+      // the scroll stream (whose sandboxed iframes drop window timers silently).
+      let selTimer: ReturnType<typeof setTimeout> | null = null;
       doc.addEventListener("selectionchange", () => {
         const s = doc.getSelection?.();
-        if (!s || s.isCollapsed) onSelectionRef.current?.(null);
+        if (!s || s.isCollapsed || s.rangeCount === 0) {
+          if (selTimer) {
+            clearTimeout(selTimer);
+            selTimer = null;
+          }
+          onSelectionRef.current?.(null);
+          return;
+        }
+        if (selTimer) clearTimeout(selTimer);
+        selTimer = setTimeout(emit, 250);
       });
     },
     [],
   );
+
+  /**
+   * Paginate L/R tap zones on a section doc (`load` seam) — replaces the old
+   * full-screen overlay div, which swallowed every touch before it reached the
+   * iframe and made native text selection impossible (touch gate #1). Swipe
+   * page-turns stay with foliate's paginator (native touch handling).
+   */
+  const attachPaginateTapZones = useCallback((doc: Document, index: number) => {
+    let start: { x: number; y: number } | null = null;
+    doc.addEventListener(
+      "pointerdown",
+      (ev) => {
+        if (!ev.isPrimary) return;
+        start = { x: ev.clientX, y: ev.clientY };
+      },
+      { passive: true },
+    );
+    doc.addEventListener(
+      "pointercancel",
+      () => {
+        start = null;
+      },
+      { passive: true },
+    );
+    doc.addEventListener(
+      "pointerup",
+      (ev) => {
+        const s = start;
+        start = null;
+        if (!s) return;
+        if (
+          Math.abs(ev.clientX - s.x) > PAGINATE_TAP_SLOP ||
+          Math.abs(ev.clientY - s.y) > PAGINATE_TAP_SLOP
+        ) {
+          return;
+        }
+        const t = ev.target as Element | null;
+        if (t?.closest?.("a[href]")) return; // foliate handles in-book links
+        if (anySheetOpenRef.current) return; // sheets own taps while open
+        // A tap on an existing highlight/underline reopens its edit bubble via
+        // foliate's show-annotation (click seam) — never page-turn out from
+        // under it (D-73).
+        for (const a of annotationsRef.current) {
+          if (a.type !== "highlight" && a.type !== "underline") continue;
+          if (spineFromCfi(a.cfi) !== index) continue;
+          const range = cfiToRange(doc, a.cfi);
+          if (!range) continue;
+          for (const r of Array.from(range.getClientRects())) {
+            if (
+              ev.clientX >= r.left &&
+              ev.clientX <= r.right &&
+              ev.clientY >= r.top &&
+              ev.clientY <= r.bottom
+            ) {
+              return;
+            }
+          }
+        }
+        // Tap coords live in the iframe's viewport space — which for the
+        // paginator is the whole horizontal STRIP (pages laid out left→right,
+        // current page revealed by translating the iframe). Resolve zones in
+        // visible view space instead: shift by the iframe's live rect.
+        const frame =
+          doc.defaultView?.frameElement as HTMLIFrameElement | null;
+        const frameRect = frame?.getBoundingClientRect();
+        const viewRect = viewRef.current?.getBoundingClientRect();
+        if (!frameRect || !viewRect || viewRect.width <= 0) return;
+        const x = ev.clientX + frameRect.left - viewRect.left;
+        const zone = resolveTapZone(x, viewRect.width);
+        handleTapActionRef.current(
+          tapZoneAction(zone, fxlRef.current ? "paginate" : prefsRef.current.mode),
+        );
+      },
+      { passive: true },
+    );
+  }, []);
 
   const scheduleLocatorUpsert = useCallback(
     (detail: RelocateDetail) => {
@@ -966,6 +1073,7 @@ export function FoliateView({
       });
     }
   }, []);
+  handleTapActionRef.current = handleTapAction;
 
   /** Resolve TOC/search/CFI target to spine index for continuous scroll. */
   const resolveSpineIndex = useCallback((target: string): number | null => {
@@ -1747,6 +1855,7 @@ export function FoliateView({
           if (!doc || typeof index !== "number") return;
           sectionDocsRef.current.set(index, doc);
           attachPaginateSelection(doc, index);
+          attachPaginateTapZones(doc, index);
           replayPaginateSection(index);
         });
         view.addEventListener("draw-annotation", (event) => {
@@ -2184,15 +2293,6 @@ export function FoliateView({
             annotations={annos}
             onSelection={handleScrollSelection}
             onReady={handleStreamReady}
-          />
-        ) : null}
-        {status === "reading" && !useContinuousScroll ? (
-          <ReaderTapZones
-            enabled={!anySheetOpen}
-            // FXL always paginates; without this a persisted "scroll" pref would
-            // null out the overlay and taps/swipes couldn't turn the page.
-            mode={fxlLocked ? "paginate" : prefs.mode}
-            onAction={handleTapAction}
           />
         ) : null}
         {/* Selection action bubble — the ONLY pointer-events:auto overlay (D-74). */}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as CFI from "../vendor/foliate-js/epubcfi.js";
-import { cfiToRange, selectionCfi, spineFromCfi } from "./scroll-cfi";
+import { cfiToRange, sectionBaseCfi, selectionCfi, spineFromCfi } from "./scroll-cfi";
 
 // Minimal html>body>#text substrate — the REAL foliate fromRange/toRange do the
 // work (no filter passed, so NodeFilter is never touched). jsdom would only be
@@ -153,5 +153,21 @@ describe("spineFromCfi (last-resort spine resolution, C6)", () => {
     expect(spineFromCfi(null)).toBeNull();
     expect(spineFromCfi(undefined)).toBeNull();
     expect(spineFromCfi("")).toBeNull();
+  });
+});
+
+describe("sectionBaseCfi (foliate getCFI fallback parity)", () => {
+  it("prefers the section's own package CFI", () => {
+    expect(sectionBaseCfi({ index: 3, cfi: "epubcfi(/6/8)" })).toBe("epubcfi(/6/8)");
+  });
+
+  it("falls back to CFI.fake.fromIndex for sections without a package CFI (TXT)", () => {
+    for (const i of [0, 1, 9, 40]) {
+      expect(sectionBaseCfi({ index: i })).toBe(CFI.fake.fromIndex(i));
+    }
+  });
+
+  it("round-trips the spine through spineFromCfi", () => {
+    expect(spineFromCfi(sectionBaseCfi({ index: 9 }))).toBe(9);
   });
 });

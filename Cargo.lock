@@ -3196,6 +3196,7 @@ name = "pillowtome"
 version = "0.1.0"
 dependencies = [
  "android-native-keyring-store",
+ "blake3",
  "keyring",
  "keyring-core",
  "pillowtome-core",

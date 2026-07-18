@@ -11,7 +11,10 @@
 //!   born from, jailed under the configured root (T-07-00-01).
 //! - [`merge`] — the deterministic merge engine: set-union drivers that never
 //!   drop a single-side record, tombstone remove-wins, per-record `hash_algo`.
+//! - [`fileplane`] — the SYNC-04 chunk planner: threshold/chunk arithmetic,
+//!   zero-padded chunk names, resume diff, 24h expiry, blake3 == work_id gate.
 
+pub mod fileplane;
 pub mod merge;
 pub mod model;
 pub mod remote;

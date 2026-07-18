@@ -29,11 +29,15 @@ tauri-plugin-opener = "=2.5.4"
 reqwest_dav = "=0.3.3"
 # Direct edge on the same locked reqwest 0.13.4 reqwest_dav resolves (needed to
 # name `reqwest::Client`/`reqwest::Url` for the injected agent, 07-01 Task 2) —
-# dep edge only, no new package, no second version (D-13).
-reqwest = "=0.13.4"
+# dep edge only, no new package, no second version (D-13). The `stream` feature
+# (07-03) enables `Body::from(tokio::fs::File)` so book uploads stream from disk
+# instead of buffering — feature edge only, still the same locked crate.
+reqwest = { version = "=0.13.4", features = ["stream"] }
 # tokio `time` feature for the 503/429 exponential backoff (07-01 Task 2) — same
-# locked 1.52.3 as the dev-dependency; feature edge only.
-tokio = { version = "=1.52.3", features = ["time"] }
+# locked 1.52.3 as the dev-dependency; feature edge only. 07-03 adds `fs` +
+# `io-util` for the file plane (streamed upload bodies, bounded chunk reads,
+# .part appends, 64KB hash loop) — feature edges only, no new package (D-13).
+tokio = { version = "=1.52.3", features = ["time", "fs", "io-util"] }
 # Shared SQLite pool access for sync_config (07-01 Task 4): promoted from
 # dev-dependencies. Same sqlx 0.8.6 tauri-plugin-sql resolves — the plugin's
 # `DbInstances` pool is reused, no second SQLite binding (Pitfall 6).
@@ -47,6 +51,10 @@ serde_json = "=1.0.150"
 # State-plane ids (07-02): tmp-<uuid> publish names, 冲突副本 copy ids, placeholder
 # item_ids, change_log row ids. Same locked 1.23.4 core already pins — dep edge only.
 uuid = { version = "=1.23.4", features = ["v4"] }
+# Download integrity gate (07-03, D-100): streamed blake3 of the received .part
+# must equal the work_id (work_id IS the blake3 hex). Same locked 1.8.5
+# pillowtome-core already pins — dep edge only, zero new packages (D-13).
+blake3 = "=1.8.5"
 
 # Android SAF (FND-03): picker + persistable URI grants. Audited + exact-pinned
 # per docs/decisions/DEC-004-android-saf-mechanism.md (=28.2.2, the soaked

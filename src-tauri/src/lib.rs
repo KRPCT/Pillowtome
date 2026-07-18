@@ -187,6 +187,8 @@ pub fn run() {
             sync::commands::sync_revert_jump,
             sync::commands::sync_now,
             sync::commands::sync_status,
+            sync::commands::sync_download_book,
+            sync::commands::sync_set_file_sync,
         ])
         .setup(|app| {
             // Materialize the embedded sample to a real filesystem path and

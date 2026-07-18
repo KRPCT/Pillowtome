@@ -114,7 +114,8 @@ pub fn classify_http_status(status: u16) -> Option<SyncError> {
 
 /// Extract the server-returned HTTP status from a `reqwest_dav` error, if the
 /// failure got as far as a response (non-2xx on the high-level methods).
-fn http_status_of(err: &reqwest_dav::Error) -> Option<u16> {
+/// `pub(crate)` since 07-03's file plane classifies PROPFIND 404/405 itself.
+pub(crate) fn http_status_of(err: &reqwest_dav::Error) -> Option<u16> {
     match err {
         reqwest_dav::Error::Decode(reqwest_dav::DecodeError::StatusMismatched(e)) => {
             Some(e.response_code)

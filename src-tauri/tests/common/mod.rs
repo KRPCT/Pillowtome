@@ -182,6 +182,10 @@ pub struct JournalEntry {
     pub if_match: Option<String>,
     pub if_none_match: Option<String>,
     pub overwrite: Option<String>,
+    /// 07-03 file-plane assertions: `Range` on download GETs, `OC-Total-Length`
+    /// on Nextcloud chunk PUTs / the assembly MOVE.
+    pub range: Option<String>,
+    pub oc_total_length: Option<String>,
 }
 
 #[derive(Default)]
@@ -274,7 +278,9 @@ fn header<'a>(request: &'a Request, name: &str) -> Option<&'a str> {
     request.headers.get(name).and_then(|v| v.to_str().ok())
 }
 
-fn journal(request: &Request, path: &str) -> JournalEntry {
+/// Build one journal entry from a request (pub so file-plane tests can journal
+/// short-circuited failed attempts in their own responders).
+pub fn journal(request: &Request, path: &str) -> JournalEntry {
     JournalEntry {
         method: request.method.as_str().to_string(),
         path: path.to_string(),
@@ -282,7 +288,55 @@ fn journal(request: &Request, path: &str) -> JournalEntry {
         if_match: header(request, "if-match").map(str::to_owned),
         if_none_match: header(request, "if-none-match").map(str::to_owned),
         overwrite: header(request, "overwrite").map(str::to_owned),
+        range: header(request, "range").map(str::to_owned),
+        oc_total_length: header(request, "oc-total-length").map(str::to_owned),
     }
+}
+
+/// Parse a `bytes=A-B` / `bytes=A-` range against a body length → inclusive
+/// `(start, end)`. `None` for unsatisfiable/malformed ranges.
+fn parse_range(range: &str, len: usize) -> Option<(usize, usize)> {
+    let spec = range.strip_prefix("bytes=")?;
+    let (a, b) = spec.split_once('-')?;
+    let start: usize = a.parse().ok()?;
+    if start >= len {
+        return None;
+    }
+    let end = if b.is_empty() {
+        len - 1
+    } else {
+        b.parse::<usize>().ok()?.min(len - 1)
+    };
+    if end < start {
+        return None;
+    }
+    Some((start, end))
+}
+
+/// Assemble a Nextcloud chunk v2 `.file` source: the upload dir's zero-padded
+/// integer chunks concatenated in name order (what real Nextcloud does at MOVE
+/// time). `None` when the dir holds no chunks.
+fn assemble_chunks(files: &BTreeMap<String, FakeFile>, dot_file: &str) -> Option<Vec<u8>> {
+    let dir = dot_file.strip_suffix("/.file")?;
+    let prefix = format!("{dir}/");
+    let mut chunks: Vec<&String> = files
+        .keys()
+        .filter(|p| {
+            p.starts_with(&prefix)
+                && p[prefix.len()..]
+                    .bytes()
+                    .all(|b| b.is_ascii_digit())
+        })
+        .collect();
+    if chunks.is_empty() {
+        return None;
+    }
+    chunks.sort();
+    let mut body = Vec::new();
+    for chunk in chunks {
+        body.extend_from_slice(&files[chunk].body);
+    }
+    Some(body)
 }
 
 impl Respond for FakeDav {
@@ -336,9 +390,25 @@ impl Respond for FakeDav {
                     .set_body_string(multistatus(&entries))
             }
             "GET" => match st.files.get(&path) {
-                Some(file) => ResponseTemplate::new(200)
-                    .insert_header("etag", file.etag.as_str())
-                    .set_body_bytes(file.body.clone()),
+                Some(file) => {
+                    // 07-03: honor Range like a real DAV server (206 + Content-Range).
+                    if let Some(range) = header(request, "range") {
+                        return match parse_range(range, file.body.len()) {
+                            Some((start, end)) => ResponseTemplate::new(206)
+                                .insert_header("etag", file.etag.as_str())
+                                .insert_header("accept-ranges", "bytes")
+                                .insert_header(
+                                    "content-range",
+                                    format!("bytes {start}-{end}/{}", file.body.len()),
+                                )
+                                .set_body_bytes(file.body[start..=end].to_vec()),
+                            None => ResponseTemplate::new(416),
+                        };
+                    }
+                    ResponseTemplate::new(200)
+                        .insert_header("etag", file.etag.as_str())
+                        .set_body_bytes(file.body.clone())
+                }
                 None => ResponseTemplate::new(404),
             },
             "PUT" => {
@@ -367,9 +437,19 @@ impl Respond for FakeDav {
                 let dest_path = reqwest::Url::parse(&destination)
                     .map(|u| u.path().to_string())
                     .unwrap_or(destination);
-                if !st.files.contains_key(&path) {
+                // 07-03: a Nextcloud chunk v2 assembly — MOVE of `<dir>/.file`
+                // synthesizes the source from the dir's stored chunks (the
+                // .file itself is virtual on Nextcloud, never a real object).
+                let source_body = if let Some(file) = st.files.get(&path) {
+                    file.body.clone()
+                } else if path.ends_with("/.file") {
+                    match assemble_chunks(&st.files, &path) {
+                        Some(body) => body,
+                        None => return ResponseTemplate::new(404),
+                    }
+                } else {
                     return ResponseTemplate::new(404);
-                }
+                };
                 // Conditional headers apply to the DESTINATION.
                 if header(request, "if-none-match") == Some("*") && st.files.contains_key(&dest_path)
                 {
@@ -384,12 +464,12 @@ impl Respond for FakeDav {
                         return ResponseTemplate::new(412);
                     }
                 }
-                let src = st.files.remove(&path).expect("source checked above");
+                st.files.remove(&path);
                 let etag = st.next_etag();
                 st.files.insert(
                     dest_path,
                     FakeFile {
-                        body: src.body,
+                        body: source_body,
                         etag: etag.clone(),
                     },
                 );

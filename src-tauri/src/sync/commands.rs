@@ -26,6 +26,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::credentials::{self, PublicSyncConfig};
+use super::fileplane;
 use super::reconcile::{self, UndoMap};
 use super::transport::{self, TransportConfig};
 use super::{
@@ -384,7 +385,6 @@ pub(crate) async fn emit_sync_status(app: &AppHandle) {
 /// downloads/uploads percent map (percent ≥ 100 completes the transfer and
 /// removes the entry), then re-emit the unified event. Never call
 /// `app.emit("sync-status", …)` from anywhere else.
-#[allow(dead_code)] // Consumed by 07-03's file plane; engine-owned today.
 pub(crate) async fn report_transfer_progress(
     app: &AppHandle,
     kind: TransferKind,
@@ -657,6 +657,148 @@ async fn sync_now_inner(app: &AppHandle) -> Result<(), SyncError> {
 #[tauri::command]
 pub async fn sync_status(app: AppHandle) -> Result<SyncStatusPayload, String> {
     status_payload(&app).await
+}
+
+// ---------------------------------------------------------------------------
+// Part 3 (07-03): file plane — 同步此书 opt-in flag + on-demand book download.
+// ---------------------------------------------------------------------------
+
+/// Bridge a file-plane progress report into the engine's transfer maps — the
+/// SOLE sync-status emitter is `emit_sync_status`; this is the file plane's
+/// only channel into it. Reports flow through an unbounded channel drained by
+/// one task so ordering is preserved, while the sink itself stays a plain
+/// sync closure (fileplane remains Tauri-free and wiremock-testable). Terminal
+/// reports (success: `done >= total`; failure: a message is attached) map to
+/// percent 100, which REMOVES the entry — the placeholder card leaves its
+/// 下载中 {n}% state (research Q3) and either opens or returns to 可下载.
+fn progress_bridge(app: &AppHandle) -> impl Fn(fileplane::FileProgress) + Send + Sync {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<fileplane::FileProgress>();
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(p) = rx.recv().await {
+            let kind = match p.direction {
+                fileplane::FileDirection::Download => TransferKind::Download,
+                fileplane::FileDirection::Upload => TransferKind::Upload,
+            };
+            let percent = if p.message.is_some() || (p.total > 0 && p.done >= p.total) {
+                100.0 // terminal — removes the transfer entry
+            } else if p.total > 0 {
+                (p.done as f64 / p.total as f64) * 100.0
+            } else {
+                0.0
+            };
+            report_transfer_progress(&app, kind, &p.work_id, percent).await;
+        }
+    });
+    move |p| {
+        let _ = tx.send(p);
+    }
+}
+
+/// The app-owned `books/` subdirectory under `app_data_dir()`, created if
+/// missing — mirrors `covers::covers_dir` exactly. Downloaded books land here
+/// as `{work_id}.{ext}` (V5: local names derive from work_id, never remote
+/// strings).
+fn books_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| SyncError::Internal.user_message().to_string())?
+        .join("books");
+    std::fs::create_dir_all(&dir).map_err(|_| SyncError::Internal.user_message().to_string())?;
+    Ok(dir)
+}
+
+/// 下载此书 (D-99): fetch a peer-synced book file on demand. Reads the
+/// `sync_file_state` DISCOVERY row written by 07-02's pull-merge
+/// (`direction='download'`, remote_path/size populated); a missing row means
+/// the peer never enabled file sync for this book. The row is consumed —
+/// overwritten with live transfer state as the download proceeds, cleared on
+/// success. Returns `{ workId, sourceId, localPath }`; 07-04's onDownload
+/// then hands `localPath` to `ingestPathToLibrary` (D-100).
+#[tauri::command]
+pub async fn sync_download_book(
+    app: AppHandle,
+    work_id: String,
+) -> Result<fileplane::DownloadedBook, String> {
+    let pool = sqlite_pool(&app)
+        .await
+        .map_err(|e| e.user_message().to_string())?;
+    let row: Option<(Option<i64>, Option<String>)> = sqlx::query_as(
+        "SELECT size, remote_path FROM sync_file_state \
+         WHERE work_id = $1 AND direction = 'download'",
+    )
+    .bind(&work_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|_| SyncError::Internal.user_message().to_string())?;
+    let remote_path = row
+        .and_then(|(size, remote_path)| remote_path.map(|path| (size, path)))
+        .and_then(|(size, path)| {
+            if path.is_empty() {
+                None
+            } else {
+                Some((size, path))
+            }
+        })
+        .ok_or("该书没有可下载的远端文件（对端未开启文件同步）")?;
+    let (size, remote_path) = remote_path;
+    let expected_size = size.unwrap_or(0).max(0) as u64;
+
+    let Some(cfg) = reconcile::load_sync_config(&pool)
+        .await
+        .map_err(|e| e.user_message().to_string())?
+    else {
+        return Err(SyncError::Internal.user_message().to_string());
+    };
+    let client = dav_client_from_row(&cfg).map_err(|e| e.user_message().to_string())?;
+    let ctx = fileplane::FilePlaneCtx {
+        agent: client.agent.clone(),
+        server_dav_root: client.host.clone(),
+        username: cfg.username.clone(),
+        remote_root: cfg.remote_path.clone(),
+        dav: client,
+    };
+    let books_dir = books_dir(&app)?;
+    let registry = app.state::<crate::storage::SourceRegistry>();
+    let report = progress_bridge(&app);
+    fileplane::download_book(
+        &ctx,
+        &pool,
+        &report,
+        &registry,
+        &books_dir,
+        &work_id,
+        &remote_path,
+        expected_size,
+    )
+    .await
+    .map_err(|e| e.user_message().to_string())
+}
+
+/// 同步此书 (D-98): the per-book opt-in flag — the single point that flips
+/// `library_item.file_sync_enabled`. The flag rides the next state-plane push
+/// (07-02's builder reads it); upload scheduling on enable is 07-04's
+/// trigger, which consumes [`fileplane::upload_book`].
+#[tauri::command]
+pub async fn sync_set_file_sync(
+    app: AppHandle,
+    work_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let pool = sqlite_pool(&app)
+        .await
+        .map_err(|e| e.user_message().to_string())?;
+    let result = sqlx::query("UPDATE library_item SET file_sync_enabled = $1 WHERE work_id = $2")
+        .bind(i64::from(enabled))
+        .bind(&work_id)
+        .execute(&pool)
+        .await
+        .map_err(|_| SyncError::Internal.user_message().to_string())?;
+    if result.rows_affected() == 0 {
+        return Err("未找到该书籍".to_string());
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@
 
 pub mod commands;
 pub mod credentials;
+pub mod fileplane;
 pub mod reconcile;
 pub mod transport;
 

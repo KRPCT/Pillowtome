@@ -169,15 +169,9 @@ pub struct DownloadedBook {
 /// Apply the client's configured auth to a raw-agent request. reqwest_dav only
 /// authenticates its own high-level methods (`start_request`); the raw agent
 /// sends nothing unless we add it — every file-plane request goes through this.
+/// Thin wrapper over the single implementation in [`transport::authed`].
 fn authed(ctx: &FilePlaneCtx, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    match &ctx.dav.auth {
-        reqwest_dav::Auth::Basic(username, password) => {
-            builder.basic_auth(username.clone(), Some(password.clone()))
-        }
-        // Digest is negotiated by reqwest_dav's high-level methods only; the
-        // configured mode is always Basic (D-96). Anonymous sends nothing.
-        _ => builder,
-    }
+    transport::authed(&ctx.dav, builder)
 }
 
 /// Map a reqwest send-stage failure through 07-01's single classifier, then

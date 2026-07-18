@@ -879,3 +879,65 @@ fn config_row_named(device_name: &str) -> pillowtome_lib::sync::reconcile::SyncC
 /// Keep the pool type import used (doc linkage for the harness).
 #[allow(dead_code)]
 fn _pool_type_witness(_: &SqlitePool) {}
+
+// ---------------------------------------------------------------------------
+// Post-07-03 auth fix — the fake now 401s any request without the configured
+// Basic credentials (every test in this file runs against that gate), and this
+// test asserts on the wire that the previously-bare raw-agent sites (state
+// tmp PUT, state MOVE, device-record tmp PUT, device-record MOVE) carry it.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn sync_push_raw_agent_requests_carry_basic_auth() {
+    let pool = fresh_pool().await;
+    seed_device(&pool, "device-a").await;
+    seed_library_book(&pool, "w1", "书名一", 0, 0, 1111).await;
+    let (server, fake) = start_dav().await;
+    let cfg = config_row(&server, "本机");
+    let client = dav_client(&server);
+    let undo = new_undo_map();
+
+    reconcile_push(&pool, &client, &cfg, &undo)
+        .await
+        .expect("push succeeds against the auth-enforcing fake");
+
+    let st = fake.state.lock().unwrap();
+    let puts = st.journal_entries("PUT");
+    let state_put = puts
+        .iter()
+        .find(|e| e.path.starts_with("/pillowtome/state/device-a.json.tmp-"))
+        .expect("state tmp PUT journaled");
+    assert_eq!(
+        state_put.authorization.as_deref(),
+        Some(EXPECTED_BASIC_AUTH),
+        "state tmp PUT must carry Basic auth"
+    );
+    let device_put = puts
+        .iter()
+        .find(|e| e.path.starts_with("/pillowtome/devices/device-a.json.tmp-"))
+        .expect("device-record tmp PUT journaled");
+    assert_eq!(
+        device_put.authorization.as_deref(),
+        Some(EXPECTED_BASIC_AUTH),
+        "device-record tmp PUT must carry Basic auth"
+    );
+    let moves = st.journal_entries("MOVE");
+    assert!(moves.len() >= 2, "state MOVE + device-record MOVE");
+    for mv in &moves {
+        assert_eq!(
+            mv.authorization.as_deref(),
+            Some(EXPECTED_BASIC_AUTH),
+            "MOVE {} must carry Basic auth",
+            mv.path
+        );
+    }
+    // Blanket check: EVERY request the push made — high-level (authed
+    // internally by reqwest_dav) or raw-agent (authed via transport::authed) —
+    // carried the configured credentials.
+    assert!(
+        st.journal
+            .iter()
+            .all(|e| e.authorization.as_deref() == Some(EXPECTED_BASIC_AUTH)),
+        "no request may go out unauthenticated"
+    );
+}

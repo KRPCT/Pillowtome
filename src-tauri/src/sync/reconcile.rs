@@ -35,7 +35,7 @@ use reqwest_dav::types::list_cmd::ListEntity;
 use sqlx::SqlitePool;
 
 use super::now_ms;
-use super::transport::{classify, classify_http_status, join_url, with_rate_limit_retry};
+use super::transport::{authed, classify, classify_http_status, join_url, with_rate_limit_retry};
 use super::SyncError;
 
 /// Body cap for a pulled peer state file (T-07-02-02): anything larger is
@@ -517,10 +517,10 @@ pub async fn push_state_file(
 
     // 1) tmp PUT — a crashed push orphans only a tmp file; readers never match
     //    tmp names (Pitfall 5). reqwest_dav's high-level put() cannot carry
-    //    headers, so this goes through the public agent (Pattern 3).
-    let resp = client
-        .agent
-        .put(&tmp_url)
+    //    headers, so this goes through the public agent (Pattern 3) — with
+    //    auth attached explicitly: the raw agent sends no Authorization by
+    //    itself (see transport::authed).
+    let resp = authed(client, client.agent.put(&tmp_url))
         .header("Content-Type", "application/json")
         .body(body.to_vec())
         .send()
@@ -534,9 +534,7 @@ pub async fn push_state_file(
     // 2) Conditional MOVE publish.
     let method =
         reqwest::Method::from_bytes(b"MOVE").map_err(|_| SyncError::Internal)?;
-    let mut mv = client
-        .agent
-        .request(method, &tmp_url)
+    let mut mv = authed(client, client.agent.request(method, &tmp_url))
         .header("Destination", &state_url)
         .header("Overwrite", "T");
     mv = match last_etag {
@@ -699,9 +697,7 @@ pub async fn upsert_device_record(
     let tmp_rel = format!("{rel}.tmp-{}", uuid::Uuid::new_v4());
     let url = join_url(&client.host, &rel);
     let tmp_url = join_url(&client.host, &tmp_rel);
-    let resp = client
-        .agent
-        .put(&tmp_url)
+    let resp = authed(client, client.agent.put(&tmp_url))
         .header("Content-Type", "application/json")
         .body(body)
         .send()
@@ -712,9 +708,7 @@ pub async fn upsert_device_record(
         return Err(classify_http_status(code).unwrap_or(SyncError::Internal));
     }
     let method = reqwest::Method::from_bytes(b"MOVE").map_err(|_| SyncError::Internal)?;
-    let resp = client
-        .agent
-        .request(method, &tmp_url)
+    let resp = authed(client, client.agent.request(method, &tmp_url))
         .header("Destination", &url)
         .header("Overwrite", "T")
         .send()

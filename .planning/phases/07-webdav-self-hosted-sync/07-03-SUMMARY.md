@@ -153,6 +153,16 @@ None in the shipped paths. Deliberate seams for 07-04: `abort_upload` is impleme
 - Forbidden diffs empty: `src-tauri/src/migrations.rs`, `core/Cargo.toml`, `src-tauri/capabilities/*` — byte-identical. Cargo.lock: +1 line, edge only (D-13).
 - Device-visible follow-up (phase gate, 07-04 owns): AVD production APK — download a >10MB book via placeholder card, confirm 下载中 {n}%, resume after force-stop mid-download, open post-verification.
 
+## Auth fix (post-07-03)
+
+The "Upstream Finding" from this summary is now FIXED. Root cause (verified against vendored reqwest_dav 0.3.3): `apply_authentication` runs only inside `start_request`, so the public `client.agent` sends no `Authorization` header — every raw-agent request in the phase went out bare and would have 401'd against any real authenticated server.
+
+- **Central helper:** `pub(crate) fn authed(client: &reqwest_dav::Client, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder` in `src-tauri/src/sync/transport.rs` — attaches Basic from `client.auth`; fileplane's local `authed` now delegates to it (single implementation).
+- **Sites fixed:** `transport.rs:264` `put_manifest_if_absent` manifest PUT; `reconcile.rs:523` `push_state_file` state tmp PUT + `:537` conditional MOVE; `reconcile.rs:700` `upsert_device_record` tmp PUT + `:711` MOVE. File-plane sites were already covered by the fileplane helper.
+- **Proof:** the shared fake (`tests/common/mod.rs`) is now auth-ENFORCING — `EXPECTED_BASIC_AUTH = "Basic dXNlcjpwYXNz"` (base64 `user:pass`), any request without it gets 401, and `JournalEntry.authorization` records what arrived. Every reconcile/e2e/fileplane test therefore runs against the gate (zero regressions ⇒ every request, high-level or raw, is authenticated). Explicit header-arrival assertions: manifest PUT matcher extended in `tests/sync_transport.rs::conditional_put_carries_if_none_match_star_to_the_wire`; new `tests/sync_reconcile.rs::sync_push_raw_agent_requests_carry_basic_auth` asserts state tmp PUT, state MOVE, device-record tmp PUT + MOVE, plus a blanket all-requests check.
+- **Digest limitation (documented in `transport::authed`'s comment):** raw-agent requests can only carry Basic — the Digest challenge handshake lives inside reqwest_dav's high-level methods and cannot be replayed raw. A Digest-only server answers these requests 401, surfacing the classified 认证失败，请检查用户名和应用密码 copy; Basic over TLS is the configured/recommended mode (D-96) and the D-94 real-server matrix covers the Digest class.
+- **Verification after the fix:** `cargo test -p pillowtome sync` — 50/50 green (incl. the new auth test); `cargo test -p pillowtome --test sync_transport` — 7/7 green; `cargo test --workspace` — exit 0, all 11 suites green (170 tests), zero warnings. All under `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`.
+
 ---
 *Phase: 07-webdav-self-hosted-sync*
 *Completed: 2026-07-18*

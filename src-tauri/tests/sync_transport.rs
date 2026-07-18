@@ -113,6 +113,10 @@ async fn conditional_put_carries_if_none_match_star_to_the_wire() {
     Mock::given(method("PUT"))
         .and(path("/pillowtome/manifest.json"))
         .and(header("If-None-Match", "*"))
+        // Post-07-03: the raw agent must also carry the configured Basic
+        // credentials (reqwest_dav only auths its own high-level methods).
+        // Without the header this mock stops matching and the test fails.
+        .and(header("Authorization", "Basic dXNlcjpwYXNz"))
         .respond_with(ResponseTemplate::new(201))
         .expect(1)
         .mount(&server)

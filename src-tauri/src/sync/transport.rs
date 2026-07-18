@@ -220,6 +220,32 @@ pub(crate) fn join_url(host: &str, rel: &str) -> String {
     format!("{}/{}", host.trim_end_matches('/'), rel.trim_start_matches('/'))
 }
 
+/// Attach the client's configured auth to a RAW-agent request. reqwest_dav
+/// authenticates only its own high-level methods (`start_request` calls
+/// `apply_authentication`); the public `agent` sends NO Authorization header
+/// by itself — verified against vendored reqwest_dav 0.3.3. Every raw request
+/// (conditional manifest PUT, state tmp PUT / MOVE publish, device-record
+/// write, file-plane chunk/range transfers) must pass through here.
+///
+/// LIMITATION (Digest-only servers): a raw-agent request can only carry
+/// Basic — the Digest challenge handshake lives inside reqwest_dav's
+/// high-level methods and cannot be replayed here. Against a Digest-only
+/// server these requests answer 401 and surface the classified 认证失败 copy;
+/// Basic over TLS is the configured/recommended mode (D-96) and the D-94
+/// real-server matrix covers the Digest server class.
+pub(crate) fn authed(
+    client: &reqwest_dav::Client,
+    builder: reqwest::RequestBuilder,
+) -> reqwest::RequestBuilder {
+    match &client.auth {
+        reqwest_dav::Auth::Basic(username, password) => {
+            builder.basic_auth(username.clone(), Some(password.clone()))
+        }
+        // Anonymous sends nothing; Digest cannot be negotiated raw (above).
+        _ => builder,
+    }
+}
+
 /// Create `{root}/manifest.json` with `If-None-Match: *` — via `client.agent`,
 /// NEVER the high-level `put()` which cannot carry custom headers (Pitfall 2).
 ///
@@ -235,9 +261,7 @@ pub async fn put_manifest_if_absent(
         &client.host,
         &format!("{}/manifest.json", root.trim_end_matches('/')),
     );
-    let resp = client
-        .agent
-        .put(url)
+    let resp = authed(client, client.agent.put(url))
         .header("If-None-Match", "*")
         .header("Content-Type", "application/json")
         .body(MANIFEST_BODY.to_vec())

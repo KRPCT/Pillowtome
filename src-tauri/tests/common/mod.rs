@@ -173,6 +173,13 @@ pub struct FakeFile {
     pub etag: String,
 }
 
+/// The exact Authorization value the fake demands on EVERY request
+/// (post-07-03 auth fix): Basic with base64 of `user:pass` — the credentials
+/// [`dav_client`] configures. A request without it answers 401, exactly like
+/// a real authenticated Nextcloud/坚果云 — this is what exposed the bare
+/// raw-agent sites and now guards against their return.
+pub const EXPECTED_BASIC_AUTH: &str = "Basic dXNlcjpwYXNz";
+
 /// One journaled request (only the fields the reconcile engine drives).
 #[derive(Debug, Clone)]
 pub struct JournalEntry {
@@ -186,6 +193,9 @@ pub struct JournalEntry {
     /// on Nextcloud chunk PUTs / the assembly MOVE.
     pub range: Option<String>,
     pub oc_total_length: Option<String>,
+    /// Post-07-03: the Authorization header as received (must equal
+    /// [`EXPECTED_BASIC_AUTH`] — the fake 401s otherwise).
+    pub authorization: Option<String>,
 }
 
 #[derive(Default)]
@@ -290,6 +300,7 @@ pub fn journal(request: &Request, path: &str) -> JournalEntry {
         overwrite: header(request, "overwrite").map(str::to_owned),
         range: header(request, "range").map(str::to_owned),
         oc_total_length: header(request, "oc-total-length").map(str::to_owned),
+        authorization: header(request, "authorization").map(str::to_owned),
     }
 }
 
@@ -345,6 +356,13 @@ impl Respond for FakeDav {
         let path = request.url.path().to_string();
         let mut st = self.state.lock().unwrap();
         st.journal.push(journal(request, &path));
+        // Auth gate (post-07-03 fix): behave like a real authenticated DAV
+        // server — every request must carry the configured Basic credentials.
+        // Any bare raw-agent request dies here with 401 instead of silently
+        // succeeding, which is exactly the regression this guards.
+        if header(request, "authorization") != Some(EXPECTED_BASIC_AUTH) {
+            return ResponseTemplate::new(401);
+        }
         match method {
             "PROPFIND" => {
                 let norm = path.trim_end_matches('/').to_string();

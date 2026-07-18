@@ -27,6 +27,17 @@ tauri-plugin-opener = "=2.5.4"
 # WebDAV transport (SYNC-01..05): high-level PROPFIND/GET/PUT/MKCOL; conditional
 # headers / chunking / Range go through its public `agent` (07-RESEARCH Pattern 3).
 reqwest_dav = "=0.3.3"
+# Direct edge on the same locked reqwest 0.13.4 reqwest_dav resolves (needed to
+# name `reqwest::Client`/`reqwest::Url` for the injected agent, 07-01 Task 2) —
+# dep edge only, no new package, no second version (D-13).
+reqwest = "=0.13.4"
+# tokio `time` feature for the 503/429 exponential backoff (07-01 Task 2) — same
+# locked 1.52.3 as the dev-dependency; feature edge only.
+tokio = { version = "=1.52.3", features = ["time"] }
+# Shared SQLite pool access for sync_config (07-01 Task 4): promoted from
+# dev-dependencies. Same sqlx 0.8.6 tauri-plugin-sql resolves — the plugin's
+# `DbInstances` pool is reused, no second SQLite binding (Pitfall 6).
+sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "sqlite"] }
 # OS keychain for the WebDAV password (SYNC-01 — password never in SQLite/IPC/logs).
 keyring = { version = "=4.1.5", features = ["android-native-keyring-store"] }
 
@@ -38,13 +49,21 @@ keyring = { version = "=4.1.5", features = ["android-native-keyring-store"] }
 # #3). Target-gated: desktop never links this crate.
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-android-fs = "=28.2.2"
+# SYNC-01 Android keychain (07-01 grounding discovery): keyring 4.1.5's v1 facade
+# registers NO store on Android (`Entry::new` would fail `NoDefaultStore`), so
+# sync/credentials.rs registers the named store as the keyring_core default
+# itself. Both crates are already in Cargo.lock via keyring's
+# android-native-keyring-store feature — dep edges only, no new packages (D-13).
+android-native-keyring-store = "=1.0.0"
+keyring-core = "=1.0.0"
 
 [dev-dependencies]
-# Off-device migration smoke test only. Pinned to the SAME sqlx the
-# tauri-plugin-sql plugin resolves (0.8.6 -> libsqlite3-sys 0.30.1) so no second
-# SQLite binding is linked (Pitfall 6 / single binding). tokio drives the async
-# sqlx test; the same 1.52.3 is already in the workspace Cargo.lock via sqlx.
-sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "sqlite"] }
+# tokio drives the async sqlx/wiremock tests (macros + rt); the same 1.52.3 is
+# also a main dependency with the `time` feature (sync backoff) — one crate,
+# unified features.
 tokio = { version = "=1.52.3", default-features = false, features = ["macros", "rt"] }
 # Off-device WebDAV transport test server (Wave 1 transport tests; 07-RESEARCH Don't Hand-Roll).
 wiremock = "=0.6.5"
+# serde_json for IPC-shape (de)serialization unit tests (07-01 Task 4) — the
+# version already pinned in Cargo.lock; no new package.
+serde_json = "=1.0.150"

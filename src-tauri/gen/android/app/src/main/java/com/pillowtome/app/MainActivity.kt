@@ -10,6 +10,10 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    // Initialize ndk-context for android-native-keyring-store (SYNC-01): tao
+    // 0.35.x no longer does this (tauri-apps/tao#1220), and the keychain is
+    // only ever used later via IPC, so post-super placement is safe.
+    io.crates.keyring.Keyring.initializeNdkContext(applicationContext)
   }
 
   // Reparent the RustWebView into a FrameLayout that suppresses the floating

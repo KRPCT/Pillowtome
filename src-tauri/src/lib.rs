@@ -11,6 +11,7 @@ pub mod fonts;
 pub mod migrations;
 pub mod protocol;
 pub mod storage;
+pub mod sync;
 
 use tauri::http::header;
 use tauri::Manager;
@@ -172,6 +173,9 @@ pub fn run() {
             commands::is_android,
             fonts::import_font,
             fonts::remove_font,
+            sync::commands::sync_get_config,
+            sync::commands::sync_test_and_save,
+            sync::commands::sync_disconnect,
         ])
         .setup(|app| {
             // Materialize the embedded sample to a real filesystem path and

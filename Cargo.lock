@@ -3195,10 +3195,14 @@ dependencies = [
 name = "pillowtome"
 version = "0.1.0"
 dependencies = [
+ "android-native-keyring-store",
  "keyring",
+ "keyring-core",
  "pillowtome-core",
+ "reqwest",
  "reqwest_dav",
  "serde",
+ "serde_json",
  "sqlx",
  "tauri",
  "tauri-build",

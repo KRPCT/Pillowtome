@@ -111,6 +111,12 @@ pub fn run() {
     builder
         // The registry is the sole authority on which bytes an id may read.
         .manage(SourceRegistry::new())
+        // WebDAV sync session state (07-02): D-92 undo store, engine-owned
+        // transfer percent maps (07-03 reports into them), and the in-memory
+        // manual-sync re-entry guard. All session-scoped, never persisted.
+        .manage(sync::SyncUndoMap::default())
+        .manage(sync::SyncProgressMaps::default())
+        .manage(sync::SyncEngineState::default())
         // pillow:// — book bytes stream here, never over IPC (D-06). Range-aware
         // 200/206/416; ids scope-guarded (T-01-01). A registered `content://`
         // handle is read via the SAF plugin (in Rust) and served from memory.
@@ -176,6 +182,11 @@ pub fn run() {
             sync::commands::sync_get_config,
             sync::commands::sync_test_and_save,
             sync::commands::sync_disconnect,
+            sync::commands::sync_book_opened,
+            sync::commands::sync_book_closed,
+            sync::commands::sync_revert_jump,
+            sync::commands::sync_now,
+            sync::commands::sync_status,
         ])
         .setup(|app| {
             // Materialize the embedded sample to a real filesystem path and
@@ -195,6 +206,19 @@ pub fn run() {
             // reopens after a restart without re-granting (FND-03).
             #[cfg(target_os = "android")]
             rehydrate_imports(app.handle());
+
+            // A4 runtime probe (07-02): the shared plugin pool only exists
+            // after the frontend Database.load — retry briefly, then log the
+            // verdict so a desktop run proves the Rust-side pool wiring (the
+            // log lives here, outside sync/, to keep that module println-free).
+            let probe_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if sync::probe_shared_pool(&probe_handle).await {
+                    eprintln!("[sync] shared pool acquired");
+                } else {
+                    eprintln!("[sync] shared pool NOT acquired within probe window");
+                }
+            });
 
             Ok(())
         })

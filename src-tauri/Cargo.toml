@@ -40,6 +40,13 @@ tokio = { version = "=1.52.3", features = ["time"] }
 sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "sqlite"] }
 # OS keychain for the WebDAV password (SYNC-01 — password never in SQLite/IPC/logs).
 keyring = { version = "=4.1.5", features = ["android-native-keyring-store"] }
+# State-plane JSON (07-02): DeviceStateFile (de)serialization lives in src-tauri —
+# core carries no serde_json runtime dep. Same pin as the locked dev edge; one
+# manifest entry, promoted from dev-dependencies (no new package, D-13).
+serde_json = "=1.0.150"
+# State-plane ids (07-02): tmp-<uuid> publish names, 冲突副本 copy ids, placeholder
+# item_ids, change_log row ids. Same locked 1.23.4 core already pins — dep edge only.
+uuid = { version = "=1.23.4", features = ["v4"] }
 
 # Android SAF (FND-03): picker + persistable URI grants. Audited + exact-pinned
 # per docs/decisions/DEC-004-android-saf-mechanism.md (=28.2.2, the soaked
@@ -64,6 +71,3 @@ keyring-core = "=1.0.0"
 tokio = { version = "=1.52.3", default-features = false, features = ["macros", "rt"] }
 # Off-device WebDAV transport test server (Wave 1 transport tests; 07-RESEARCH Don't Hand-Roll).
 wiremock = "=0.6.5"
-# serde_json for IPC-shape (de)serialization unit tests (07-01 Task 4) — the
-# version already pinned in Cargo.lock; no new package.
-serde_json = "=1.0.150"

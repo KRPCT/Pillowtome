@@ -215,7 +215,7 @@ pub async fn bootstrap_dirs(client: &reqwest_dav::Client, root: &str) -> Result<
 
 /// Single path-join point: strip trailing `/` from host, leading `/` from
 /// rel, join with one `/` (Pitfall 8 — trailing-slash quirks live HERE only).
-fn join_url(host: &str, rel: &str) -> String {
+pub(crate) fn join_url(host: &str, rel: &str) -> String {
     format!("{}/{}", host.trim_end_matches('/'), rel.trim_start_matches('/'))
 }
 

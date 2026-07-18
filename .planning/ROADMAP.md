@@ -201,11 +201,11 @@ Plans:
 
 Plans:
 
-- [ ] 07-00-PLAN.md — Wave 0: 依赖钉版（reqwest_dav =0.3.3 / keyring =4.1.5 / wiremock =0.6.5）+ SCHEMA_V8（library_item tombstone + file_sync_enabled + sync_config/sync_state/sync_file_state）+ locator change_log 缺口 + core sync merge/remote/model 纯函数与穷举 fixtures [Wave 0, autonomous]
-- [ ] 07-01-PLAN.md — 连接与凭据（SYNC-01）：keyring（含 Android ndk-context spike + AVD 生产 APK 冒烟）+ transport（TLS 双开关、D-97 强制测试、中文四类错误分类）+ wiremock 传输矩阵 [Wave 1, non-autonomous]
-- [ ] 07-02-PLAN.md — 状态平面（SYNC-02, SYNC-03, SYNC-05）：每设备状态文件重建 + 条件 PUT + tmp-MOVE 原子写、拉取合并入库（tombstone 防复活）、D-92 撤回管道、双实例 e2e 不丢数据 [Wave 2, autonomous]
-- [ ] 07-03-PLAN.md — 文件平面（SYNC-04）：10MB 阈值、Nextcloud chunk v2 断点续传、通用服务器流式整 PUT（研究 Q1 对 D-101 的修正）、下载 Range 续传 + blake3==work_id 校验、sync_set_file_sync/sync_download_book 命令 [Wave 2, autonomous]
-- [ ] 07-04-PLAN.md — UI + 调度 + 验收（SYNC-01..05）：同步按钮+状态点、SyncSettingsSheet、占位卡+点击下载、同步此书开关、trace pill + 撤回弹窗、开书拉/合书推（D-90/D-91）、AVD 生产 APK + 真实服务器矩阵（坚果云/代理 Nextcloud/dufs）checkpoint [Wave 3, non-autonomous]
+- [x] 07-00-PLAN.md — Wave 0: 依赖钉版（reqwest_dav =0.3.3 / keyring =4.1.5 / wiremock =0.6.5）+ SCHEMA_V8（library_item tombstone + file_sync_enabled + sync_config/sync_state/sync_file_state）+ locator change_log 缺口 + core sync merge/remote/model 纯函数与穷举 fixtures [Wave 0, autonomous]
+- [x] 07-01-PLAN.md — 连接与凭据（SYNC-01）：keyring（含 Android ndk-context spike + AVD 生产 APK 冒烟）+ transport（TLS 双开关、D-97 强制测试、中文四类错误分类）+ wiremock 传输矩阵 [Wave 1, non-autonomous]
+- [x] 07-02-PLAN.md — 状态平面（SYNC-02, SYNC-03, SYNC-05）：每设备状态文件重建 + 条件 PUT + tmp-MOVE 原子写、拉取合并入库（tombstone 防复活）、D-92 撤回管道、双实例 e2e 不丢数据 [Wave 2, autonomous]
+- [x] 07-03-PLAN.md — 文件平面（SYNC-04）：10MB 阈值、Nextcloud chunk v2 断点续传、通用服务器流式整 PUT（研究 Q1 对 D-101 的修正）、下载 Range 续传 + blake3==work_id 校验、sync_set_file_sync/sync_download_book 命令 [Wave 2, autonomous]
+- [x] 07-04-PLAN.md — UI + 调度 + 验收（SYNC-01..05）：同步按钮+状态点、SyncSettingsSheet、占位卡+点击下载、同步此书开关、trace pill + 撤回弹窗、开书拉/合书推（D-90/D-91）、AVD 生产 APK + 真实服务器矩阵（坚果云/代理 Nextcloud/dufs）checkpoint [Wave 3, non-autonomous]
 
 ## Progress
 
@@ -220,4 +220,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Local Library | 4/4 | Complete   | 2026-07-16 |
 | 5. Annotations & Composite Locator | 5/8 | In Progress|  |
 | 6. TXT Format & Format-Abstraction Validation | 0/TBD | Not started | - |
-| 7. WebDAV Self-Hosted Sync | 0/5 | Planned | - |
+| 7. WebDAV Self-Hosted Sync | 5/5 | Executed (device acceptance pending) | 2026-07-18 |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 7 planned (5 plans 07-00..07-04), ready to execute
+stopped_at: Phase 7 executed (5/5 plans, code complete) — device acceptance batch pending
 last_updated: "2026-07-18T10:05:00.000Z"
 last_activity: 2026-07-18
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 31
-  completed_plans: 24
-  percent: 57
+  completed_plans: 29
+  percent: 68
 ---
 
 <!-- NOTE (2026-07-17): the 2026-07-16..17 work ran AD-HOC (outside GSD) at the
@@ -157,6 +157,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-07-18T10:05:00.000Z
-Stopped at: Phase 7 planned (5 plans 07-00..07-04), ready to execute
-Resume file: .planning/phases/07-webdav-self-hosted-sync/07-00-PLAN.md
-Resume action: Phase 7 WebDAV sync planned end-to-end (07-00 wave 0 → 07-01 connect/credentials → 07-02 state plane → 07-03 file plane → 07-04 UI+scheduler+acceptance); plan-check loop passed (2 checkers, 12 cross-plan contract fixes). Phase 05 05-08 device acceptance remains open. Next entries: `/gsd-execute-phase 07` (or finish 05-08 first per roadmap order).
+Stopped at: Phase 7 executed (5/5 plans, code complete) — device acceptance batch pending
+Resume file: .planning/phases/07-webdav-self-hosted-sync/07-04-SUMMARY.md
+Resume action: Phase 7 WebDAV sync executed end-to-end (07-00..07-04 + raw-agent auth fix; cargo 174 green, vitest 212 green). Remaining gates: (a) deferred manual batch — AVD production-APK keyring smoke (07-01-T5; first Android compile of the cfg(android) keyring path) + AVD UI acceptance + real-server matrix 坚果云/代理 Nextcloud/dufs (07-04-T5, D-94); (b) 05-08 device acceptance still open. Next entries: run the manual batch, then `/gsd-verify-work 07`.

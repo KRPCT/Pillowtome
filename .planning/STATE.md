@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-07-PLAN.md
-last_updated: "2026-07-18T15:30:00.000Z"
+stopped_at: Phase 7 context gathered
+last_updated: "2026-07-18T08:49:37.645Z"
 last_activity: 2026-07-18
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 26
   completed_plans: 24
-  percent: 62
+  percent: 57
 ---
 
 <!-- NOTE (2026-07-17): the 2026-07-16..17 work ran AD-HOC (outside GSD) at the
@@ -156,7 +156,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-17T16:43:25.965Z
-Stopped at: Completed 05-03-PLAN.md
-Resume file: None
+Last session: 2026-07-18T08:49:37.636Z
+Stopped at: Phase 7 context gathered
+Resume file: .planning/phases/07-webdav-self-hosted-sync/07-CONTEXT.md
 Resume action: reconcile GSD phase status vs shipped code (Phase 4 done, Phase 6 formats done ahead), then plan/execute Phase 5 (annotations).

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { onBackButtonPress } from "@tauri-apps/api/app";
+import { listen } from "@tauri-apps/api/event";
 import { BookOpen, Settings2 } from "lucide-react";
 import { ThemeProvider } from "@mui/material/styles";
 import AppBar from "@mui/material/AppBar";
@@ -17,29 +18,51 @@ import DialogActions from "@mui/material/DialogActions";
 import "./App.css";
 import { getMuiTheme } from "./theme/mui";
 import { FoliateView } from "./reader/FoliateView";
-import { LibraryGrid } from "./library/LibraryGrid";
+import { LibraryGrid, type SyncCardViewMaps } from "./library/LibraryGrid";
 import { ImportButton } from "./library/ImportButton";
 import { FolderScanButton } from "./library/FolderScanButton";
 import {
+  adoptSyncedFile,
   deleteLibraryItem,
   listLibraryItems,
   touchLastOpened,
 } from "./library/library-store";
+import { ingestPathToLibrary } from "./library/import-actions";
+import { knownHashesFromItems } from "./library/import-pipeline";
 import type { LibraryItem } from "./library/types";
 import {
   LibrarySettingsSheet,
   useLibraryPrefs,
 } from "./library/LibrarySettingsSheet";
+import {
+  syncDownloadBook,
+  syncNow,
+  syncSetFileSync,
+  syncStatus,
+  type SyncStatusEvent,
+} from "./sync/sync-api";
+import {
+  createSyncStatusStore,
+  shouldToastFailure,
+  type SyncStatusStore,
+} from "./sync/sync-status";
+import { SyncStatusButton } from "./sync/SyncStatusButton";
+import { SyncSettingsSheet } from "./sync/SyncSettingsSheet";
 
 /**
  * 书库为主壳：纸感主题与阅读页对齐；直接进入网格 + 设置菜单。
+ * Phase 7: AppBar 同步按钮（状态点 + D-90 手动兜底）、同步设置 sheet、
+ * 云端占位卡下载流 — failures surface ONLY as dot + this Snackbar (D-93).
  */
 function App() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [shelf, setShelf] = useState<LibraryItem[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<LibraryItem | null>(null);
+  /** workIds whose last download attempt rejected — the §3 failed card state. */
+  const [failedDownloads, setFailedDownloads] = useState<ReadonlySet<string>>(new Set());
   const openIdRef = useRef<string | null>(null);
   openIdRef.current = openId;
 
@@ -47,6 +70,17 @@ function App() {
   const { prefs, onPrefsChange } = useLibraryPrefs();
   const theme = prefs.theme ?? "day";
   const muiTheme = getMuiTheme(theme);
+
+  // The engine-driven sync status store: snapshot init + "sync-status" events.
+  // No timers, no polling anywhere (D-91).
+  const syncStoreRef = useRef<SyncStatusStore | null>(null);
+  if (syncStoreRef.current === null) {
+    syncStoreRef.current = createSyncStatusStore(syncStatus, (cb) =>
+      listen<SyncStatusEvent>("sync-status", (e) => cb(e.payload)),
+    );
+  }
+  const syncStore = syncStoreRef.current;
+  const syncState = useSyncExternalStore(syncStore.subscribe, syncStore.getState);
 
   const refreshShelf = useCallback(async () => {
     try {
@@ -56,6 +90,17 @@ function App() {
       setStatus("无法加载书库，请重启应用后再试。");
     }
   }, []);
+
+  // The ONLY failure surface (D-93): toast once on a transition INTO error —
+  // engine-classified Chinese copy rendered verbatim, never a modal.
+  const prevSyncRef = useRef(syncState);
+  useEffect(() => {
+    const prev = prevSyncRef.current;
+    prevSyncRef.current = syncState;
+    if (shouldToastFailure(prev, syncState)) {
+      setStatus(`同步失败：${syncState.lastError ?? ""}`);
+    }
+  }, [syncState]);
 
   const confirmDelete = useCallback(async () => {
     const target = pendingDelete;
@@ -89,9 +134,89 @@ function App() {
     void touchLastOpened(item.workId);
   }, []);
 
+  // D-90 兜底: unconfigured tap converges on the sheet; configured tap syncs.
+  const handleSyncPress = useCallback(() => {
+    if (!syncState.configured) {
+      setSyncSettingsOpen(true);
+      return;
+    }
+    void syncNow()
+      .then((snap) => {
+        // The engine records failures itself (dot + toast carry them); only a
+        // clean run earns the 同步完成 toast + shelf refresh (merged catalog).
+        if (!snap.lastError) {
+          setStatus("同步完成");
+          void refreshShelf();
+        }
+      })
+      .catch(() => {
+        /* failure surfaces via the sync-status event → toast */
+      });
+  }, [syncState.configured, refreshShelf]);
+
+  // 占位卡点击下载 (D-99/D-100): download → reparse (ingest) → ADOPT the
+  // placeholder row (the explicit UPDATE ingest alone can never do) → refresh.
+  const handleDownload = useCallback(
+    async (item: LibraryItem) => {
+      setFailedDownloads((prev) => {
+        if (!prev.has(item.workId)) return prev;
+        const next = new Set(prev);
+        next.delete(item.workId);
+        return next;
+      });
+      try {
+        const res = await syncDownloadBook({ workId: item.workId });
+        // Exclude THIS work or library_ingest dedup-refuses the reparse.
+        const known = knownHashesFromItems(shelf).filter((h) => h !== item.workId);
+        const ingest = await ingestPathToLibrary(res.localPath, known);
+        await adoptSyncedFile(item.workId, res.sourceId, ingest.coverFile ?? null);
+        void refreshShelf();
+      } catch (err) {
+        console.warn("[sync] download failed", err);
+        setFailedDownloads((prev) => new Set(prev).add(item.workId));
+        setStatus("下载失败，请检查网络后重试");
+      }
+    },
+    [shelf, refreshShelf],
+  );
+
+  // 同步此书 (D-98): flip the flag, then let sync_now's upload pump push the
+  // file (07-04 backend wiring) — the toast confirms the flag, not the upload.
+  const handleToggleFileSync = useCallback(
+    async (item: LibraryItem, enabled: boolean) => {
+      try {
+        await syncSetFileSync({ workId: item.workId, enabled });
+        setStatus(enabled ? `已开启同步《${item.title}》` : `已关闭同步《${item.title}》`);
+        if (enabled) {
+          void syncNow().catch(() => {
+            /* upload failure surfaces via the status store */
+          });
+        }
+        void refreshShelf();
+      } catch (err) {
+        console.warn("[sync] toggle file sync failed", err);
+        setStatus(String(err).replace(/^Error:\s*/i, "") || "同步失败，请稍后重试");
+      }
+    },
+    [refreshShelf],
+  );
+
+  const syncView = useMemo<SyncCardViewMaps>(
+    () => ({
+      downloads: new Map(syncState.downloads.map((d) => [d.workId, d.percent])),
+      uploads: new Map(syncState.uploads.map((u) => [u.workId, u.percent])),
+      failedDownloads,
+    }),
+    [syncState.downloads, syncState.uploads, failedDownloads],
+  );
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     void onBackButtonPress(() => {
+      if (syncSettingsOpen) {
+        setSyncSettingsOpen(false);
+        return;
+      }
       if (settingsOpen) {
         setSettingsOpen(false);
         return;
@@ -116,7 +241,7 @@ function App() {
     return () => {
       unlisten?.();
     };
-  }, [settingsOpen]);
+  }, [settingsOpen, syncSettingsOpen]);
 
   if (openId) {
     return (
@@ -160,6 +285,7 @@ function App() {
               onStatus={setStatus}
               onDone={() => void refreshShelf()}
             />
+            <SyncStatusButton state={syncState} onPress={handleSyncPress} />
             <IconButton
               color="inherit"
               aria-label="设置"
@@ -183,6 +309,10 @@ function App() {
               onDelete={setPendingDelete}
               cleanTitles={prefs.cleanTitles}
               chromeHasActions
+              syncView={syncView}
+              onDownload={(item) => void handleDownload(item)}
+              onToggleFileSync={(item, enabled) => void handleToggleFileSync(item, enabled)}
+              onStatus={setStatus}
             />
           </Box>
         </div>
@@ -217,6 +347,18 @@ function App() {
           onOpenChange={setSettingsOpen}
           prefs={prefs}
           onPrefsChange={onPrefsChange}
+          syncState={syncState}
+          onOpenSyncSettings={() => {
+            setSettingsOpen(false);
+            setSyncSettingsOpen(true);
+          }}
+        />
+
+        <SyncSettingsSheet
+          open={syncSettingsOpen}
+          onOpenChange={setSyncSettingsOpen}
+          syncState={syncState}
+          onConfigChanged={() => syncStore.refresh()}
         />
       </div>
     </ThemeProvider>

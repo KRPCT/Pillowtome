@@ -99,6 +99,15 @@ import {
   type ScrollSelection,
 } from "./ContinuousScrollStream";
 import { ReaderBottomBar } from "./ReaderBottomBar";
+import {
+  syncBookClosed,
+  syncBookOpened,
+  syncRevertJump,
+  type SyncOpenResult,
+} from "../sync/sync-api";
+import { createCloseGate } from "../sync/scheduler";
+import { traceFromOpenResult, type SyncTrace } from "./sync-jump";
+import { SyncUndoDialog } from "./SyncUndoDialog";
 
 /**
  * foliate-js 阅读视图 + immersive chrome + TOC + locator progress (READ-01..05).
@@ -350,6 +359,16 @@ export function FoliateView({
   const [undoVisible, setUndoVisible] = useState(false);
   const undoPosRef = useRef<ReadingPosition | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** D-90 sync lifecycle: at-most-one close push per open (unmount/back/background). */
+  const closeGateRef = useRef(createCloseGate());
+  /** 开书拉 fires once per mount, only on the real ensure_work path. */
+  const syncOpenedRef = useRef(false);
+  /** The settled open-pull result; the trace applies once the book is reading. */
+  const [syncOpenResult, setSyncOpenResult] = useState<SyncOpenResult | null>(null);
+  /** Session-scoped D-92 trace (已从其他设备同步 pill); null = no jump this open. */
+  const [syncTrace, setSyncTrace] = useState<SyncTrace | null>(null);
+  const [syncUndoOpen, setSyncUndoOpen] = useState(false);
+  const syncTraceAppliedRef = useRef(false);
 
   prefsRef.current = prefs;
   locationRef.current = location;
@@ -1161,6 +1180,8 @@ export function FoliateView({
 
   /** Snapshot the current position before a jump so "返回原位" can restore it. */
   const captureUndo = useCallback(() => {
+    // Any manual jump replaces the sync trace pill (UI-SPEC §5 slot priority).
+    setSyncTrace(null);
     const loc = locationRef.current;
     if (!loc) return;
     const cfi = typeof loc.cfi === "string" ? loc.cfi : null;
@@ -1482,6 +1503,109 @@ export function FoliateView({
     }
   }, [useContinuousScroll, jumpContinuousToSpine]);
 
+  /**
+   * Jump to a position reported by the sync engine (D-92 open-pull merge, or
+   * the locator returned by sync_revert_jump) — through the same restore
+   * machinery as open-time resume, WITHOUT captureUndo (the sync pill owns the
+   * slot; the pre-jump position lives in the engine's stash, not undoPosRef).
+   */
+  const jumpToSyncedPosition = useCallback(
+    (cfi: string | null, fraction: number | null) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const realCfi = isRealCfi(cfi) ? cfi : null;
+      if (useContinuousScroll) {
+        const spineHint = realCfi ? spineFromCfi(realCfi) : null;
+        const pos = positionFromLocatorCfi(realCfi, fraction ?? null, spineHint);
+        if (pos) {
+          jumpContinuousToSpine(pos.spineIndex, pos.offsetFraction, pos.cfi ?? null);
+          return;
+        }
+        if (fraction != null) {
+          jumpToWholeFraction(fraction);
+        }
+        return;
+      }
+      if (realCfi) {
+        void view.goTo(realCfi).catch(() => {
+          if (fraction != null) jumpToWholeFraction(fraction);
+        });
+      } else if (fraction != null) {
+        jumpToWholeFraction(fraction);
+      }
+    },
+    [useContinuousScroll, jumpContinuousToSpine, jumpToWholeFraction],
+  );
+
+  /** The one D-90 close push — fires at most once per open via the close gate. */
+  const pushSyncClose = useCallback((reason: string) => {
+    const workId = workIdRef.current;
+    if (!workId || workId.startsWith("work-")) return; // real-ensure path only
+    if (!closeGateRef.current.consumeClose()) return;
+    void syncBookClosed({ workId }).catch((err) =>
+      console.warn(`[sync] close push failed (${reason})`, err),
+    );
+  }, []);
+
+  /** 撤回原位: replay the locator RETURNED by sync_revert_jump — never a UI guess. */
+  const handleSyncRevert = useCallback(async () => {
+    const workId = workIdRef.current;
+    setSyncUndoOpen(false);
+    setSyncTrace(null);
+    if (!workId) return;
+    try {
+      const reverted = await syncRevertJump({ workId });
+      if (reverted) {
+        jumpToSyncedPosition(reverted.cfi || null, reverted.progressFraction);
+      }
+    } catch (err) {
+      console.warn("[sync] revert jump failed", err);
+    }
+  }, [jumpToSyncedPosition]);
+
+  /** 保留进度: dismiss the dialog + the session trace, keep the merged position. */
+  const handleSyncKeep = useCallback(() => {
+    setSyncUndoOpen(false);
+    setSyncTrace(null);
+  }, []);
+
+  // Apply the open-pull merge jump once BOTH the pull result and the open book
+  // are ready (either may finish first). Silent: no toast, no modal (D-93).
+  useEffect(() => {
+    if (status !== "reading" || !syncOpenResult || syncTraceAppliedRef.current) return;
+    const trace = traceFromOpenResult(syncOpenResult);
+    if (!trace) return;
+    syncTraceAppliedRef.current = true;
+    const workId = workIdRef.current;
+    if (!workId) return;
+    // The merge already persisted the further position — re-read the merged
+    // locator and jump there, then leave the session-scoped trace pill.
+    void loadLocator(workId)
+      .then((row) => {
+        jumpToSyncedPosition(
+          row?.cfi ?? null,
+          row?.progress_fraction ?? syncOpenResult.progressFraction,
+        );
+        setSyncTrace(trace);
+      })
+      .catch((err) => console.warn("[sync] post-merge locator load failed", err));
+  }, [status, syncOpenResult, jumpToSyncedPosition]);
+
+  // 切后台推 (D-90): a background transition consumes the one close push; on
+  // return the gate re-arms so a later close fires once — but NO re-pull
+  // (pull is open-book only). No timers, no polling (D-91).
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        pushSyncClose("background");
+      } else {
+        closeGateRef.current.markOpened();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [pushSyncClose]);
+
   // Keep max-block-size in sync with host height so short pages don't float on tall screens.
   useEffect(() => {
     if (status !== "reading" || fxlRef.current) return;
@@ -1782,6 +1906,19 @@ export function FoliateView({
           if (!cancelled && ensured?.workId) {
             workIdRef.current = ensured.workId;
             await ensureWorkRow(ensured.workId, ensured.contentHash, "epub");
+            // 开书拉 (D-90): arm the close gate on every successful ensure
+            // (reopenTick re-arms after its cleanup consumed a push), and pull
+            // peer state once per mount — silent: failures surface only via
+            // the "sync-status" event → status dot + toast (D-93), never here.
+            closeGateRef.current.markOpened();
+            if (!syncOpenedRef.current) {
+              syncOpenedRef.current = true;
+              void syncBookOpened({ workId: ensured.workId })
+                .then((res) => {
+                  if (!cancelled) setSyncOpenResult(res);
+                })
+                .catch((err) => console.warn("[sync] book-open pull failed", err));
+            }
           }
         } catch (err) {
           console.warn("[FoliateView] ensure_work failed; progress disabled", err);
@@ -2103,6 +2240,12 @@ export function FoliateView({
       }
       created?.remove();
       viewRef.current = null;
+      // 合书推 (D-90): at most one push per open — the gate dedups this
+      // teardown against handleBack and the background push. A reopenTick
+      // re-open also consumes (and then re-arms on ensure) — an acceptable
+      // extra push, never a missed one.
+      pushSyncClose("teardown");
+      setSyncTrace(null);
       // Drop refs to the torn-down view's section docs (reopenTick re-populates).
       sectionDocsRef.current.clear();
       drawnKeysRef.current.clear();
@@ -2110,7 +2253,7 @@ export function FoliateView({
     // reopenTick: re-run (re-open the book) when 简繁/词不拆行 toggles so the
     // transformTarget content transform re-applies; position restores from the
     // saved locator.
-  }, [id, reopenTick, scheduleLocatorUpsert, buildCss, clearAutospaceShims, ensureCjkCaps]);
+  }, [id, reopenTick, scheduleLocatorUpsert, buildCss, clearAutospaceShims, ensureCjkCaps, pushSyncClose]);
 
   // Also flush locator when parent closes via onClose path — onClose may unmount us;
   // wrap onBack to flush first.
@@ -2124,6 +2267,8 @@ export function FoliateView({
         pendingLocatorRef.current = relocateToLocatorRow(workId, loc);
       }
     }
+    // 合书推 (D-90) before leaving; the teardown push dedups via the gate.
+    pushSyncClose("back");
     void flushLocator()
       .catch(() => {
         /* still leave */
@@ -2131,7 +2276,7 @@ export function FoliateView({
       .finally(() => {
         onClose?.();
       });
-  }, [flushLocator, onClose, useContinuousScroll]);
+  }, [flushLocator, onClose, useContinuousScroll, pushSyncClose]);
 
   /**
    * Android system back stack inside reader:
@@ -2314,8 +2459,18 @@ export function FoliateView({
           onScrub={handleScrub}
           undoVisible={undoVisible}
           onUndo={handleUndo}
+          syncTraceVisible={syncTrace !== null}
+          onSyncTrace={() => setSyncUndoOpen(true)}
         />
       ) : null}
+
+      <SyncUndoDialog
+        open={syncUndoOpen && syncTrace !== null}
+        trace={syncTrace}
+        onRevert={() => void handleSyncRevert()}
+        onKeep={handleSyncKeep}
+        onClose={() => setSyncUndoOpen(false)}
+      />
 
       <SettingsSheet
         open={settingsOpen}

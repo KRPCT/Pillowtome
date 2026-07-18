@@ -27,6 +27,10 @@ export function rowToLibraryItem(row: LibraryItemRow): LibraryItem {
       typeof row.progress_fraction === "number" && Number.isFinite(row.progress_fraction)
         ? row.progress_fraction
         : null,
+    // Phase 7: the `sync-remote` sentinel marks state-plane placeholder rows
+    // whose file has not been downloaded (and adopted) yet.
+    fileLocal: row.source_id !== "sync-remote",
+    fileSyncEnabled: !!row.file_sync_enabled,
   };
 }
 
@@ -45,6 +49,7 @@ export async function listLibraryItems(): Promise<LibraryItem[]> {
          li.imported_at,
          li.last_opened_at,
          li.last_read_at,
+         li.file_sync_enabled AS file_sync_enabled,
          loc.progress_fraction AS progress_fraction
        FROM library_item li
        LEFT JOIN locator loc ON loc.work_id = li.work_id
@@ -57,6 +62,29 @@ export async function listLibraryItems(): Promise<LibraryItem[]> {
   } catch (err) {
     console.warn("[library-store] list failed", err);
     return [];
+  }
+}
+
+/**
+ * Adopt a downloaded placeholder as a real local book (D-100 hand-off):
+ * ingest alone can never flip the row — its `libraryHasWorkId` dedup exits as
+ * `skipped_duplicate` before touching `source_id` (import-actions.ts). Without
+ * this UPDATE the row keeps the `sync-remote` sentinel and the book stays
+ * unopenable across restarts. Soft-fail style, consistent with this file.
+ */
+export async function adoptSyncedFile(
+  workId: string,
+  sourceId: string,
+  coverFile: string | null,
+): Promise<void> {
+  try {
+    const db = await openDb();
+    await db.execute(
+      `UPDATE library_item SET source_id = $1, cover_file = $2 WHERE work_id = $3`,
+      [sourceId, coverFile, workId],
+    );
+  } catch (err) {
+    console.warn("[library-store] adoptSyncedFile failed", err);
   }
 }
 

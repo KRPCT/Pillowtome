@@ -648,7 +648,41 @@ async fn sync_now_inner(app: &AppHandle) -> Result<(), SyncError> {
         reconcile::pull_state_files(&pool, &client, &cfg, &undo, None)
     })
     .await?;
-    reconcile::reconcile_push(&pool, &client, &cfg, &undo).await
+    reconcile::reconcile_push(&pool, &client, &cfg, &undo).await?;
+
+    // Pending file uploads (07-04 orchestrator-directed wiring): after the
+    // state round succeeds, push every 同步此书 book that has no completed
+    // upload row. Sequential; a per-book failure is recorded in last_error and
+    // NEVER fails the whole sync_now. Runs only here — configured + authed is
+    // already proven above (the client build reads the keychain).
+    let ctx = fileplane::FilePlaneCtx {
+        agent: client.agent.clone(),
+        server_dav_root: client.host.clone(),
+        username: cfg.username.clone(),
+        remote_root: cfg.remote_path.clone(),
+        dav: client,
+    };
+    let report = progress_bridge(app);
+    let registry = app.state::<crate::storage::SourceRegistry>();
+    let staged = std::sync::Mutex::new(Vec::new());
+    let resolve_local = |book: &PendingUpload| {
+        local_path_for_upload(app, &registry, &staged, book)
+    };
+    let pump = pump_pending_uploads(&ctx, &pool, &report, &cfg.remote_path, &resolve_local).await;
+    // Staged SAF copies are single-run — always reaped, even on pump error.
+    for path in staged.lock().unwrap().drain(..) {
+        let _ = std::fs::remove_file(path);
+    }
+    let (uploaded, upload_error) = pump?;
+    if uploaded > 0 {
+        // The completed upload rows feed the state builder — push again so
+        // peers see file_sync.remote_path/size/hash in THIS sync run.
+        reconcile::reconcile_push(&pool, &ctx.dav, &cfg, &undo).await?;
+    }
+    if let Some(msg) = upload_error {
+        record_sync_failure(&pool, &SyncError::Soft(msg)).await?;
+    }
+    Ok(())
 }
 
 /// Current sync status for 07-04's store init (empty transfer arrays until the
@@ -799,6 +833,156 @@ pub async fn sync_set_file_sync(
         return Err("未找到该书籍".to_string());
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Part 4 (07-04, orchestrator-directed wiring): the pending-upload pump.
+// `sync_set_file_sync` flips only the flag — nothing else in production called
+// `fileplane::upload_book`, so 同步此书 would never reach the server. The pump
+// runs at the tail of every successful `sync_now` (the manual button AND the
+// post-enable frontend call share this path), pushing each flagged book that
+// has no completed upload row yet, then re-pushing state so peers see the
+// fresh `file_sync.remote_path/size/hash` metadata in the same run.
+// ---------------------------------------------------------------------------
+
+/// One catalog row waiting for its first (or resumed) upload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingUpload {
+    pub work_id: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub source_id: String,
+    pub format: String,
+}
+
+/// The pending-upload scan: 同步此书 ON, not tombstoned, holding a real local
+/// source (never the `sync-remote` placeholder sentinel), and WITHOUT a
+/// completed upload metadata row (`direction='upload'` with `remote_path` —
+/// the exact row the 07-02 state builder reads). An interrupted upload
+/// (scratch row with `remote_path NULL`) IS returned: `upload_book` resumes it
+/// via its `transfer_uuid`/`chunks_done`.
+pub async fn pending_uploads(pool: &sqlx::SqlitePool) -> Result<Vec<PendingUpload>, SyncError> {
+    let rows: Vec<(String, String, Option<String>, String, String)> = sqlx::query_as(
+        "SELECT li.work_id, li.title, li.author, li.source_id, w.format \
+         FROM library_item li JOIN work w ON w.work_id = li.work_id \
+         WHERE li.file_sync_enabled = 1 AND li.deleted = 0 \
+           AND li.source_id != 'sync-remote' \
+           AND NOT EXISTS ( \
+             SELECT 1 FROM sync_file_state s \
+             WHERE s.work_id = li.work_id AND s.direction = 'upload' \
+               AND s.remote_path IS NOT NULL \
+           ) \
+         ORDER BY li.work_id",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|_| SyncError::Internal)?;
+    Ok(rows
+        .into_iter()
+        .map(|(work_id, title, author, source_id, format)| PendingUpload {
+            work_id,
+            title,
+            author,
+            source_id,
+            format,
+        })
+        .collect())
+}
+
+/// Upload one pending book under core's single naming point (D-105): plain
+/// `作者 - 书名.ext` first; a same-name different-bytes destination is a naming
+/// collision (NEVER silently overwritten), so retry once with the `[hash8]`
+/// suffix before giving up. The returned `&'static str` is the classified
+/// [`fileplane::FileError::user_message`] copy — rendered verbatim downstream.
+pub async fn upload_pending_book(
+    ctx: &fileplane::FilePlaneCtx,
+    pool: &sqlx::SqlitePool,
+    report: &(dyn Fn(fileplane::FileProgress) + Send + Sync),
+    remote_root: &str,
+    book: &PendingUpload,
+    local_path: &std::path::Path,
+) -> Result<(), &'static str> {
+    let author = book.author.clone().unwrap_or_default();
+    let mut collision = false;
+    loop {
+        let remote_path = pillowtome_core::sync::remote::book_remote_path(
+            remote_root,
+            &author,
+            &book.title,
+            &book.format,
+            &book.work_id,
+            collision,
+        )
+        .map_err(|_| fileplane::FileError::Internal.user_message())?;
+        match fileplane::upload_book(ctx, pool, report, &book.work_id, local_path, &remote_path)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(fileplane::FileError::RemoteConflict) if !collision => {
+                collision = true;
+            }
+            Err(err) => return Err(err.user_message()),
+        }
+    }
+}
+
+/// Sequential pump over [`pending_uploads`] — pool/ctx/closure shaped so the
+/// wiremock suites drive it without an `AppHandle`. `resolve_local` maps a
+/// candidate to a readable local path (desktop `Path` sources in place; SAF
+/// `content://` books pre-staged by the caller) and returns `None` when the
+/// file is not held locally this session — that book is skipped, not failed.
+/// A per-book failure NEVER aborts the pump: the first failure's classified
+/// copy is returned for `last_error` and the remaining books still run.
+/// Returns `(uploaded_count, first_failure_copy)`.
+pub async fn pump_pending_uploads(
+    ctx: &fileplane::FilePlaneCtx,
+    pool: &sqlx::SqlitePool,
+    report: &(dyn Fn(fileplane::FileProgress) + Send + Sync),
+    remote_root: &str,
+    resolve_local: &(dyn Fn(&PendingUpload) -> Option<std::path::PathBuf> + Send + Sync),
+) -> Result<(usize, Option<&'static str>), SyncError> {
+    let mut uploaded = 0usize;
+    let mut first_error: Option<&'static str> = None;
+    for book in pending_uploads(pool).await? {
+        let Some(local_path) = resolve_local(&book) else {
+            continue;
+        };
+        match upload_pending_book(ctx, pool, report, remote_root, &book, &local_path).await {
+            Ok(()) => uploaded += 1,
+            Err(msg) => {
+                if first_error.is_none() {
+                    first_error = Some(msg);
+                }
+            }
+        }
+    }
+    Ok((uploaded, first_error))
+}
+
+/// The production resolver for [`pump_pending_uploads`]: desktop `Path`
+/// sources upload in place; Android SAF `content://` books stage through the
+/// cache dir (whole-bytes read — the pre-existing platform constraint every
+/// book open already has, fileplane.rs module docs) and the staged copy is
+/// pushed into `staged` so the caller reaps it after the run.
+fn local_path_for_upload(
+    app: &AppHandle,
+    registry: &crate::storage::SourceRegistry,
+    staged: &std::sync::Mutex<Vec<std::path::PathBuf>>,
+    book: &PendingUpload,
+) -> Option<std::path::PathBuf> {
+    match registry.resolve(&book.source_id)? {
+        pillowtome_core::source::BookSource::Path(path) => Some(path),
+        pillowtome_core::source::BookSource::ContentUri(uri) => {
+            let source = pillowtome_core::source::BookSource::ContentUri(uri);
+            let bytes = crate::storage::resolve_bytes(&source, app).ok()?;
+            let dir = app.path().app_cache_dir().ok()?.join("sync-upload");
+            std::fs::create_dir_all(&dir).ok()?;
+            let path = dir.join(format!("{}.{}", book.work_id, book.format));
+            std::fs::write(&path, bytes).ok()?;
+            staged.lock().unwrap().push(path.clone());
+            Some(path)
+        }
+    }
 }
 
 #[cfg(test)]

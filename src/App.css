@@ -1569,3 +1569,80 @@ foliate-view {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ---------------------------------------------------------------------------
+ * Phase 7 — WebDAV sync chrome (UI-SPEC 07): AppBar status dot, placeholder
+ * card variants, reader sync trace pill. Custom-CSS chrome = 朱砂 tokens.
+ * ------------------------------------------------------------------------- */
+
+/* AppBar 同步按钮 + 8px 状态点 (§1/§C). */
+.sync-status-button {
+  position: relative;
+}
+.sync-status-button__dot {
+  position: absolute;
+  /* 2px inset off the 20px icon's top-right corner inside the 44px hit area. */
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.sync-status-button__dot[data-state="syncing"] {
+  background: var(--reader-accent, #b4472f);
+  animation: sync-status-dot-pulse 1s ease-in-out infinite;
+}
+.sync-status-button__dot[data-state="error"] {
+  background: var(--md-error, #ba1a1a);
+}
+.sync-status-button__spin {
+  animation: sync-status-icon-spin 1s linear infinite;
+}
+@keyframes sync-status-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes sync-status-icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-status-button__dot[data-state="syncing"],
+  .sync-status-button__spin {
+    animation: none;
+  }
+}
+
+/* 云端占位卡 variants (§3). */
+.library-card--unsynced {
+  opacity: 0.55;
+}
+.library-card__badge--cloud {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.library-card__sync-caption {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--md-on-surface-variant, #53433f);
+}
+
+/* D-92 trace pill: pill 本体 = surface 底 + fg 字; accent only on the icon
+   (reserved list #5). */
+.reader__undo-pill--sync {
+  color: var(--reader-fg, #1c1b1a);
+}
+.reader__undo-pill--sync svg {
+  color: var(--reader-accent, #b4472f);
+}

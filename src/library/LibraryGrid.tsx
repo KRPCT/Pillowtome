@@ -1,10 +1,21 @@
 import { useMemo, useState } from "react";
 import type { LibraryItem } from "./types";
 import { applyLibraryView, type FilterKey, type SortKey } from "./library-sort";
+import { deriveCardState } from "./sync-card-state";
 import { LibraryCard } from "./LibraryCard";
 import { LibraryToolbar } from "./LibraryToolbar";
 import { ImportButton } from "./ImportButton";
 import { FolderScanButton } from "./FolderScanButton";
+
+/** Per-workId transfer views from the sync-status store (Phase 7). */
+export interface SyncCardViewMaps {
+  /** workId → live download percent (entry present ⇒ 下载中). */
+  downloads: ReadonlyMap<string, number>;
+  /** workId → live upload percent (entry present ⇒ 正在上传…). */
+  uploads: ReadonlyMap<string, number>;
+  /** workIds whose last download attempt rejected (tap retries). */
+  failedDownloads: ReadonlySet<string>;
+}
 
 export interface LibraryGridProps {
   items: LibraryItem[];
@@ -17,6 +28,11 @@ export interface LibraryGridProps {
   cleanTitles?: boolean;
   /** When true, hide empty-state import buttons (chrome already has them). */
   chromeHasActions?: boolean;
+  /** Phase 7 sync views + handlers (optional — omit for sync-free surfaces). */
+  syncView?: SyncCardViewMaps;
+  onDownload?: (item: LibraryItem) => void;
+  onToggleFileSync?: (item: LibraryItem, enabled: boolean) => void;
+  onStatus?: (msg: string | null) => void;
 }
 
 export function LibraryGrid({
@@ -27,6 +43,10 @@ export function LibraryGrid({
   onDelete,
   cleanTitles,
   chromeHasActions = false,
+  syncView,
+  onDownload,
+  onToggleFileSync,
+  onStatus,
 }: LibraryGridProps) {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("recent");
@@ -66,15 +86,34 @@ export function LibraryGrid({
         onSortChange={setSort}
       />
       <div className="library-grid">
-        {view.map((item) => (
-          <LibraryCard
-            key={item.itemId}
-            item={item}
-            onOpen={onOpen}
-            onDelete={onDelete}
-            cleanTitles={cleanTitles}
-          />
-        ))}
+        {view.map((item) => {
+          const downloadPercent = syncView?.downloads.get(item.workId) ?? null;
+          const cardState = syncView
+            ? deriveCardState(
+                item,
+                syncView.failedDownloads.has(item.workId)
+                  ? "failed"
+                  : downloadPercent != null
+                    ? { percent: downloadPercent }
+                    : null,
+              )
+            : "local";
+          return (
+            <LibraryCard
+              key={item.itemId}
+              item={item}
+              onOpen={onOpen}
+              onDelete={onDelete}
+              cleanTitles={cleanTitles}
+              syncState={cardState}
+              downloadPercent={downloadPercent}
+              uploading={syncView?.uploads.has(item.workId) ?? false}
+              onDownload={onDownload}
+              onToggleFileSync={onToggleFileSync}
+              onStatus={onStatus}
+            />
+          );
+        })}
       </div>
     </section>
   );

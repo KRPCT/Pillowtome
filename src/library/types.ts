@@ -17,6 +17,11 @@ export interface LibraryItem {
   lastReadAt: number | null;
   /** From locator.progress_fraction when joined; null if never opened. */
   progressFraction: number | null;
+  /** Phase 7: the book file is held locally (placeholder rows carry the
+   *  `sync-remote` sentinel source_id until downloaded + adopted). */
+  fileLocal?: boolean;
+  /** Phase 7: per-book 同步此书 opt-in (SCHEMA_V8 file_sync_enabled). */
+  fileSyncEnabled?: boolean;
 }
 
 export interface LibraryItemRow {
@@ -30,4 +35,6 @@ export interface LibraryItemRow {
   last_opened_at: number | null;
   last_read_at: number | null;
   progress_fraction?: number | null;
+  /** SCHEMA_V8 column; optional so rows predating V8 still type-check. */
+  file_sync_enabled?: number | null;
 }

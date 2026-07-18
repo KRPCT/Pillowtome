@@ -3,7 +3,14 @@
  */
 
 import { useEffect, useState } from "react";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
 import { SettingsSheet } from "../reader/SettingsSheet";
+import {
+  formatRelativeSyncTime,
+  type SyncViewState,
+} from "../sync/sync-status";
 import {
   DEFAULT_PREFS,
   type ReadingPrefs,
@@ -25,6 +32,10 @@ export interface LibrarySettingsSheetProps {
   onOpenChange: (open: boolean) => void;
   prefs: ReadingPrefs;
   onPrefsChange: (partial: Partial<ReadingPrefs>) => void;
+  /** Live sync engine view for the 同步 section (UI-SPEC §6). */
+  syncState: SyncViewState;
+  /** Open the SyncSettingsSheet (from the section CTA / 同步设置 row). */
+  onOpenSyncSettings: () => void;
 }
 
 export function LibrarySettingsSheet({
@@ -32,6 +43,8 @@ export function LibrarySettingsSheet({
   onOpenChange,
   prefs,
   onPrefsChange,
+  syncState,
+  onOpenSyncSettings,
 }: LibrarySettingsSheetProps) {
   const [fonts, setFonts] = useState<CustomFont[]>([]);
   const [fontStatus, setFontStatus] = useState<string | null>(null);
@@ -43,6 +56,50 @@ export function LibrarySettingsSheet({
       .catch(() => setFonts([]));
   }, [open]);
 
+  // UI-SPEC §6: 未配置 → guidance + CTA; 已配置 → read-only summary + 同步设置.
+  const syncSection = (
+    <Box sx={{ mb: 3 }}>
+      <Typography
+        variant="subtitle2"
+        sx={{ color: "text.secondary", mb: 1.25, letterSpacing: "0.02em" }}
+      >
+        同步
+      </Typography>
+      {syncState.configured ? (
+        <Box>
+          {syncState.serverUrl ? (
+            <Typography variant="body2" noWrap>
+              {syncState.serverUrl}
+            </Typography>
+          ) : null}
+          {syncState.lastSyncAt != null ? (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+              上次同步 {formatRelativeSyncTime(syncState.lastSyncAt, Date.now())}
+            </Typography>
+          ) : null}
+          {syncState.lastError ? (
+            <Typography variant="caption" color="error" sx={{ display: "block" }}>
+              同步失败：{syncState.lastError}
+            </Typography>
+          ) : null}
+          <Button size="small" onClick={onOpenSyncSettings} sx={{ mt: 1 }}>
+            同步设置
+          </Button>
+        </Box>
+      ) : (
+        <Box>
+          <Typography variant="body2">未开启同步</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+            配置 WebDAV 服务器后，阅读进度与批注可在多设备间同步
+          </Typography>
+          <Button size="small" variant="outlined" onClick={onOpenSyncSettings} sx={{ mt: 1.5 }}>
+            设置 WebDAV 同步
+          </Button>
+        </Box>
+      )}
+    </Box>
+  );
+
   return (
     <SettingsSheet
       open={open}
@@ -50,6 +107,7 @@ export function LibrarySettingsSheet({
       prefs={prefs}
       onPrefsChange={onPrefsChange}
       showLibraryPrefs
+      syncSection={syncSection}
       fonts={fonts.map((f) => ({ id: f.id, familyName: f.familyName }))}
       fontStatus={fontStatus}
       onImportFont={async () => {

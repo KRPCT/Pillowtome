@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { CloudDownload, RotateCcw } from "lucide-react";
 
 /**
  * Bottom reading navigation (P0 hero): a draggable whole-book scrubber with
@@ -7,7 +7,9 @@ import { RotateCcw } from "lucide-react";
  * shown after a jump. The undo pill is the honest safety net over imperfect
  * position math — any jump is one tap to reverse.
  *
- * Clean-room from UI-SPEC; no Readest source.
+ * The D-92 sync trace pill (已从其他设备同步) shares the undo pill's slot and
+ * takes priority over it (UI-SPEC §5): while a sync trace is live, the undo
+ * pill is suppressed. Clean-room from UI-SPEC; no Readest source.
  */
 export interface ReaderBottomBarProps {
   visible: boolean;
@@ -22,6 +24,9 @@ export interface ReaderBottomBarProps {
   /** Show the 返回原位 undo affordance. */
   undoVisible?: boolean;
   onUndo?: () => void;
+  /** Show the D-92 sync trace pill (priority over the undo pill). */
+  syncTraceVisible?: boolean;
+  onSyncTrace?: () => void;
 }
 
 function pct(f: number): number {
@@ -36,6 +41,8 @@ export function ReaderBottomBar({
   onScrub,
   undoVisible = false,
   onUndo,
+  syncTraceVisible = false,
+  onSyncTrace,
 }: ReaderBottomBarProps) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
@@ -91,7 +98,17 @@ export function ReaderBottomBar({
       role="group"
       aria-label="阅读进度导航"
     >
-      {undoVisible ? (
+      {syncTraceVisible ? (
+        <button
+          type="button"
+          className="reader__undo-pill reader__undo-pill--sync"
+          onClick={onSyncTrace}
+          aria-label="已从其他设备同步"
+        >
+          <CloudDownload aria-hidden />
+          已从其他设备同步
+        </button>
+      ) : undoVisible ? (
         <button
           type="button"
           className="reader__undo-pill"

@@ -121,6 +121,8 @@ export interface SettingsSheetProps {
   fontStatus?: string | null;
   /** Show library-only options (e.g. 书名清洗) — set from the library shell. */
   showLibraryPrefs?: boolean;
+  /** Optional 同步 section (Phase 7) — rendered after the 书库 block. */
+  syncSection?: ReactNode;
 }
 
 function formatLineHeight(v: number): string {
@@ -184,6 +186,7 @@ export function SettingsSheet({
   onRemoveFont,
   fontStatus = null,
   showLibraryPrefs = false,
+  syncSection = null,
 }: SettingsSheetProps) {
   const selectedFont =
     prefs.fontFamilyKey === "system" || !prefs.activeFontId
@@ -420,6 +423,13 @@ export function SettingsSheet({
               />
             </Box>
           </Section>
+        ) : null}
+
+        {syncSection ? (
+          <>
+            <Divider sx={{ mb: 3 }} />
+            {syncSection}
+          </>
         ) : null}
 
         <Section title="字体">

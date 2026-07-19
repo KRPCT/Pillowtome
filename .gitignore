@@ -47,3 +47,14 @@ target/
 pillowtome-*.png
 pillow-device.db
 .zcode/
+
+# Internal engineering files (kept locally, never pushed)
+.planning/
+docs/
+CLAUDE.md
+HANDOFF.md
+harness.html
+src/harness/
+scripts/*.bat
+scripts/*.ps1
+scripts/ui-audit.mjs

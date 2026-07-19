@@ -35,7 +35,9 @@
 | 平台 | 安装包 |
 |---|---|
 | Windows | `Pillowtome_*_x64-setup.exe`（安装程序）或 `Pillowtome_*_x64_en-US.msi`（批量部署用） |
-| 安卓 | `pillowtome-*-universal-release.apk`（通用包，覆盖主流处理器架构） |
+| 安卓 | 按处理器架构选择：`Pillowtome_*_arm64-v8a.apk`（绝大多数近十年手机与平板，推荐）、`Pillowtome_*_armeabi-v7a.apk`（较老的 32 位设备）、`Pillowtome_*_x86_64.apk`（模拟器及 x86 设备） |
+
+安卓端也支持用系统「打开方式」直接打开 EPUB / TXT 文件，打开即导入书库。
 
 **首次运行提示**：当前版本未做商业代码签名。Windows 请在安全防护提示中选「更多信息 → 仍要运行」；安卓需允许「安装未知来源应用」。安装包使用自签名证书，后续版本覆盖安装时请保留同一签名。
 

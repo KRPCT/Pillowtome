@@ -292,6 +292,7 @@ export function FoliateView({
   const [searchOpen, setSearchOpen] = useState(false);
   const [fxlLocked, setFxlLocked] = useState(false);
   const [bookTitle, setBookTitle] = useState("");
+  const [bookAuthor, setBookAuthor] = useState("");
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [customFonts, setCustomFonts] = useState<CustomFont[]>([]);
   const [fontStatus, setFontStatus] = useState<string | null>(null);
@@ -2183,12 +2184,19 @@ export function FoliateView({
           }
         }
 
-        // Best-effort title from engine metadata when present.
-        const metaTitle = (
-          view.book as { metadata?: { title?: string } } | undefined
-        )?.metadata?.title;
+        // Best-effort title/author from engine metadata when present.
+        const bookMeta = (
+          view.book as
+            | { metadata?: { title?: string; author?: unknown } }
+            | undefined
+        )?.metadata;
+        const metaTitle = bookMeta?.title;
         if (typeof metaTitle === "string" && metaTitle.trim()) {
           setBookTitle(metaTitle.trim());
+        }
+        const metaAuthor = authorToString(bookMeta?.author);
+        if (metaAuthor) {
+          setBookAuthor(metaAuthor);
         }
 
         // Phase B: backfill real title/author/cover for engine-parsed formats
@@ -2394,7 +2402,7 @@ export function FoliateView({
         {status === "reading" ? (
           <ReaderChrome
             title={bookTitle}
-            fraction={location?.fraction ?? null}
+            author={bookAuthor}
             chromeVisible={chromeVisible}
             bookmarked={bookmarkedHere}
             onBack={handleBack}
@@ -2478,6 +2486,7 @@ export function FoliateView({
         prefs={prefs}
         onPrefsChange={handlePrefsChange}
         modeLocked={fxlLocked}
+        theme={prefs.theme}
         fonts={customFonts.map((f) => ({
           id: f.id,
           familyName: f.familyName,
@@ -2497,6 +2506,7 @@ export function FoliateView({
         items={tocItems}
         activeLabel={activeTocLabel}
         onNavigate={handleTocNavigate}
+        theme={prefs.theme}
       />
 
       <SearchSheet
@@ -2504,9 +2514,14 @@ export function FoliateView({
         onOpenChange={setSearchOpen}
         view={viewRef.current}
         onJump={handleSearchJump}
+        theme={prefs.theme}
       />
 
-      <NoteEditorSheet annotation={noteTarget} onClose={handleNoteClose} />
+      <NoteEditorSheet
+        annotation={noteTarget}
+        onClose={handleNoteClose}
+        theme={prefs.theme}
+      />
 
       <AnnotationsSheet
         open={annotationsOpen}
@@ -2517,6 +2532,7 @@ export function FoliateView({
         }
         onJump={handleAnnotationJump}
         onDelete={handleAnnotationDelete}
+        theme={prefs.theme}
       />
       </div>
     </ThemeProvider>

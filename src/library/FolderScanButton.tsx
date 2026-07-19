@@ -13,7 +13,6 @@ import {
   libraryHasWorkId,
 } from "./library-store";
 import { ensureWorkRow } from "../reader/locator-store";
-import MuiButton from "@mui/material/Button";
 
 export interface FolderScanButtonProps {
   onDone?: () => void;
@@ -93,15 +92,14 @@ export function FolderScanButton({
 
   if (variant === "toolbar") {
     return (
-      <MuiButton
-        className={className}
-        variant="outlined"
-        size="small"
+      <button
+        type="button"
+        className={className ?? "btn-ghost"}
         disabled={busy}
         onClick={() => void handleScan()}
       >
         {label}
-      </MuiButton>
+      </button>
     );
   }
 

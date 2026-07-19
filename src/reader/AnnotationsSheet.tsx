@@ -1,8 +1,8 @@
 /**
- * Annotations manager (批注) — chapter-grouped list + jump + delete. Reuses the
- * TocSheet shell (left drawer ≥768px, bottom sheet on phone) and its
- * touch/scroll-gate-safe body (CLAUDE.md gate #3). Bookmarks are folded in — no
- * separate surface.
+ * Annotations manager (批注) — mockup §05 .anno-sheet：计数 tabs（高亮/笔记/
+ * 书签）、serif 引文 + 左侧 3px 批注色条、--paper-2 笔记小卡、meta 行
+ * （章节 · 进度% + 时间）。Reuses the shared sheet shell (left drawer ≥768px,
+ * bottom sheet on phone) and its touch/scroll-gate-safe body (CLAUDE.md gate #3).
  *
  * Row tap builds a ReadingPosition via the single jump bus (position-bus) and
  * hands it up; this sheet never invents a second navigation path (D-82).
@@ -17,13 +17,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { capturePosition, positionForTocSpine } from "./position-bus";
 import type { ReadingPosition } from "./reading-position";
 import { spineFromCfi } from "./scroll-cfi";
 import type { AnnotationRow } from "./annotation-store";
+import type { ReadingTheme } from "./apply-reading-styles";
 
-type Filter = "all" | "highlight" | "note" | "bookmark";
+type Filter = "highlight" | "note" | "bookmark";
 
 export interface AnnotationsSheetProps {
   open: boolean;
@@ -35,6 +35,8 @@ export interface AnnotationsSheetProps {
   onJump: (pos: ReadingPosition) => void;
   /** Soft-delete the annotation (host calls annotation-store tombstone). */
   onDelete: (annotation: AnnotationRow) => void;
+  /** Reader theme — flips the sheet to 墨壳 at night. */
+  theme?: ReadingTheme;
 }
 
 function useIsDesktop(): boolean {
@@ -61,20 +63,34 @@ function matchesFilter(a: AnnotationRow, filter: Filter): boolean {
       return !!a.note;
     case "bookmark":
       return a.type === "bookmark";
-    default:
-      return true;
   }
 }
 
 const EMPTY_COPY: Record<Filter, { title: string; body: string }> = {
-  all: {
-    title: "还没有批注",
-    body: "阅读时长按或划选正文，即可高亮、写笔记或添加书签",
-  },
   highlight: { title: "还没有高亮", body: "划选正文即可添加高亮或下划线" },
   note: { title: "还没有笔记", body: "在高亮上点「笔记」即可写下想法" },
   bookmark: { title: "还没有书签", body: "点工具栏的书签按钮即可标记当前位置" },
 };
+
+/** 「今天 12:20 / 昨天 23:04 / 3月5日」(mockup §05 anno-meta)。 */
+function formatAnnoTime(ts: number): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const now = new Date();
+  if (sameDay(d, now)) return `今天 ${hh}:${mm}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(d, yesterday)) return `昨天 ${hh}:${mm}`;
+  if (d.getFullYear() === now.getFullYear())
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
 
 export function AnnotationsSheet({
   open,
@@ -83,25 +99,32 @@ export function AnnotationsSheet({
   chapterLabel,
   onJump,
   onDelete,
+  theme = "day",
 }: AnnotationsSheetProps) {
   const isDesktop = useIsDesktop();
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>("highlight");
   /** Note rows require a two-step confirm; tracks the row awaiting 确认删除. */
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const groups = useMemo(() => {
-    const bySpine = new Map<number, AnnotationRow[]>();
-    for (const a of annotations) {
-      if (!matchesFilter(a, filter)) continue;
-      const spine = spineFromCfi(a.cfi) ?? 0;
-      const list = bySpine.get(spine) ?? [];
-      list.push(a);
-      bySpine.set(spine, list);
-    }
-    return Array.from(bySpine.entries()).sort((x, y) => x[0] - y[0]);
+  const counts = useMemo(
+    () => ({
+      highlight: annotations.filter((a) => matchesFilter(a, "highlight"))
+        .length,
+      note: annotations.filter((a) => matchesFilter(a, "note")).length,
+      bookmark: annotations.filter((a) => matchesFilter(a, "bookmark")).length,
+    }),
+    [annotations],
+  );
+
+  /** Flat, reading-ordered list (spine asc, then creation order inside a spine). */
+  const rows = useMemo(() => {
+    const filtered = annotations.filter((a) => matchesFilter(a, filter));
+    return filtered
+      .map((a, i) => ({ a, i, spine: spineFromCfi(a.cfi) ?? 0 }))
+      .sort((x, y) => x.spine - y.spine || x.i - y.i);
   }, [annotations, filter]);
 
-  const empty = groups.length === 0;
+  const empty = rows.length === 0;
 
   const jump = (a: AnnotationRow) => {
     const spine = spineFromCfi(a.cfi) ?? 0;
@@ -126,10 +149,17 @@ export function AnnotationsSheet({
     onDelete(a);
   };
 
+  const tabs: Array<{ key: Filter; label: string }> = [
+    { key: "highlight", label: "高亮" },
+    { key: "note", label: "笔记" },
+    { key: "bookmark", label: "书签" },
+  ];
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side={isDesktop ? "left" : "bottom"}
+        data-theme={theme}
         className={
           isDesktop
             ? "reader-anno-sheet reader-sheet flex h-full w-[min(360px,85vw)] flex-col gap-0 p-0 sm:max-w-sm"
@@ -137,32 +167,38 @@ export function AnnotationsSheet({
         }
         showCloseButton
       >
-        <SheetHeader className="reader-sheet__header shrink-0 px-4 pt-4 pb-2">
+        <SheetHeader className="reader-sheet__header shrink-0 px-4 pt-4 pb-0">
           <SheetTitle className="reader-toc-sheet__title">批注</SheetTitle>
           <SheetDescription className="sr-only">
             管理高亮、笔记与书签，点按跳转到对应位置
           </SheetDescription>
         </SheetHeader>
 
-        <ToggleGroup
-          type="single"
-          value={filter}
-          onValueChange={(v) => v && setFilter(v as Filter)}
-          className="reader-anno-sheet__filter shrink-0"
+        <div
+          className="reader-anno-tabs shrink-0"
+          role="tablist"
+          aria-label="批注筛选"
         >
-          <ToggleGroupItem value="all" aria-label="全部">
-            全部
-          </ToggleGroupItem>
-          <ToggleGroupItem value="highlight" aria-label="高亮">
-            高亮
-          </ToggleGroupItem>
-          <ToggleGroupItem value="note" aria-label="笔记">
-            笔记
-          </ToggleGroupItem>
-          <ToggleGroupItem value="bookmark" aria-label="书签">
-            书签
-          </ToggleGroupItem>
-        </ToggleGroup>
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={filter === t.key}
+              className={
+                filter === t.key
+                  ? "reader-anno-tab reader-anno-tab--on"
+                  : "reader-anno-tab"
+              }
+              onClick={() => {
+                setFilter(t.key);
+                setConfirmId(null);
+              }}
+            >
+              {t.label} {counts[t.key]}
+            </button>
+          ))}
+        </div>
 
         {empty ? (
           <div className="reader-toc-sheet__empty" role="status">
@@ -174,67 +210,61 @@ export function AnnotationsSheet({
             </p>
           </div>
         ) : (
-          <div className="reader-sheet__body min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4 [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
-            {groups.map(([spine, rows]) => (
-              <section key={spine}>
-                <h3 className="reader-anno-group__header">
-                  {chapterLabel?.(spine) ?? `第 ${spine + 1} 章`}
-                </h3>
-                <ul className="reader-toc-sheet__ul" role="list">
-                  {rows.map((a) => (
-                    <li key={a.annotation_id} className="reader-anno-row-wrap">
-                      <button
-                        type="button"
-                        className="reader-anno-row"
-                        onClick={() => jump(a)}
+          <div className="reader-sheet__body min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] [touch-action:pan-y]">
+            <ul className="reader-anno-list" role="list">
+              {rows.map(({ a, spine }) => {
+                const chapter =
+                  chapterLabel?.(spine) ?? `第 ${spine + 1} 章`;
+                const frac = a.progress_fraction;
+                const loc =
+                  frac != null && Number.isFinite(frac)
+                    ? `${chapter} · ${(Math.max(0, Math.min(1, frac)) * 100).toFixed(1)}%`
+                    : chapter;
+                const confirming = confirmId === a.annotation_id;
+                return (
+                  <li key={a.annotation_id} className="reader-anno-item">
+                    <button
+                      type="button"
+                      className="reader-anno-item__main"
+                      onClick={() => jump(a)}
+                    >
+                      <span
+                        className="reader-anno-quote"
+                        style={{
+                          ["--bar" as string]:
+                            a.type === "bookmark"
+                              ? "var(--cinnabar)"
+                              : `var(--anno-${a.color ?? "cinnabar"}, var(--cinnabar))`,
+                        }}
                       >
-                        <span
-                          className="reader-anno-row__dot"
-                          aria-hidden="true"
-                          style={{
-                            ["--dot" as string]:
-                              a.type === "bookmark"
-                                ? "var(--reader-accent)"
-                                : `var(--anno-${a.color ?? "cinnabar"})`,
-                          }}
-                        />
-                        <span className="reader-anno-row__body">
-                          <span className="reader-anno-row__excerpt">
-                            {a.type === "bookmark"
-                              ? "书签"
-                              : a.text_exact || "（无摘录）"}
-                          </span>
-                          {a.note ? (
-                            <span className="reader-anno-row__note">{a.note}</span>
-                          ) : null}
-                        </span>
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          className="reader-anno-row__delete"
-                          aria-label={
-                            confirmId === a.annotation_id ? "确认删除" : "删除"
-                          }
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            requestDelete(a);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              requestDelete(a);
-                            }
-                          }}
-                        >
-                          {confirmId === a.annotation_id ? "确认删除" : "删除"}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+                        {a.type === "bookmark"
+                          ? "书签"
+                          : a.text_exact || "（无摘录）"}
+                      </span>
+                      {a.note ? (
+                        <span className="reader-anno-note">{a.note}</span>
+                      ) : null}
+                      <span className="reader-anno-meta">
+                        <span>{loc}</span>
+                        <span>{formatAnnoTime(a.created_at)}</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        confirming
+                          ? "reader-anno-item__delete reader-anno-item__delete--confirm"
+                          : "reader-anno-item__delete"
+                      }
+                      aria-label={confirming ? "确认删除" : "删除"}
+                      onClick={() => requestDelete(a)}
+                    >
+                      {confirming ? "确认" : "删除"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
       </SheetContent>

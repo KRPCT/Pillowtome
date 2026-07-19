@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   applyLibraryView,
+  countByStatus,
   filterLibrary,
   readingStatus,
+  searchLibrary,
   sortLibrary,
 } from "./library-sort";
 import type { LibraryItem } from "./types";
@@ -80,5 +82,49 @@ describe("applyLibraryView", () => {
     ];
     const view = applyLibraryView(items, "reading", "recent");
     expect(view.map((i) => i.itemId)).toEqual(["b", "a"]);
+  });
+});
+
+describe("searchLibrary", () => {
+  const items = [
+    item({ itemId: "a", title: "红楼梦", author: "曹雪芹" }),
+    item({ itemId: "b", title: "呐喊", author: "鲁迅" }),
+    item({ itemId: "c", title: "Dream of Red Mansions", author: "Cao Xueqin" }),
+  ];
+
+  it("blank query returns a copy of the full shelf", () => {
+    const out = searchLibrary(items, "   ");
+    expect(out).toHaveLength(3);
+    expect(out).not.toBe(items);
+  });
+
+  it("matches title substring case-insensitively", () => {
+    expect(searchLibrary(items, "红楼").map((i) => i.itemId)).toEqual(["a"]);
+    expect(searchLibrary(items, "dream").map((i) => i.itemId)).toEqual(["c"]);
+    expect(searchLibrary(items, "MANSIONS").map((i) => i.itemId)).toEqual(["c"]);
+  });
+
+  it("matches author substring and tolerates null authors", () => {
+    expect(searchLibrary(items, "鲁迅").map((i) => i.itemId)).toEqual(["b"]);
+    expect(searchLibrary(items, "cao").map((i) => i.itemId)).toEqual(["c"]);
+    const noAuthor = [item({ itemId: "d", title: "无名氏", author: null })];
+    expect(searchLibrary(noAuthor, "鲁")).toHaveLength(0);
+  });
+});
+
+describe("countByStatus", () => {
+  it("counts every bucket over the full shelf", () => {
+    const items = [
+      item({ itemId: "a", title: "A", progressFraction: null }),
+      item({ itemId: "b", title: "B", progressFraction: 0.2 }),
+      item({ itemId: "c", title: "C", progressFraction: 1 }),
+      item({ itemId: "d", title: "D", progressFraction: 0 }),
+    ];
+    expect(countByStatus(items)).toEqual({
+      all: 4,
+      reading: 1,
+      unread: 2,
+      finished: 1,
+    });
   });
 });

@@ -10,7 +10,7 @@
  */
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { Copy, Trash2, Underline } from "lucide-react";
+import { Trash2, Underline } from "lucide-react";
 import type { PaletteColor } from "./css-highlight";
 
 export type BubbleContext = "create" | "edit";
@@ -31,12 +31,13 @@ export interface SelectionBubbleProps {
   onDelete: () => void;
 }
 
-/** 4-color palette, cinnabar first/default (UI-SPEC Color → Annotation palette). */
+/** 5-color palette, cinnabar first/default (mockup §05 朱砂谱系). */
 const SWATCHES: ReadonlyArray<{ key: PaletteColor; label: string }> = [
   { key: "cinnabar", label: "朱砂" },
-  { key: "ochre", label: "赭色" },
+  { key: "ochre", label: "赭石" },
   { key: "green", label: "黛绿" },
   { key: "indigo", label: "靛蓝" },
+  { key: "lotus", label: "藕荷" },
 ];
 
 const BUBBLE_GAP = 8;
@@ -108,7 +109,7 @@ export function SelectionBubble({
         aria-label="下划线"
         onClick={() => onCreate("underline", current ?? "cinnabar")}
       >
-        <Underline size={18} aria-hidden="true" />
+        <Underline size={14} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -116,7 +117,7 @@ export function SelectionBubble({
         aria-label="笔记"
         onClick={onOpenNote}
       >
-        笔记
+        <span aria-hidden="true">✎</span> 笔记
       </button>
       <button
         type="button"
@@ -130,7 +131,9 @@ export function SelectionBubble({
         {copied ? (
           "已复制"
         ) : (
-          <Copy size={18} aria-hidden="true" />
+          <>
+            <span aria-hidden="true">⧉</span> 复制
+          </>
         )}
       </button>
 
@@ -141,7 +144,7 @@ export function SelectionBubble({
           aria-label="删除"
           onClick={onDelete}
         >
-          <Trash2 size={18} aria-hidden="true" />
+          <Trash2 size={14} aria-hidden="true" />
         </button>
       ) : null}
     </div>

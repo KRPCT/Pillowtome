@@ -86,8 +86,8 @@ describe("buildReadingCss", () => {
 
   it("overrides author white body background (安达-style MarkdownPad CSS)", () => {
     const css = buildReadingCss(DEFAULT_PREFS, "", SYSTEM_CJK_STACK);
-    // Day page bg from UI-SPEC
-    expect(css).toContain("background-color: #FFFEF9 !important");
+    // Day page bg from mockup §03 (page colors = 三主题 hex)
+    expect(css).toContain("background-color: #fbf8f2 !important");
     // Both html and body get the paint
     expect(css.indexOf("html")).toBeLessThan(css.indexOf("body"));
   });

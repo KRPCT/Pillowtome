@@ -102,7 +102,7 @@ describe("clearHighlights", () => {
 
 describe("HIGHLIGHT_CSS", () => {
   it("declares highlight + underline rules for every palette key", () => {
-    for (const c of ["cinnabar", "ochre", "green", "indigo"]) {
+    for (const c of ["cinnabar", "ochre", "green", "indigo", "lotus"]) {
       expect(HIGHLIGHT_CSS).toContain(`::highlight(pillow-hl-${c})`);
       expect(HIGHLIGHT_CSS).toContain(`::highlight(pillow-ul-${c})`);
       expect(HIGHLIGHT_CSS).toContain(`var(--anno-${c}-fill)`);

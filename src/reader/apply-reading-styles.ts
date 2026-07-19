@@ -58,14 +58,14 @@ export const DEFAULT_PREFS: ReadingPrefs = {
 export const SYSTEM_CJK_STACK =
   'system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK TC", sans-serif';
 
-/** Book page colors injected into foliate render documents (UI-SPEC §Color B). */
+/** Book page colors injected into foliate render documents (mockup §03 三主题 hex). */
 export const PAGE_COLORS: Record<
   ReadingTheme,
   { background: string; foreground: string }
 > = {
-  day: { background: "#FFFEF9", foreground: "#1C1915" },
-  night: { background: "#12100E", foreground: "#E8E2D6" },
-  sepia: { background: "#F4ECD8", foreground: "#3B2F1E" },
+  day: { background: "#fbf8f2", foreground: "#2a251c" },
+  night: { background: "#181611", foreground: "#c9c2b2" },
+  sepia: { background: "#f1e7d0", foreground: "#3d3324" },
 };
 
 /**
@@ -145,8 +145,10 @@ export function buildCjkCss(prefs: ReadingPrefs, caps: CjkCssCaps): string {
   const parts: string[] = [];
 
   // CJK-04 defaults (always on; not toggles). D-40 indent / D-41 line-height stays on body/p.
+  // 两端对齐（mockup §03 .reader-text text-align: justify）与首行缩进同为默认中文排版。
   parts.push(`
     body p {
+      text-align: justify !important;
       text-indent: 2em !important;
     }
     body h1, body h2, body h3, body h4, body h5, body h6,
@@ -211,25 +213,28 @@ export function buildCjkCss(prefs: ReadingPrefs, caps: CjkCssCaps): string {
  */
 const ANNO_PALETTE: Record<
   ReadingPrefs["theme"],
-  Record<"cinnabar" | "ochre" | "green" | "indigo", { seed: string; alpha: number }>
+  Record<"cinnabar" | "ochre" | "green" | "indigo" | "lotus", { seed: string; alpha: number }>
 > = {
   day: {
-    cinnabar: { seed: "#d24a32", alpha: 28 },
-    ochre: { seed: "#c08a2e", alpha: 28 },
-    green: { seed: "#4f855f", alpha: 28 },
-    indigo: { seed: "#3e5c99", alpha: 28 },
+    cinnabar: { seed: "#c53d2e", alpha: 28 },
+    ochre: { seed: "#d9a441", alpha: 32 },
+    green: { seed: "#4f7a63", alpha: 28 },
+    indigo: { seed: "#3e5c8a", alpha: 28 },
+    lotus: { seed: "#8e6a93", alpha: 28 },
   },
   sepia: {
-    cinnabar: { seed: "#d24a32", alpha: 28 },
-    ochre: { seed: "#c08a2e", alpha: 28 },
-    green: { seed: "#4f855f", alpha: 28 },
-    indigo: { seed: "#3e5c99", alpha: 28 },
+    cinnabar: { seed: "#c53d2e", alpha: 28 },
+    ochre: { seed: "#d9a441", alpha: 32 },
+    green: { seed: "#4f7a63", alpha: 28 },
+    indigo: { seed: "#3e5c8a", alpha: 28 },
+    lotus: { seed: "#8e6a93", alpha: 28 },
   },
   night: {
     cinnabar: { seed: "#e8846f", alpha: 30 },
     ochre: { seed: "#d9b061", alpha: 30 },
     green: { seed: "#7fb48c", alpha: 30 },
     indigo: { seed: "#8aa4d6", alpha: 30 },
+    lotus: { seed: "#b99cbd", alpha: 30 },
   },
 };
 

@@ -18,10 +18,10 @@
  */
 
 export type HighlightType = "highlight" | "underline";
-export type PaletteColor = "cinnabar" | "ochre" | "green" | "indigo";
+export type PaletteColor = "cinnabar" | "ochre" | "green" | "indigo" | "lotus";
 
-/** Fixed 4-color palette (UI-SPEC D-70). The ::highlight() name allowlist. */
-export const PALETTE: readonly PaletteColor[] = ["cinnabar", "ochre", "green", "indigo"];
+/** Fixed 5-color palette (mockup §05 朱砂谱系：朱砂/赭石/黛绿/靛蓝/藕荷). The ::highlight() name allowlist. */
+export const PALETTE: readonly PaletteColor[] = ["cinnabar", "ochre", "green", "indigo", "lotus"];
 
 interface HighlightLike {
   add(range: Range): void;
@@ -108,7 +108,7 @@ export function clearHighlights(win: HighlightWindow | null | undefined): void {
 }
 
 /**
- * `::highlight()` rules for all four palette keys, injected into each section's
+ * `::highlight()` rules for all five palette keys, injected into each section's
  * `pillow-reading-css`. The `--anno-*` / `--anno-*-fill` vars are declared per
  * theme in index.css by plan 05-04; this module only references them.
  */

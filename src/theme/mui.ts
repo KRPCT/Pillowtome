@@ -2,20 +2,23 @@ import { createTheme, type Theme } from "@mui/material/styles";
 import type { ReadingTheme } from "../reader/apply-reading-styles";
 
 /**
- * 简约淡雅 (minimalist / light / refined) Material Design 3 theme for Pillowtome.
+ * 纸墨 (paper / ink / hairline / cinnabar) Material Design 3 theme — the MUI
+ * residue (Snackbar, Dialogs, switches, menus) adopts the mockup §01 token
+ * language: paper surfaces, ink text, 朱砂 primary, hairline dividers.
  *
- * Direction (user-chosen): neutral light surfaces, generous whitespace, minimal
- * elevation, and a restrained 墨青 (ink-teal) accent. The book PAGE keeps its own
- * paper reading tones; this theme owns the app chrome (bars, sheets, controls).
+ * 主题仅作用于阅读画布（mockup §01）：界面壳层保持纸墨体系，因此 day /
+ * sepia / night 三个主题共用同一套纸墨壳层色板；夜间仅翻转阅读画布
+ * （--page-* 与 reader[data-theme="night"]），不翻转 chrome。
  *
- * The three themes are built ONCE at module load and cached — switching theme is
- * a map lookup, never a `createTheme` call (that per-switch cost + MUI re-style
- * was the source of the theme-switch lag). `sepia` is a distinct warm-light theme
- * (day and sepia are no longer the same MUI theme).
+ * The themes are built ONCE at module load and cached — switching theme is a
+ * map lookup, never a `createTheme` call (per-switch rebuild was the source of
+ * the theme-switch lag).
  */
 
-const CJK_STACK =
-  '"Geist Variable", system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK TC", sans-serif';
+const UI_STACK =
+  '"Inter", "Noto Sans SC", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+const SERIF_STACK =
+  '"Noto Serif SC", "Songti SC", "STSong", "SimSun", serif';
 
 interface Palette {
   mode: "light" | "dark";
@@ -32,36 +35,39 @@ interface Palette {
 const PALETTES: Record<ReadingTheme, Palette> = {
   day: {
     mode: "light",
-    primary: "#37606e", // 墨青 ink-teal
-    onPrimary: "#ffffff",
-    secondary: "#516069",
-    bgDefault: "#f8fafb",
-    bgPaper: "#ffffff",
-    textPrimary: "#181d1f",
-    textSecondary: "#3f484c",
-    divider: "#dde4e7",
+    primary: "#bf3a2b", // 朱砂 cinnabar
+    onPrimary: "#fdf6ee",
+    secondary: "#6b5d52",
+    bgDefault: "#faf7f1", // 纸 paper
+    bgPaper: "#faf7f1",
+    textPrimary: "#17140f", // 墨 ink
+    textSecondary: "#4a453b", // 墨二 ink-2
+    divider: "#e3ddcf", // 发丝线 line
   },
   sepia: {
+    // 壳层保持纸墨体系（mockup §01「主题仅作用于阅读画布」）— same as day.
     mode: "light",
-    primary: "#37606e",
-    onPrimary: "#ffffff",
-    secondary: "#6b5d47",
-    bgDefault: "#f0e7d5",
-    bgPaper: "#f7efdd", // warm sepia surface — the fix for "sepia menu didn't change"
-    textPrimary: "#3b2f1e",
-    textSecondary: "#6b5d47",
-    divider: "#ddd0b8",
+    primary: "#bf3a2b",
+    onPrimary: "#fdf6ee",
+    secondary: "#6b5d52",
+    bgDefault: "#faf7f1",
+    bgPaper: "#faf7f1",
+    textPrimary: "#17140f",
+    textSecondary: "#4a453b",
+    divider: "#e3ddcf",
   },
   night: {
-    mode: "dark",
-    primary: "#a1cbda",
-    onPrimary: "#00363f",
-    secondary: "#b8cad3",
-    bgDefault: "#0f1416",
-    bgPaper: "#171d1f",
-    textPrimary: "#dfe3e5",
-    textSecondary: "#bec8cc",
-    divider: "#283034",
+    // 壳层保持纸墨体系（mockup §01「主题仅作用于阅读画布」）— same as day。
+    // 夜间仅翻转阅读画布（--page-* / reader[data-theme="night"]），不翻转 chrome。
+    mode: "light",
+    primary: "#bf3a2b",
+    onPrimary: "#fdf6ee",
+    secondary: "#6b5d52",
+    bgDefault: "#faf7f1",
+    bgPaper: "#faf7f1",
+    textPrimary: "#17140f",
+    textSecondary: "#4a453b",
+    divider: "#e3ddcf",
   },
 };
 
@@ -76,30 +82,87 @@ function buildTheme(p: Palette): Theme {
       text: { primary: p.textPrimary, secondary: p.textSecondary },
       divider: p.divider,
       action: {
-        hover: light ? "rgba(55,96,110,0.06)" : "rgba(161,203,218,0.08)",
-        selected: light ? "rgba(55,96,110,0.10)" : "rgba(161,203,218,0.14)",
+        hover: light ? "rgba(191,58,43,0.06)" : "rgba(232,132,111,0.10)",
+        selected: light ? "rgba(191,58,43,0.10)" : "rgba(232,132,111,0.16)",
       },
     },
-    shape: { borderRadius: 14 },
+    shape: { borderRadius: 10 },
     typography: {
-      fontFamily: CJK_STACK,
+      fontFamily: UI_STACK,
       button: { textTransform: "none", fontWeight: 600, letterSpacing: 0 },
-      h6: { fontWeight: 700 },
+      // 标题用 serif 栈（词标/书名形制，mockup §01 字排）
+      h6: {
+        fontFamily: SERIF_STACK,
+        fontWeight: 700,
+        letterSpacing: "0.12em",
+      },
       subtitle2: { fontWeight: 600 },
     },
     components: {
       MuiAppBar: { defaultProps: { elevation: 0, color: "transparent" } },
-      MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
+      MuiPaper: {
+        styleOverrides: {
+          root: { backgroundImage: "none" },
+        },
+      },
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: { root: { borderRadius: 999 } },
       },
       MuiDrawer: { styleOverrides: { paper: { backgroundImage: "none" } } },
-      MuiChip: { styleOverrides: { root: { borderRadius: 8, fontWeight: 500 } } },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            backgroundImage: "none",
+            borderRadius: 16,
+            border: `1px solid ${p.divider}`,
+            boxShadow: "0 18px 44px -22px rgba(23,20,15,.4)",
+          },
+        },
+      },
+      MuiDialogTitle: {
+        styleOverrides: {
+          root: {
+            fontFamily: SERIF_STACK,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+          },
+        },
+      },
+      MuiSnackbarContent: {
+        styleOverrides: {
+          root: {
+            // 墨底纸字气泡（mockup §03 sel-bubble 语汇）
+            backgroundColor: light ? "#17140f" : "#e6dfd2",
+            color: light ? "#faf7f1" : "#17140f",
+            borderRadius: 10,
+            boxShadow: "0 14px 34px -12px rgba(23,20,15,.55)",
+          },
+        },
+      },
+      MuiChip: { styleOverrides: { root: { borderRadius: 999, fontWeight: 500 } } },
       MuiToggleButton: {
         styleOverrides: { root: { textTransform: "none", fontWeight: 600 } },
       },
       MuiTooltip: { styleOverrides: { tooltip: { fontSize: 12 } } },
+      MuiSwitch: {
+        styleOverrides: {
+          switchBase: {
+            "&.Mui-checked": {
+              color: p.primary,
+              "& + .MuiSwitch-track": { backgroundColor: p.primary },
+            },
+          },
+        },
+      },
+      MuiMenu: {
+        styleOverrides: {
+          paper: {
+            border: `1px solid ${p.divider}`,
+            boxShadow: "0 12px 28px -14px rgba(23,20,15,.35)",
+          },
+        },
+      },
     },
   });
 }

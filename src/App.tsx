@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { onBackButtonPress } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
-import { BookOpen, Settings2 } from "lucide-react";
+import { BookMarked, RefreshCw, Search, Settings2, X } from "lucide-react";
 import { ThemeProvider } from "@mui/material/styles";
-import AppBar from "@mui/material/AppBar";
-import Toolbar from "@mui/material/Toolbar";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
-import IconButton from "@mui/material/IconButton";
 import Snackbar from "@mui/material/Snackbar";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -49,10 +44,15 @@ import {
 import { SyncStatusButton } from "./sync/SyncStatusButton";
 import { SyncSettingsSheet } from "./sync/SyncSettingsSheet";
 
+/** 窄屏底部 tab（mockup §06 .tabbar）：React 状态驱动，不引路由。 */
+type MobileTab = "library" | "annotations" | "sync" | "settings";
+
 /**
- * 书库为主壳：纸感主题与阅读页对齐；直接进入网格 + 设置菜单。
- * Phase 7: AppBar 同步按钮（状态点 + D-90 手动兜底）、同步设置 sheet、
- * 云端占位卡下载流 — failures surface ONLY as dot + this Snackbar (D-93).
+ * 书库为主壳（mockup §02 纸墨语汇）：词标 + 搜索 + 同步药丸 + 朱砂导入。
+ * 窄屏（≤640px）压缩为词标 + 搜索图标 + 同步点，右下朱砂 FAB 触发导入，
+ * 底部 tab bar（书库/批注/同步/设置）。
+ * Phase 7: 同步状态 D-90 手动兜底、同步设置 sheet、云端占位卡下载流 —
+ * failures surface ONLY as dot + this Snackbar (D-93).
  */
 function App() {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -63,8 +63,15 @@ function App() {
   const [pendingDelete, setPendingDelete] = useState<LibraryItem | null>(null);
   /** workIds whose last download attempt rejected — the §3 failed card state. */
   const [failedDownloads, setFailedDownloads] = useState<ReadonlySet<string>>(new Set());
+  /** 顶栏搜索词（客户端子串过滤，LibraryGrid 内应用）。 */
+  const [query, setQuery] = useState("");
+  /** 窄屏顶栏搜索展开态（>640px 搜索 pill 常驻）。 */
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("library");
   const openIdRef = useRef<string | null>(null);
   openIdRef.current = openId;
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const readerBackRef = useRef<(() => boolean) | null>(null);
   const { prefs, onPrefsChange } = useLibraryPrefs();
@@ -119,6 +126,11 @@ function App() {
   useEffect(() => {
     void refreshShelf();
   }, [refreshShelf]);
+
+  // 窄屏搜索展开后聚焦输入框。
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
 
   const closeReader = useCallback(() => {
     setOpenId(null);
@@ -210,6 +222,23 @@ function App() {
     [syncState.downloads, syncState.uploads, failedDownloads],
   );
 
+  // 窄屏 tab bar（§06）：书库回到网格；批注无全局面 → toast 指引；
+  // 同步/设置打开对应 sheet（关闭后 tab 回到书库）。
+  const handleMobileTab = useCallback((tab: MobileTab) => {
+    if (tab === "annotations") {
+      setStatus("在阅读页内长按划词查看批注");
+      return;
+    }
+    setMobileTab(tab);
+    if (tab === "library") {
+      bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (tab === "sync") {
+      setSyncSettingsOpen(true);
+    } else if (tab === "settings") {
+      setSettingsOpen(true);
+    }
+  }, []);
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     void onBackButtonPress(() => {
@@ -219,6 +248,10 @@ function App() {
       }
       if (settingsOpen) {
         setSettingsOpen(false);
+        return;
+      }
+      if (searchOpen) {
+        setSearchOpen(false);
         return;
       }
       if (readerBackRef.current) {
@@ -241,7 +274,7 @@ function App() {
     return () => {
       unlisten?.();
     };
-  }, [settingsOpen, syncSettingsOpen]);
+  }, [settingsOpen, syncSettingsOpen, searchOpen]);
 
   if (openId) {
     return (
@@ -254,23 +287,62 @@ function App() {
     );
   }
 
+  const sheetClosed = (tab: MobileTab) => (open: boolean) => {
+    if (tab === "sync") setSyncSettingsOpen(open);
+    else setSettingsOpen(open);
+    if (!open) setMobileTab("library");
+  };
+
   return (
     <ThemeProvider theme={muiTheme}>
       <div className="library-shell reader" data-theme={theme}>
-        <AppBar position="static" color="transparent" elevation={0}>
-          <Toolbar sx={{ gap: 1, borderBottom: 1, borderColor: "divider" }}>
-            <BookOpen className="library-chrome__icon" aria-hidden />
-            <Box sx={{ minWidth: 0, mr: "auto" }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                枕籍
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                本地书库
-              </Typography>
-            </Box>
-            <Button color="inherit" size="small" onClick={() => setOpenId("sample")}>
+        {/* §02 书库顶栏：词标 + 搜索 pill + 同步药丸 + 朱砂导入 + ghost 操作。
+            桌面 52px、1px 发丝线下边框、纸底；≤640px 压缩为词标 + 图标。 */}
+        <header className={searchOpen ? "app-topbar app-topbar--search" : "app-topbar"}>
+          <div className="app-wordmark">
+            枕籍<small>PILLOWTOME</small>
+          </div>
+          <button
+            type="button"
+            className="app-topbar__icon-btn app-topbar__search-toggle"
+            aria-label={searchOpen ? "收起搜索" : "搜索"}
+            onClick={() => {
+              if (searchOpen) setQuery("");
+              setSearchOpen(!searchOpen);
+            }}
+          >
+            {searchOpen ? <X size={18} /> : <Search size={18} />}
+          </button>
+          <div className="lib-search">
+            <Search size={13} aria-hidden className="lib-search__icon" />
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索书名、作者或笔记…"
+              aria-label="搜索书库"
+            />
+            {query !== "" ? (
+              <button
+                type="button"
+                className="lib-search__clear"
+                aria-label="清空搜索"
+                onClick={() => setQuery("")}
+              >
+                <X size={12} />
+              </button>
+            ) : null}
+          </div>
+          <span className="app-topbar__tail">
+            <SyncStatusButton state={syncState} onPress={handleSyncPress} />
+            <button
+              type="button"
+              className="btn-ghost app-topbar__sample"
+              onClick={() => setOpenId("sample")}
+            >
               示例
-            </Button>
+            </button>
             <ImportButton
               variant="toolbar"
               onStatus={setStatus}
@@ -285,37 +357,81 @@ function App() {
               onStatus={setStatus}
               onDone={() => void refreshShelf()}
             />
-            <SyncStatusButton state={syncState} onPress={handleSyncPress} />
-            <IconButton
-              color="inherit"
+            <button
+              type="button"
+              className="app-topbar__icon-btn"
               aria-label="设置"
               onClick={() => setSettingsOpen(true)}
             >
-              <Settings2 size={20} />
-            </IconButton>
-          </Toolbar>
-        </AppBar>
+              <Settings2 size={18} />
+            </button>
+          </span>
+        </header>
 
-        <div className="library-shell__body">
-          <Box sx={{ pt: 1 }}>
-            <LibraryGrid
-              items={shelf}
-              onOpen={openItem}
-              onRefresh={() => void refreshShelf()}
-              onImportedOpen={(sourceId) => {
-                setOpenId(sourceId);
-                void refreshShelf();
-              }}
-              onDelete={setPendingDelete}
-              cleanTitles={prefs.cleanTitles}
-              chromeHasActions
-              syncView={syncView}
-              onDownload={(item) => void handleDownload(item)}
-              onToggleFileSync={(item, enabled) => void handleToggleFileSync(item, enabled)}
-              onStatus={setStatus}
-            />
-          </Box>
+        <div className="library-shell__body" ref={bodyRef}>
+          <LibraryGrid
+            items={shelf}
+            onOpen={openItem}
+            onRefresh={() => void refreshShelf()}
+            onImportedOpen={(sourceId) => {
+              setOpenId(sourceId);
+              void refreshShelf();
+            }}
+            onDelete={setPendingDelete}
+            cleanTitles={prefs.cleanTitles}
+            chromeHasActions
+            searchQuery={query}
+            syncView={syncView}
+            onDownload={(item) => void handleDownload(item)}
+            onToggleFileSync={(item, enabled) => void handleToggleFileSync(item, enabled)}
+            onStatus={setStatus}
+          />
         </div>
+
+        {/* §06 窄屏：右下朱砂 FAB（＋ 触发导入）+ 底部 tab bar（仅 ≤640px 显示）。 */}
+        <ImportButton
+          variant="fab"
+          onStatus={setStatus}
+          onImported={(b) => {
+            setOpenId(b.id);
+            void refreshShelf();
+          }}
+          onDone={() => void refreshShelf()}
+        />
+        <nav className="tabbar" aria-label="主导航">
+          <button
+            type="button"
+            className={mobileTab === "library" ? "on" : undefined}
+            onClick={() => handleMobileTab("library")}
+          >
+            <b>
+              <BookMarked size={17} aria-hidden />
+            </b>
+            书库
+          </button>
+          <button type="button" onClick={() => handleMobileTab("annotations")}>
+            <b>✎</b>
+            批注
+          </button>
+          <button
+            type="button"
+            className={mobileTab === "sync" ? "on" : undefined}
+            onClick={() => handleMobileTab("sync")}
+          >
+            <b>
+              <RefreshCw size={17} aria-hidden />
+            </b>
+            同步
+          </button>
+          <button
+            type="button"
+            className={mobileTab === "settings" ? "on" : undefined}
+            onClick={() => handleMobileTab("settings")}
+          >
+            <b>⚙</b>
+            设置
+          </button>
+        </nav>
 
         <Snackbar
           open={status !== null}
@@ -344,7 +460,7 @@ function App() {
 
         <LibrarySettingsSheet
           open={settingsOpen}
-          onOpenChange={setSettingsOpen}
+          onOpenChange={sheetClosed("settings")}
           prefs={prefs}
           onPrefsChange={onPrefsChange}
           syncState={syncState}
@@ -356,7 +472,7 @@ function App() {
 
         <SyncSettingsSheet
           open={syncSettingsOpen}
-          onOpenChange={setSyncSettingsOpen}
+          onOpenChange={sheetClosed("sync")}
           syncState={syncState}
           onConfigChanged={() => syncStore.refresh()}
         />

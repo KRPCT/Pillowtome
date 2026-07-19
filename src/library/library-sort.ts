@@ -63,3 +63,31 @@ export function applyLibraryView(
 ): LibraryItem[] {
   return sortLibrary(filterLibrary(items, filter), sort);
 }
+
+/**
+ * 顶栏搜索（mockup §02 lib-search）：对书名/作者做大小写不敏感的子串过滤。
+ * 空白查询原样返回（拷贝）；匹配在过滤/排序之前应用。
+ */
+export function searchLibrary(items: LibraryItem[], query: string): LibraryItem[] {
+  const q = query.trim().toLowerCase();
+  if (q === "") return items.slice();
+  return items.filter(
+    (it) =>
+      it.title.toLowerCase().includes(q) ||
+      (it.author ?? "").toLowerCase().includes(q),
+  );
+}
+
+/** 状态 chips 计数（全部/在读/未读/读毕），基于完整书架实时计算。 */
+export function countByStatus(items: LibraryItem[]): Record<FilterKey, number> {
+  const counts: Record<FilterKey, number> = {
+    all: items.length,
+    reading: 0,
+    unread: 0,
+    finished: 0,
+  };
+  for (const it of items) {
+    counts[readingStatus(it.progressFraction)] += 1;
+  }
+  return counts;
+}

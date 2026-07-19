@@ -13,6 +13,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { flattenToc, type TocItem } from "./toc";
+import type { ReadingTheme } from "./apply-reading-styles";
 
 export interface TocSheetProps {
   open: boolean;
@@ -23,6 +24,8 @@ export interface TocSheetProps {
   activeLabel?: string | null;
   /** Navigate to href then close. */
   onNavigate: (href: string) => void | Promise<void>;
+  /** Reader theme — flips the sheet to 墨壳 at night. */
+  theme?: ReadingTheme;
 }
 
 function useIsDesktop(): boolean {
@@ -67,6 +70,7 @@ export function TocSheet({
   items,
   activeLabel = null,
   onNavigate,
+  theme = "day",
 }: TocSheetProps) {
   const isDesktop = useIsDesktop();
   const flat = useMemo(() => flattenToc(items), [items]);
@@ -86,10 +90,11 @@ export function TocSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side={isDesktop ? "left" : "bottom"}
+        data-theme={theme}
         className={
           isDesktop
-            ? "reader-toc-sheet reader-toc-sheet--drawer reader-sheet flex h-full w-[min(360px,85vw)] flex-col gap-0 p-0 sm:max-w-sm"
-            : "reader-toc-sheet reader-toc-sheet--bottom reader-sheet flex max-h-[min(90vh,720px)] flex-col gap-0 p-0"
+            ? "reader-toc-sheet reader-sheet flex h-full w-[min(360px,85vw)] flex-col gap-0 p-0 sm:max-w-sm"
+            : "reader-toc-sheet reader-sheet flex max-h-[min(90vh,720px)] flex-col gap-0 p-0"
         }
         showCloseButton
       >

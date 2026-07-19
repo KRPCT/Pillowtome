@@ -7,17 +7,17 @@ import {
   Search,
   Type,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ProgressBar } from "./ProgressBar";
 
 /**
- * 48px reader toolbar + 2px progress bar (UI-SPEC shell).
- * Immersive prep: when chromeVisible is false, toolbar+bar are not rendered.
+ * 阅读顶栏（mockup §03 .reader-chrome-top）：
+ * 左「‹ 书库」· 中央绝对居中 serif 书名·作者 · 右侧幽灵 chrome 按钮组
+ * （目录 / 搜索 / 书签 / 批注 / Aa 朱砂高亮）。底缘 1px 发丝线（无阴影）。
+ * 沉浸机制不变：始终挂载，chromeVisible 只切 data-visible（不 reflow .reader__view）。
  */
 export interface ReaderChromeProps {
   title?: string;
-  /** Reading fraction 0..1; when null/undefined, percent caption is omitted. */
-  fraction?: number | null;
+  /** 作者 — 与书名组成「书名 · 作者」中央标题。 */
+  author?: string;
   chromeVisible?: boolean;
   /** True when a bookmark exists at/near the current reading position. */
   bookmarked?: boolean;
@@ -31,7 +31,7 @@ export interface ReaderChromeProps {
 
 export function ReaderChrome({
   title = "",
-  fraction = null,
+  author = "",
   chromeVisible = true,
   bookmarked = false,
   onBack,
@@ -41,88 +41,83 @@ export function ReaderChrome({
   onOpenAnnotations,
   onToggleBookmark,
 }: ReaderChromeProps) {
+  const fullTitle = author ? `${title} · ${author}` : title;
+
   // Always mounted so show/hide can fade+slide (chromeVisible toggles a data attr).
   return (
     <div className="reader__chrome" data-visible={chromeVisible}>
       <header className="reader__toolbar">
         <div className="reader__toolbar-left">
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="reader__icon-btn"
-            aria-label="返回"
-            title="返回"
+            className="reader__chrome-btn reader__chrome-btn--back"
+            aria-label="返回书库"
+            title="返回书库"
             onClick={onBack}
           >
-            <ChevronLeft />
-          </Button>
-          <span className="reader__title" title={title}>
-            {title}
-          </span>
+            <ChevronLeft size={20} strokeWidth={1.75} aria-hidden="true" />
+            <span className="reader__chrome-btn-label">书库</span>
+          </button>
         </div>
 
+        <span className="reader__chrome-title" title={fullTitle}>
+          {fullTitle}
+        </span>
+
         <div className="reader__toolbar-right">
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="reader__icon-btn"
+            className="reader__chrome-btn"
             aria-label="目录"
             title="目录"
             onClick={onOpenToc}
           >
-            <List />
-          </Button>
-          <Button
+            <List size={20} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="reader__icon-btn"
+            className="reader__chrome-btn"
             aria-label="搜索"
             title="搜索"
             onClick={onOpenSearch}
           >
-            <Search />
-          </Button>
-          <Button
+            <Search size={20} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="reader__icon-btn"
-            aria-label="批注"
-            title="批注"
-            onClick={onOpenAnnotations}
-          >
-            <Highlighter />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="reader__icon-btn"
-            data-active={bookmarked}
+            className="reader__chrome-btn"
+            data-active={bookmarked || undefined}
             aria-label={bookmarked ? "移除书签" : "添加书签"}
             aria-pressed={bookmarked}
             title={bookmarked ? "移除书签" : "添加书签"}
             onClick={onToggleBookmark}
           >
-            {bookmarked ? <BookmarkCheck /> : <Bookmark />}
-          </Button>
-          <Button
+            {bookmarked ? (
+              <BookmarkCheck size={20} strokeWidth={1.75} aria-hidden="true" />
+            ) : (
+              <Bookmark size={20} strokeWidth={1.75} aria-hidden="true" />
+            )}
+          </button>
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="reader__icon-btn"
-            aria-label="显示设置"
-            title="显示设置"
+            className="reader__chrome-btn"
+            aria-label="批注"
+            title="批注"
+            onClick={onOpenAnnotations}
+          >
+            <Highlighter size={20} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="reader__chrome-btn reader__chrome-btn--aa"
+            aria-label="排版设置"
+            title="排版设置"
             onClick={onOpenSettings}
           >
-            <Type />
-          </Button>
+            <Type size={20} strokeWidth={1.75} aria-hidden="true" />
+          </button>
         </div>
       </header>
-      <ProgressBar fraction={fraction ?? 0} />
     </div>
   );
 }

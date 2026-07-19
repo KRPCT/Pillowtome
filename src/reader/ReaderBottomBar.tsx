@@ -3,7 +3,8 @@ import { CloudDownload, RotateCcw } from "lucide-react";
 
 /**
  * Bottom reading navigation (P0 hero): a draggable whole-book scrubber with
- * chapter tick marks, a tap-to-cycle progress caption, and a "返回原位" undo pill
+ * chapter tick marks, a chapter caption on the left and a tabular percent on
+ * the right (mockup §03 .reader-chrome-bottom), plus a "返回原位" undo pill
  * shown after a jump. The undo pill is the honest safety net over imperfect
  * position math — any jump is one tap to reverse.
  *
@@ -33,6 +34,10 @@ function pct(f: number): number {
   return Math.round(Math.max(0, Math.min(1, f)) * 100);
 }
 
+function pct1(f: number): string {
+  return (Math.max(0, Math.min(1, f)) * 100).toFixed(1);
+}
+
 export function ReaderBottomBar({
   visible,
   fraction,
@@ -46,7 +51,6 @@ export function ReaderBottomBar({
 }: ReaderBottomBarProps) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
-  const [captionChapter, setCaptionChapter] = useState(true);
 
   const fracFromClientX = useCallback((clientX: number): number => {
     const el = trackRef.current;
@@ -85,10 +89,6 @@ export function ReaderBottomBar({
 
   const shown = drag != null ? drag : (fraction ?? 0);
   const shownPct = pct(shown);
-  const caption =
-    captionChapter && chapterLabel
-      ? chapterLabel
-      : `全书 ${fraction != null ? pct(fraction) : 0}%`;
 
   // Always mounted so show/hide can fade+slide; data-visible toggles it.
   return (
@@ -121,14 +121,9 @@ export function ReaderBottomBar({
       ) : null}
 
       <div className="reader__bottom-inner">
-        <button
-          type="button"
-          className="reader__scrub-caption"
-          onClick={() => setCaptionChapter((v) => !v)}
-          title="切换进度显示"
-        >
-          {caption}
-        </button>
+        <span className="reader__scrub-caption" title={chapterLabel ?? undefined}>
+          {chapterLabel ?? "全书"}
+        </span>
 
         <div
           ref={trackRef}
@@ -177,6 +172,8 @@ export function ReaderBottomBar({
             </span>
           ) : null}
         </div>
+
+        <span className="reader__scrub-pages">{pct1(shown)}%</span>
       </div>
     </div>
   );

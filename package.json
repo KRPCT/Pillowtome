@@ -16,7 +16,7 @@
   "dependencies": {
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
-    "@fontsource-variable/geist": "5.2.9",
+    "@fontsource/inter": "^5.2.8",
     "@mui/material": "9.2.0",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-dialog": "2.7.1",

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/sheet";
 import { buildSearchOpts, SEARCH_DEBOUNCE_MS } from "./search-opts";
 import type { FoliateViewElement } from "./foliate-types";
+import type { ReadingTheme } from "./apply-reading-styles";
 
 export interface SearchHit {
   cfi: string;
@@ -31,6 +32,8 @@ export interface SearchSheetProps {
   view: FoliateViewElement | null;
   /** Jump to CFI then close sheet. */
   onJump: (cfi: string) => void | Promise<void>;
+  /** Reader theme — flips the sheet to 墨壳 at night. */
+  theme?: ReadingTheme;
 }
 
 interface ExcerptShape {
@@ -69,6 +72,7 @@ export function SearchSheet({
   onOpenChange,
   view,
   onJump,
+  theme = "day",
 }: SearchSheetProps) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -196,11 +200,12 @@ export function SearchSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
+        data-theme={theme}
         className="reader-search-sheet reader-sheet flex max-h-[min(85vh,720px)] flex-col gap-0 p-0"
         showCloseButton
       >
         <SheetHeader className="reader-sheet__header shrink-0 px-4 pt-4 pb-2">
-          <SheetTitle className="text-lg font-semibold">搜索</SheetTitle>
+          <SheetTitle className="reader-toc-sheet__title">搜索</SheetTitle>
           <SheetDescription className="sr-only">
             在书中搜索关键词并跳转到匹配位置
           </SheetDescription>

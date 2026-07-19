@@ -1,7 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+
+/* 纸墨字排（mockup §01）：书文/标题 Noto Serif CJK、界面 Inter + Noto Sans CJK。
+   CJK 全字体本地化：可变 OTF 由 Rust 物化到 app_data/fonts、经 pillow:// 提供，
+   启动时在 main.tsx 注入 @font-face（PillowBundledSerifCJK / PillowBundledCJK），
+   不用 Google Fonts CDN，也不用 fontsource 的 unicode-range 子集（逐字回退闪烁）。 */
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-600.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -13,6 +20,30 @@
    MD3 owns every chrome surface (app bars, sheets, cards, controls).
    ========================================================================== */
 :root {
+  /* ============================================================
+     枕籍 mockup 语义令牌（mockups/styles.css 为唯一规格）
+     纸 paper / 墨 ink / 发丝线 line / 朱砂 cinnabar
+     ============================================================ */
+  --paper: #faf7f1;
+  --paper-2: #f3efe6;
+  --ink: #17140f;
+  --ink-2: #4a453b;
+  --ink-3: #8a8375;
+  --line: #e3ddcf;
+  --cinnabar: #bf3a2b;
+  --cinnabar-deep: #9e2d20;
+  --on-cinnabar: #fdf6ee;
+
+  --font-serif: "PillowBundledSerifCJK", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+  --font-ui: "PillowBundledCJK", "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+
+  /* 批注色板 · 朱砂谱系（5 色，mockup 05） */
+  --hl-cinnabar: #c53d2e;
+  --hl-yellow: #d9a441;
+  --hl-blue: #3e5c8a;
+  --hl-bamboo: #4f7a63;
+  --hl-lotus: #8e6a93;
+
   /* Shape scale (corner radii) */
   --md-shape-none: 0px;
   --md-shape-xs: 4px;
@@ -63,47 +94,49 @@
   --reader-fg: var(--md-on-surface);
   --reader-muted: var(--md-on-surface-variant);
   --reader-border: var(--md-outline-variant);
-  --page-bg: #fffef9;
-  --page-fg: #1c1915;
+  --page-bg: #fbf8f2;
+  --page-fg: #2a251c;
 
-  /* Annotation palette (D-70) — solid seed + translucent fill (day/sepia @28%). */
-  --anno-cinnabar: #d24a32;
-  --anno-cinnabar-fill: color-mix(in srgb, #d24a32 28%, transparent);
-  --anno-ochre: #c08a2e;
-  --anno-ochre-fill: color-mix(in srgb, #c08a2e 28%, transparent);
-  --anno-green: #4f855f;
-  --anno-green-fill: color-mix(in srgb, #4f855f 28%, transparent);
-  --anno-indigo: #3e5c99;
-  --anno-indigo-fill: color-mix(in srgb, #3e5c99 28%, transparent);
+  /* Annotation palette (朱砂谱系, mockup) — solid seed + translucent fill (day/sepia @28%). */
+  --anno-cinnabar: #c53d2e;
+  --anno-cinnabar-fill: color-mix(in srgb, #c53d2e 28%, transparent);
+  --anno-ochre: #d9a441;
+  --anno-ochre-fill: color-mix(in srgb, #d9a441 32%, transparent);
+  --anno-green: #4f7a63;
+  --anno-green-fill: color-mix(in srgb, #4f7a63 28%, transparent);
+  --anno-indigo: #3e5c8a;
+  --anno-indigo-fill: color-mix(in srgb, #3e5c8a 28%, transparent);
+  --anno-lotus: #8e6a93;
+  --anno-lotus-fill: color-mix(in srgb, #8e6a93 28%, transparent);
 
-  /* MD3 color roles — light (朱砂 seed) */
-  --md-primary: #b4472f;
-  --md-on-primary: #ffffff;
-  --md-primary-container: #ffdad2;
+  /* MD3 color roles — 纸墨壳层（朱砂 seed） */
+  --md-primary: #bf3a2b;
+  --md-on-primary: #fdf6ee;
+  --md-primary-container: #f6dcd4;
   --md-on-primary-container: #3a0a02;
-  --md-secondary: #77574f;
+  --md-secondary: #6b5d52;
   --md-on-secondary: #ffffff;
-  --md-secondary-container: #ffdad2;
-  --md-on-secondary-container: #2c150f;
+  --md-secondary-container: #ece4d6;
+  --md-on-secondary-container: #2c2118;
   --md-tertiary: #6d5e2f;
   --md-on-tertiary: #ffffff;
-  --md-tertiary-container: #f8e2a6;
+  --md-tertiary-container: #f0e5c0;
   --md-on-tertiary-container: #231b00;
   --md-error: #ba1a1a;
   --md-on-error: #ffffff;
   --md-error-container: #ffdad6;
   --md-on-error-container: #410002;
-  --md-surface: #fff8f6;
-  --md-on-surface: #231917;
-  --md-surface-variant: #f5ded8;
-  --md-on-surface-variant: #53433f;
-  --md-surface-container-lowest: #ffffff;
-  --md-surface-container-low: #fff1ed;
-  --md-surface-container: #fceae5;
-  --md-surface-container-high: #f6e4df;
-  --md-surface-container-highest: #f0ded9;
-  --md-outline: #85736e;
-  --md-outline-variant: #d8c2bb;
+  --md-surface: #faf7f1;
+  --md-on-surface: #17140f;
+  --md-surface-variant: #ece7db;
+  --md-on-surface-variant: #4a453b;
+  --md-surface-container-lowest: #fffdf8;
+  --md-surface-container-low: #f6f2ea;
+  --md-surface-container: #f3efe6;
+  --md-surface-container-high: #eee9de;
+  --md-surface-container-highest: #e9e3d6;
+  --md-outline: #8a8375;
+  --md-outline-variant: #e3ddcf;
   --md-scrim: #000000;
 }
 
@@ -115,10 +148,10 @@
   --reader-fg: var(--md-on-surface);
   --reader-muted: var(--md-on-surface-variant);
   --reader-border: var(--md-outline-variant);
-  --page-bg: #12100e;
-  --page-fg: #e8e2d6;
+  --page-bg: #181611;
+  --page-fg: #c9c2b2;
 
-  /* Annotation palette (D-70) — lighter night tints, fill @30% so page text reads through. */
+  /* Annotation palette (朱砂谱系) — lighter night tints, fill @30% so page text reads through. */
   --anno-cinnabar: #e8846f;
   --anno-cinnabar-fill: color-mix(in srgb, #e8846f 30%, transparent);
   --anno-ochre: #d9b061;
@@ -127,35 +160,37 @@
   --anno-green-fill: color-mix(in srgb, #7fb48c 30%, transparent);
   --anno-indigo: #8aa4d6;
   --anno-indigo-fill: color-mix(in srgb, #8aa4d6 30%, transparent);
+  --anno-lotus: #b99cbd;
+  --anno-lotus-fill: color-mix(in srgb, #b99cbd 30%, transparent);
 
-  /* MD3 color roles — dark (朱砂 seed) */
-  --md-primary: #ffb4a4;
-  --md-on-primary: #5f1607;
+  /* MD3 color roles — 夜间墨壳（朱砂 seed） */
+  --md-primary: #e8846f;
+  --md-on-primary: #3a0a02;
   --md-primary-container: #8f2f1a;
-  --md-on-primary-container: #ffdad2;
-  --md-secondary: #e7bdb2;
-  --md-on-secondary: #442a22;
-  --md-secondary-container: #5d3f37;
-  --md-on-secondary-container: #ffdad2;
+  --md-on-primary-container: #f6dcd4;
+  --md-secondary: #d6c5ba;
+  --md-on-secondary: #3a2c24;
+  --md-secondary-container: #54423a;
+  --md-on-secondary-container: #ece4d6;
   --md-tertiary: #dbc68d;
   --md-on-tertiary: #3b2f05;
   --md-tertiary-container: #534619;
-  --md-on-tertiary-container: #f8e2a6;
+  --md-on-tertiary-container: #f0e5c0;
   --md-error: #ffb4ab;
   --md-on-error: #690005;
   --md-error-container: #93000a;
   --md-on-error-container: #ffdad6;
-  --md-surface: #1a1210;
-  --md-on-surface: #f0ded9;
-  --md-surface-variant: #53433f;
-  --md-on-surface-variant: #d8c2bb;
-  --md-surface-container-lowest: #140c0a;
-  --md-surface-container-low: #231917;
-  --md-surface-container: #271d1a;
-  --md-surface-container-high: #322825;
-  --md-surface-container-highest: #3d322f;
-  --md-outline: #a08c86;
-  --md-outline-variant: #53433f;
+  --md-surface: #181611;
+  --md-on-surface: #e6dfd2;
+  --md-surface-variant: #45403a;
+  --md-on-surface-variant: #c9c2b2;
+  --md-surface-container-lowest: #121009;
+  --md-surface-container-low: #201d18;
+  --md-surface-container: #242119;
+  --md-surface-container-high: #2e2a24;
+  --md-surface-container-highest: #3a352c;
+  --md-outline: #8a8375;
+  --md-outline-variant: #45403a;
   --md-scrim: #000000;
 }
 
@@ -167,53 +202,55 @@
   --reader-fg: var(--md-on-surface);
   --reader-muted: var(--md-on-surface-variant);
   --reader-border: var(--md-outline-variant);
-  --page-bg: #f4ecd8;
-  --page-fg: #3b2f1e;
+  --page-bg: #f1e7d0;
+  --page-fg: #3d3324;
 
-  /* Annotation palette (D-70) — same seed as day, fill @28% over warm paper. */
-  --anno-cinnabar: #d24a32;
-  --anno-cinnabar-fill: color-mix(in srgb, #d24a32 28%, transparent);
-  --anno-ochre: #c08a2e;
-  --anno-ochre-fill: color-mix(in srgb, #c08a2e 28%, transparent);
-  --anno-green: #4f855f;
-  --anno-green-fill: color-mix(in srgb, #4f855f 28%, transparent);
-  --anno-indigo: #3e5c99;
-  --anno-indigo-fill: color-mix(in srgb, #3e5c99 28%, transparent);
+  /* Annotation palette (朱砂谱系) — same seed as day, fill @28% over warm paper. */
+  --anno-cinnabar: #c53d2e;
+  --anno-cinnabar-fill: color-mix(in srgb, #c53d2e 28%, transparent);
+  --anno-ochre: #d9a441;
+  --anno-ochre-fill: color-mix(in srgb, #d9a441 32%, transparent);
+  --anno-green: #4f7a63;
+  --anno-green-fill: color-mix(in srgb, #4f7a63 28%, transparent);
+  --anno-indigo: #3e5c8a;
+  --anno-indigo-fill: color-mix(in srgb, #3e5c8a 28%, transparent);
+  --anno-lotus: #8e6a93;
+  --anno-lotus-fill: color-mix(in srgb, #8e6a93 28%, transparent);
 
-  /* MD3 color roles — light on warm sepia paper (朱砂 seed) */
-  --md-primary: #a8442a;
-  --md-on-primary: #ffffff;
-  --md-primary-container: #ffdad2;
+  /* MD3 color roles — 宣纸主题壳层仍为纸墨体系（mockup：主题仅作用于阅读画布） */
+  --md-primary: #bf3a2b;
+  --md-on-primary: #fdf6ee;
+  --md-primary-container: #f6dcd4;
   --md-on-primary-container: #3a0a02;
-  --md-secondary: #77574f;
+  --md-secondary: #6b5d52;
   --md-on-secondary: #ffffff;
-  --md-secondary-container: #f6ddc6;
-  --md-on-secondary-container: #2c150f;
+  --md-secondary-container: #ece4d6;
+  --md-on-secondary-container: #2c2118;
   --md-tertiary: #6d5e2f;
   --md-on-tertiary: #ffffff;
-  --md-tertiary-container: #f0e0a2;
+  --md-tertiary-container: #f0e5c0;
   --md-on-tertiary-container: #231b00;
   --md-error: #ba1a1a;
   --md-on-error: #ffffff;
   --md-error-container: #ffdad6;
   --md-on-error-container: #410002;
-  --md-surface: #f4ecd8;
-  --md-on-surface: #3b2f1e;
-  --md-surface-variant: #e5d8c0;
-  --md-on-surface-variant: #53433f;
-  --md-surface-container-lowest: #fbf3df;
-  --md-surface-container-low: #f0e7d0;
-  --md-surface-container: #ece2c8;
-  --md-surface-container-high: #e6dabd;
-  --md-surface-container-highest: #e0d4b4;
-  --md-outline: #8a7a5f;
-  --md-outline-variant: #d4c6ae;
+  --md-surface: #faf7f1;
+  --md-on-surface: #17140f;
+  --md-surface-variant: #ece7db;
+  --md-on-surface-variant: #4a453b;
+  --md-surface-container-lowest: #fffdf8;
+  --md-surface-container-low: #f6f2ea;
+  --md-surface-container: #f3efe6;
+  --md-surface-container-high: #eee9de;
+  --md-surface-container-highest: #e9e3d6;
+  --md-outline: #8a8375;
+  --md-outline-variant: #e3ddcf;
   --md-scrim: #000000;
 }
 
 @theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
+    --font-heading: var(--font-serif);
+    --font-sans: var(--font-ui);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

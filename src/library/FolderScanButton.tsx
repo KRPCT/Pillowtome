@@ -13,7 +13,6 @@ import {
   libraryHasWorkId,
 } from "./library-store";
 import { ensureWorkRow } from "../reader/locator-store";
-import MuiButton from "@mui/material/Button";
 
 export interface FolderScanButtonProps {
   onDone?: () => void;
@@ -32,6 +31,49 @@ function newItemId(): string {
     /* fall through */
   }
   return `item-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+/**
+ * 扫描文件夹流程（顶栏按钮与「⋯」溢出菜单共用）：桌面递归 EPUB 扫描 (D-50, D-53)。
+ */
+export async function scanFolderToLibrary({
+  onStatus,
+  onDone,
+}: {
+  onStatus?: (msg: string | null) => void;
+  onDone?: () => void;
+}): Promise<void> {
+  try {
+    const onAndroid = await invoke<boolean>("is_android");
+    if (onAndroid) {
+      onStatus?.("Android 请使用「导入」选择 EPUB 文件。");
+      return;
+    }
+    const picked = await open({
+      multiple: false,
+      directory: true,
+    });
+    if (picked === null) return;
+    const dir = picked as string;
+    const existing = await listLibraryItems();
+    const known = knownHashesFromItems(
+      existing.map((i) => ({ workId: i.workId })),
+    );
+    const summary = await invoke<ScanSummary>("library_scan_folder", {
+      dir,
+      knownHashes: known,
+    });
+    for (const item of summary.items ?? []) {
+      await persistIngest(item);
+    }
+    onStatus?.(summarizeScan(summary));
+    onDone?.();
+  } catch (err) {
+    const msg = String(err);
+    if (!msg.includes("已取消") && !msg.includes("未选择")) {
+      onStatus?.(msg.replace(/^Error:\s*/i, "") || "扫描失败，请重试。");
+    }
+  }
 }
 
 /**
@@ -55,35 +97,7 @@ export function FolderScanButton({
     setBusy(true);
     setStatus(null);
     try {
-      const onAndroid = await invoke<boolean>("is_android");
-      if (onAndroid) {
-        setStatus("Android 请使用「导入」选择 EPUB 文件。");
-        return;
-      }
-      const picked = await open({
-        multiple: false,
-        directory: true,
-      });
-      if (picked === null) return;
-      const dir = picked as string;
-      const existing = await listLibraryItems();
-      const known = knownHashesFromItems(
-        existing.map((i) => ({ workId: i.workId })),
-      );
-      const summary = await invoke<ScanSummary>("library_scan_folder", {
-        dir,
-        knownHashes: known,
-      });
-      for (const item of summary.items ?? []) {
-        await persistIngest(item);
-      }
-      setStatus(summarizeScan(summary));
-      onDone?.();
-    } catch (err) {
-      const msg = String(err);
-      if (!msg.includes("已取消") && !msg.includes("未选择")) {
-        setStatus(msg.replace(/^Error:\s*/i, "") || "扫描失败，请重试。");
-      }
+      await scanFolderToLibrary({ onStatus: setStatus, onDone });
     } finally {
       setBusy(false);
     }
@@ -93,15 +107,14 @@ export function FolderScanButton({
 
   if (variant === "toolbar") {
     return (
-      <MuiButton
-        className={className}
-        variant="outlined"
-        size="small"
+      <button
+        type="button"
+        className={className ?? "btn-ghost"}
         disabled={busy}
         onClick={() => void handleScan()}
       >
         {label}
-      </MuiButton>
+      </button>
     );
   }
 

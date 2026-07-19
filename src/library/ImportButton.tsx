@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import MuiButton from "@mui/material/Button";
 import { knownHashesFromItems, summarizeIngest } from "./import-pipeline";
 import { ingestPathToLibrary } from "./import-actions";
 import { listLibraryItems } from "./library-store";
@@ -20,8 +19,8 @@ export interface ImportButtonProps {
   onDone?: () => void;
   /** Toolbar variant reports status here (shown as a Snackbar) instead of inline. */
   onStatus?: (msg: string | null) => void;
-  /** Compact toolbar style */
-  variant?: "default" | "toolbar";
+  /** toolbar = 顶栏朱砂主按钮（mockup §02 .btn-primary）；fab = 窄屏右下角浮动按钮（§06 .fab） */
+  variant?: "default" | "toolbar" | "fab";
   className?: string;
 }
 
@@ -92,15 +91,28 @@ export function ImportButton({
 
   if (variant === "toolbar") {
     return (
-      <MuiButton
-        className={className}
-        variant="outlined"
-        size="small"
+      <button
+        type="button"
+        className={className ?? "btn-primary"}
         disabled={busy}
         onClick={() => void handleImport()}
       >
-        {busy ? "导入中…" : "导入"}
-      </MuiButton>
+        {busy ? "导入中…" : "＋ 导入图书"}
+      </button>
+    );
+  }
+
+  if (variant === "fab") {
+    return (
+      <button
+        type="button"
+        className={className ?? "fab"}
+        aria-label={busy ? "导入中" : "导入图书"}
+        disabled={busy}
+        onClick={() => void handleImport()}
+      >
+        ＋
+      </button>
     );
   }
 

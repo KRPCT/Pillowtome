@@ -31,14 +31,6 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = false
-        }
-    }
     signingConfigs {
         create("release") {
             storeFile = rootProject.file(keystoreProperties.getProperty("storeFile", "pillowtome-release.keystore"))

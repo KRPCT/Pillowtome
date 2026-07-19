@@ -16,6 +16,7 @@ import { FoliateView } from "./reader/FoliateView";
 import { LibraryGrid, type SyncCardViewMaps } from "./library/LibraryGrid";
 import { ImportButton } from "./library/ImportButton";
 import { FolderScanButton } from "./library/FolderScanButton";
+import { TopbarOverflowMenu } from "./library/TopbarOverflowMenu";
 import {
   adoptSyncedFile,
   deleteLibraryItem,
@@ -45,12 +46,13 @@ import { SyncStatusButton } from "./sync/SyncStatusButton";
 import { SyncSettingsSheet } from "./sync/SyncSettingsSheet";
 
 /** 窄屏底部 tab（mockup §06 .tabbar）：React 状态驱动，不引路由。 */
-type MobileTab = "library" | "annotations" | "sync" | "settings";
+type MobileTab = "library" | "sync" | "settings";
 
 /**
  * 书库为主壳（mockup §02 纸墨语汇）：词标 + 搜索 + 同步药丸 + 朱砂导入。
- * 窄屏（≤640px）压缩为词标 + 搜索图标 + 同步点，右下朱砂 FAB 触发导入，
- * 底部 tab bar（书库/批注/同步/设置）。
+ * 窄屏（≤640px）压缩为词标 + 搜索图标 + 同步点 + 「⋯」溢出菜单，右下朱砂
+ * FAB 触发导入，底部 tab bar（书库/同步/设置）；≤1000px 搜索收成图标、
+ * 示例/扫描/设置并入「⋯」菜单。
  * Phase 7: 同步状态 D-90 手动兜底、同步设置 sheet、云端占位卡下载流 —
  * failures surface ONLY as dot + this Snackbar (D-93).
  */
@@ -222,13 +224,9 @@ function App() {
     [syncState.downloads, syncState.uploads, failedDownloads],
   );
 
-  // 窄屏 tab bar（§06）：书库回到网格；批注无全局面 → toast 指引；
-  // 同步/设置打开对应 sheet（关闭后 tab 回到书库）。
+  // 窄屏 tab bar（§06）：书库回到网格；同步/设置打开对应 sheet
+  //（关闭后 tab 回到书库）。
   const handleMobileTab = useCallback((tab: MobileTab) => {
-    if (tab === "annotations") {
-      setStatus("在阅读页内长按划词查看批注");
-      return;
-    }
     setMobileTab(tab);
     if (tab === "library") {
       bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -320,7 +318,7 @@ function App() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索书名、作者或笔记…"
+              placeholder="搜索书名或作者…"
               aria-label="搜索书库"
             />
             {query !== "" ? (
@@ -359,12 +357,18 @@ function App() {
             />
             <button
               type="button"
-              className="app-topbar__icon-btn"
+              className="app-topbar__icon-btn app-topbar__settings"
               aria-label="设置"
               onClick={() => setSettingsOpen(true)}
             >
               <Settings2 size={18} />
             </button>
+            <TopbarOverflowMenu
+              onOpenSample={() => setOpenId("sample")}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onStatus={setStatus}
+              onDone={() => void refreshShelf()}
+            />
           </span>
         </header>
 
@@ -408,10 +412,6 @@ function App() {
               <BookMarked size={17} aria-hidden />
             </b>
             书库
-          </button>
-          <button type="button" onClick={() => handleMobileTab("annotations")}>
-            <b>✎</b>
-            批注
           </button>
           <button
             type="button"

@@ -214,6 +214,7 @@ pub fn resolve_font_path(fonts_dir: &Path, id: &str) -> Option<PathBuf> {
 /// Reserved bundled face ids (CJK-05). Flat tokens that pass [`is_safe_font_id`].
 pub const BUNDLED_NOTO_SC_ID: &str = "bundled-noto-sc";
 pub const BUNDLED_NOTO_TC_ID: &str = "bundled-noto-tc";
+pub const BUNDLED_NOTO_SERIF_SC_ID: &str = "bundled-noto-serif-sc";
 
 /// True when the file stem is a reserved bundled face (excluded from custom count).
 pub fn is_bundled_font_id(id: &str) -> bool {

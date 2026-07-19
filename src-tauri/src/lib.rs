@@ -40,6 +40,11 @@ const BUNDLED_NOTO_SC: &[u8] =
 const BUNDLED_NOTO_TC: &[u8] =
     include_bytes!("../assets/fonts/noto-cjk/NotoSansCJKtc-VF.otf");
 
+/// Bundled Noto Serif CJK SC variable OTF (OFL) — serif reading face, same
+/// materialize path; served via pillow fonts id `bundled-noto-serif-sc`.
+const BUNDLED_NOTO_SERIF_SC: &[u8] =
+    include_bytes!("../assets/fonts/noto-cjk/NotoSerifCJKsc-VF.otf");
+
 /// Sample id registered in the [`SourceRegistry`]; the reader fetches
 /// `pillow://.../sample`.
 const SAMPLE_ID: &str = "sample";
@@ -61,7 +66,8 @@ fn materialize_sample(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Box<
     Ok(path)
 }
 
-/// Materialize bundled Noto SC+TC into `app_data_dir/fonts` (soft-fail).
+/// Materialize bundled Noto Sans SC+TC and Serif SC into `app_data_dir/fonts`
+/// (soft-fail).
 ///
 /// Size match skips rewrite so multi-MB fonts are not rewritten every launch.
 fn materialize_bundled_cjk_fonts(app: &tauri::AppHandle) {
@@ -70,6 +76,7 @@ fn materialize_bundled_cjk_fonts(app: &tauri::AppHandle) {
             for (id, bytes) in [
                 (fonts::BUNDLED_NOTO_SC_ID, BUNDLED_NOTO_SC),
                 (fonts::BUNDLED_NOTO_TC_ID, BUNDLED_NOTO_TC),
+                (fonts::BUNDLED_NOTO_SERIF_SC_ID, BUNDLED_NOTO_SERIF_SC),
             ] {
                 if let Err(err) = fonts::materialize_bundled_font(&dir, id, bytes) {
                     eprintln!("[pillowtome] bundled CJK font materialize failed ({id}): {err}");

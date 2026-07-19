@@ -16,9 +16,9 @@ import type { ReadingTheme } from "../reader/apply-reading-styles";
  */
 
 const UI_STACK =
-  '"Inter", "Noto Sans SC", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  '"PillowBundledCJK", "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
 const SERIF_STACK =
-  '"Noto Serif SC", "Songti SC", "STSong", "SimSun", serif';
+  '"PillowBundledSerifCJK", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif';
 
 interface Palette {
   mode: "light" | "dark";

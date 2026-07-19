@@ -17,8 +17,6 @@
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@fontsource/inter": "^5.2.8",
-    "@fontsource/noto-sans-sc": "^5.2.9",
-    "@fontsource/noto-serif-sc": "^5.2.9",
     "@mui/material": "9.2.0",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-dialog": "2.7.1",

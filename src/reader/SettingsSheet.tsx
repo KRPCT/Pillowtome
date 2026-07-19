@@ -20,10 +20,15 @@ import {
 } from "@/components/ui/popover";
 import {
   PAGE_COLORS,
-  SYSTEM_CJK_STACK,
   type ReadingPrefs,
   type ReadingTheme,
 } from "./apply-reading-styles";
+import {
+  FONT_KEY_NOTO_SANS,
+  FONT_KEY_NOTO_SERIF,
+  FONT_KEY_SYSTEM,
+  fontFamilyCssFor,
+} from "./fonts";
 import { convertText } from "./cjk-convert-shim";
 
 const PREVIEW_HAN = /[㐀-鿿豈-﫿]/;
@@ -71,6 +76,13 @@ const THEME_SWATCHES: Array<{ key: ReadingTheme; label: string }> = [
   { key: "day", label: "日间" },
   { key: "sepia", label: "宣纸" },
   { key: "night", label: "夜间" },
+];
+
+/** 内置字体（本地 bundled 可变字重，不走网络/子集）。 */
+const BUILTIN_FONTS: Array<{ key: string; label: string }> = [
+  { key: FONT_KEY_NOTO_SERIF, label: "思源宋体" },
+  { key: FONT_KEY_NOTO_SANS, label: "思源黑体" },
+  { key: FONT_KEY_SYSTEM, label: "系统默认" },
 ];
 
 const CJK_PREVIEW =
@@ -359,14 +371,15 @@ export function SettingsSheet({
   theme = "day",
 }: SettingsSheetProps) {
   const isDesktop = useIsDesktop();
-  const selectedFont =
-    prefs.fontFamilyKey === "system" || !prefs.activeFontId
-      ? "system"
-      : prefs.activeFontId;
+  // 内置键直接命中；自定义字体以 activeFontId 命中。
+  const builtinHit = BUILTIN_FONTS.some((f) => f.key === prefs.fontFamilyKey);
+  const selectedFont = builtinHit
+    ? prefs.fontFamilyKey
+    : prefs.activeFontId || FONT_KEY_SYSTEM;
 
   const pageColors = PAGE_COLORS[prefs.theme];
   const previewStyle = {
-    fontFamily: SYSTEM_CJK_STACK,
+    fontFamily: fontFamilyCssFor(prefs.fontFamilyKey, prefs.activeFontId),
     fontSize: `${prefs.fontSizePx}px`,
     lineHeight: prefs.lineHeight,
     textIndent: "2em",
@@ -449,22 +462,28 @@ export function SettingsSheet({
 
           <AaSection title="字体">
             <div className="reader-font-list">
-              <button
-                type="button"
-                className={
-                  selectedFont === "system"
-                    ? "reader-font-list__item reader-font-list__item--on"
-                    : "reader-font-list__item"
-                }
-                onClick={() =>
-                  onPrefsChange({ fontFamilyKey: "system", activeFontId: null })
-                }
-              >
-                <span>系统默认</span>
-                <span className="reader-font-list__check" aria-hidden="true">
-                  ✓
-                </span>
-              </button>
+              {BUILTIN_FONTS.map((f) => {
+                const selected = selectedFont === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    className={
+                      selected
+                        ? "reader-font-list__item reader-font-list__item--on"
+                        : "reader-font-list__item"
+                    }
+                    onClick={() =>
+                      onPrefsChange({ fontFamilyKey: f.key, activeFontId: null })
+                    }
+                  >
+                    <span>{f.label}</span>
+                    <span className="reader-font-list__check" aria-hidden="true">
+                      ✓
+                    </span>
+                  </button>
+                );
+              })}
               {fonts.map((f) => {
                 const selected = selectedFont === f.id;
                 return (

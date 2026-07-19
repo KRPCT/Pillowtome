@@ -2,15 +2,10 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* 纸墨字排（mockup §01）：书文 Noto Serif SC、界面 Inter + Noto Sans SC。
-   离线打包：单文件简体子集（含拉丁/数字/标点），不用 Google Fonts CDN。 */
-@import "@fontsource/noto-serif-sc/chinese-simplified-400.css";
-@import "@fontsource/noto-serif-sc/chinese-simplified-600.css";
-@import "@fontsource/noto-serif-sc/chinese-simplified-700.css";
-@import "@fontsource/noto-serif-sc/chinese-simplified-900.css";
-@import "@fontsource/noto-sans-sc/chinese-simplified-400.css";
-@import "@fontsource/noto-sans-sc/chinese-simplified-500.css";
-@import "@fontsource/noto-sans-sc/chinese-simplified-700.css";
+/* 纸墨字排（mockup §01）：书文/标题 Noto Serif CJK、界面 Inter + Noto Sans CJK。
+   CJK 全字体本地化：可变 OTF 由 Rust 物化到 app_data/fonts、经 pillow:// 提供，
+   启动时在 main.tsx 注入 @font-face（PillowBundledSerifCJK / PillowBundledCJK），
+   不用 Google Fonts CDN，也不用 fontsource 的 unicode-range 子集（逐字回退闪烁）。 */
 @import "@fontsource/inter/latin-400.css";
 @import "@fontsource/inter/latin-500.css";
 @import "@fontsource/inter/latin-600.css";
@@ -39,8 +34,8 @@
   --cinnabar-deep: #9e2d20;
   --on-cinnabar: #fdf6ee;
 
-  --font-serif: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
-  --font-ui: "Inter", "Noto Sans SC", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "PillowBundledSerifCJK", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+  --font-ui: "PillowBundledCJK", "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
 
   /* 批注色板 · 朱砂谱系（5 色，mockup 05） */
   --hl-cinnabar: #c53d2e;

@@ -38,7 +38,7 @@ import {
   upsertLocator,
 } from "./locator-store";
 import {
-  buildBundledCjkFontFaceCss,
+  buildAllBundledFontFaceCss,
   buildFontFaceCss,
   fontFamilyCssFor,
   importCustomFont,
@@ -633,7 +633,7 @@ export function FoliateView({
     (next: ReadingPrefs) => {
       const caps = ensureCjkCaps();
       const faces =
-        buildFontFaceCss(next.activeFontId) + buildBundledCjkFontFaceCss();
+        buildFontFaceCss(next.activeFontId) + buildAllBundledFontFaceCss();
       return buildReadingCss(
         next,
         faces,

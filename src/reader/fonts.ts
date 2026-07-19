@@ -124,9 +124,19 @@ export function pillowCustomFamily(id: string): string {
 /** Bundled Noto Sans CJK family name (D-47 / CJK-05). */
 export const BUNDLED_CJK_FAMILY = "PillowBundledCJK";
 
+/** Bundled Noto Serif CJK family name （思源宋体 reading face). */
+export const BUNDLED_SERIF_CJK_FAMILY = "PillowBundledSerifCJK";
+
 /** Pillow protocol font ids for materialized Noto SC/TC (safe flat tokens). */
 export const BUNDLED_NOTO_SC_ID = "bundled-noto-sc";
 export const BUNDLED_NOTO_TC_ID = "bundled-noto-tc";
+/** Pillow protocol font id for materialized Noto Serif SC variable OTF. */
+export const BUNDLED_NOTO_SERIF_SC_ID = "bundled-noto-serif-sc";
+
+/** Aa 面板内置字体键（prefs.fontFamilyKey；activeFontId 恒为 null）。 */
+export const FONT_KEY_SYSTEM = "system";
+export const FONT_KEY_NOTO_SERIF = "noto-serif";
+export const FONT_KEY_NOTO_SANS = "noto-sans";
 
 /**
  * `@font-face` CSS for bundled CJK faces (same family, SC + TC sources).
@@ -150,6 +160,27 @@ export function buildBundledCjkFontFaceCss(): string {
 }
 
 /**
+ * `@font-face` CSS for the bundled Noto Serif CJK SC variable face.
+ * Single full-coverage OTF — no unicode-range splitting, so glyphs never
+ * fallback-flicker mid-reading.
+ */
+export function buildBundledSerifCjkFontFaceCss(): string {
+  const serif = pillowFontUrl(BUNDLED_NOTO_SERIF_SC_ID);
+  return `
+    @font-face {
+      font-family: "${BUNDLED_SERIF_CJK_FAMILY}";
+      src: url("${serif}");
+      font-display: swap;
+    }
+  `;
+}
+
+/** All bundled faces (sans SC/TC + serif SC) — shell + reader injection. */
+export function buildAllBundledFontFaceCss(): string {
+  return buildBundledCjkFontFaceCss() + buildBundledSerifCjkFontFaceCss();
+}
+
+/**
  * Build `@font-face` CSS for the active custom font (D-30).
  * Empty string when system / missing id.
  */
@@ -167,16 +198,27 @@ export function buildFontFaceCss(activeFontId: string | null | undefined): strin
 }
 
 /**
- * Body font-family CSS: custom? → PillowBundledCJK → system CJK stack (D-47).
- * Incomplete custom face still falls through to bundled for CJK coverage.
+ * Body font-family CSS by Aa 面板字体键 (D-47):
+ * - 思源宋体 (noto-serif) → bundled serif VF，系统宋体兜底；
+ * - 思源黑体 (noto-sans) → bundled sans VF，系统栈兜底；
+ * - 系统默认 (system) → 系统栈（bundled sans 仅在通用族前兜底覆盖）；
+ * - 自定义字体 → PillowCustom-{id} 在前，缺字回退 bundled + 系统栈。
  */
 export function fontFamilyCssFor(
   fontFamilyKey: string,
   activeFontId: string | null | undefined,
 ): string {
-  const tail = `"${BUNDLED_CJK_FAMILY}", ${SYSTEM_CJK_STACK}`;
-  if (fontFamilyKey === "system" || !activeFontId) {
-    return tail;
+  const sansTail = `"${BUNDLED_CJK_FAMILY}", ${SYSTEM_CJK_STACK}`;
+  if (fontFamilyKey === FONT_KEY_NOTO_SERIF) {
+    // 内置宋体在前；系统宋体居中兜底；bundled 黑体保证缺字仍可显示。
+    return `"${BUNDLED_SERIF_CJK_FAMILY}", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "${BUNDLED_CJK_FAMILY}", serif`;
   }
-  return `"${pillowCustomFamily(activeFontId)}", ${tail}`;
+  if (fontFamilyKey === FONT_KEY_NOTO_SANS) {
+    return sansTail;
+  }
+  if (fontFamilyKey === FONT_KEY_SYSTEM || !activeFontId) {
+    // 系统栈优先；bundled sans 在通用 sans-serif 前作最终 CJK 覆盖兜底。
+    return SYSTEM_CJK_STACK.replace(/, sans-serif$/, "") + `, "${BUNDLED_CJK_FAMILY}", sans-serif`;
+  }
+  return `"${pillowCustomFamily(activeFontId)}", ${sansTail}`;
 }

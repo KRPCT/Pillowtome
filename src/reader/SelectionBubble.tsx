@@ -51,14 +51,28 @@ export function SelectionBubble({
 }: SelectionBubbleProps) {
   const barRef = useRef<HTMLDivElement | null>(null);
   const [placement, setPlacement] = useState<"above" | "below">("above");
+  const [clampedLeft, setClampedLeft] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Flip below the anchor when there is no room above (D-75).
+  // Flip below the anchor when there is no room above (D-75); clamp horizontally
+  // into the reader view so small screens never push the bar off-viewport.
   useLayoutEffect(() => {
     if (!selection) return;
     setCopied(false);
-    const h = barRef.current?.offsetHeight ?? 44;
+    const el = barRef.current;
+    const h = el?.offsetHeight ?? 44;
     setPlacement(selection.rect.top - h - BUBBLE_GAP < 0 ? "below" : "above");
+    const center = selection.rect.left + selection.rect.width / 2;
+    const parent = el?.offsetParent as HTMLElement | null;
+    const bw = el?.offsetWidth ?? 0;
+    if (parent && bw > 0) {
+      const pw = parent.clientWidth;
+      const min = bw / 2 + 8;
+      const max = Math.max(min, pw - bw / 2 - 8);
+      setClampedLeft(Math.min(Math.max(center, min), max));
+    } else {
+      setClampedLeft(center);
+    }
   }, [selection]);
 
   if (!selection) return null;
@@ -68,7 +82,7 @@ export function SelectionBubble({
     placement === "above"
       ? rect.top - (barRef.current?.offsetHeight ?? 44) - BUBBLE_GAP
       : rect.top + rect.height + BUBBLE_GAP;
-  const left = rect.left + rect.width / 2;
+  const left = clampedLeft ?? rect.left + rect.width / 2;
 
   return (
     <div

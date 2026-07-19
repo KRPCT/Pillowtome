@@ -1,0 +1,1 @@
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'build-android-release|tauri|gradle' } | Select-Object ProcessId, Name, @{N='Cmd';E={$_.CommandLine.Substring(0, [Math]::Min(120, $_.CommandLine.Length))}} | Format-List

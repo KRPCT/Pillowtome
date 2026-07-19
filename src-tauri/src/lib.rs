@@ -222,6 +222,25 @@ pub fn run() {
                 }
             });
 
+            // Android keychain spike evidence (07-01 Task 5): exercise the real
+            // credentials path (save → read → delete) once at launch, proving
+            // ndk-context init + default-store registration + the Keystore
+            // write path on device (RESEARCH Pitfall 1). Soft-fail: the verdict
+            // goes to stderr and a marker file; sync itself reports classified
+            // errors later. (eprintln lives here, outside sync/, as above.)
+            #[cfg(target_os = "android")]
+            {
+                let verdict = match sync::credentials::keychain_self_test() {
+                    Ok(()) => "[pillowtome] keychain self-test: OK".to_string(),
+                    Err(e) => format!("[pillowtome] keychain self-test: FAILED ({e:?})"),
+                };
+                eprintln!("{verdict}");
+                if let Ok(dir) = app.path().app_data_dir() {
+                    let _ =
+                        std::fs::write(dir.join("keychain-selftest.txt"), format!("{verdict}\n"));
+                }
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

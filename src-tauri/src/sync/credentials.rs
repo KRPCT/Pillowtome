@@ -127,6 +127,29 @@ pub fn keyring_available() -> bool {
     }
 }
 
+/// Android spike evidence hook (07-01 Task 5): exercise the REAL credentials
+/// path — save → read back → delete — with a throwaway self-test account,
+/// proving ndk-context init, default-store registration, and the Keystore
+/// WRITE path all work on-device (RESEARCH Pitfall 1; a bare read probe can
+/// pass without ever touching Keystore encryption). Called once from `lib.rs`
+/// setup on Android; leaves no residue (the entry is deleted, and `NoEntry`
+/// on delete is fine). Never touches the real account key; the marker value
+/// is a constant, never logged.
+#[cfg(target_os = "android")]
+pub(crate) fn keychain_self_test() -> Result<(), SyncError> {
+    const SELFTEST_URL: &str = "https://keychain-selftest.invalid";
+    const SELFTEST_USER: &str = "keychain-selftest";
+    const SELFTEST_MARKER: &str = "pillowtome-selftest";
+    save_password(SELFTEST_URL, SELFTEST_USER, SELFTEST_MARKER)?;
+    let read_back = get_password(SELFTEST_URL, SELFTEST_USER);
+    let _ = delete_password(SELFTEST_URL, SELFTEST_USER);
+    match read_back {
+        Ok(value) if value == SELFTEST_MARKER => Ok(()),
+        Ok(_) => Err(SyncError::Internal),
+        Err(e) => Err(e),
+    }
+}
+
 /// The ONLY config shape that ever crosses IPC back to the frontend.
 ///
 /// Password-free by construction (T-07-01-01): there is no field that could

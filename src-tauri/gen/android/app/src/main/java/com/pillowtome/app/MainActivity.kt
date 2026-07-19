@@ -13,7 +13,9 @@ class MainActivity : TauriActivity() {
     // Initialize ndk-context for android-native-keyring-store (SYNC-01): tao
     // 0.35.x no longer does this (tauri-apps/tao#1220), and the keychain is
     // only ever used later via IPC, so post-super placement is safe.
+    Log.i("Pillowtome", "keyring ndk-context init: invoking native initializeNdkContext")
     io.crates.keyring.Keyring.initializeNdkContext(applicationContext)
+    Log.i("Pillowtome", "keyring ndk-context init: native init OK")
   }
 
   // Reparent the RustWebView into a FrameLayout that suppresses the floating

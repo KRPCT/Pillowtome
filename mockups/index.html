@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>枕籍 Pillowtome — UI/UX Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ================= 导航 ================= -->
+<nav class="topnav">
+  <div class="topnav-inner">
+    <div class="brand-mini">枕籍<em>PILLOWTOME</em></div>
+    <div class="topnav-links">
+      <a href="#tokens"><span class="no">01</span>设计令牌</a>
+      <a href="#library"><span class="no">02</span>书库</a>
+      <a href="#reader"><span class="no">03</span>阅读界面</a>
+      <a href="#typeset"><span class="no">04</span>排版设置</a>
+      <a href="#annotation"><span class="no">05</span>批注系统</a>
+      <a href="#android"><span class="no">06</span>Android</a>
+      <a href="#sync"><span class="no">07</span>WebDAV 同步</a>
+      <a href="#interaction"><span class="no">08</span>交互说明</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ================= 页首 ================= -->
+<header class="hero">
+  <div class="hero-kicker">UI / UX Mockups · v1 设计提案</div>
+  <h1>枕籍<span class="en">Pillowtome — Read in Chinese, Beautifully</span></h1>
+  <p class="hero-sub">
+    多平台互通的电子书阅读器（桌面 Windows / macOS / Linux + Android）。以<strong>干净、舒适的中文排版</strong>为差异化硬指标，以<strong>本地优先 + WebDAV 自托管同步</strong>为数据哲学。本稿覆盖 v1 全部核心界面：书库、阅读、中文排版设置、批注、移动端与同步。
+  </p>
+  <dl class="hero-meta">
+    <div><dt>设计语言</dt><dd>纸 · 墨 · 发丝线 · 朱砂</dd></div>
+    <div><dt>覆盖端</dt><dd>桌面三平台 + Android</dd></div>
+    <div><dt>阅读主题</dt><dd>日间 / 宣纸 / 夜间</dd></div>
+    <div><dt>依据文档</dt><dd>PROJECT.md · ROADMAP.md</dd></div>
+  </dl>
+</header>
+
+<!-- ================= 01 设计令牌 ================= -->
+<section class="sheet" id="tokens">
+  <div class="sec-head">
+    <span class="sec-no">01</span>
+    <h2>设计令牌</h2>
+    <span class="en">Design Tokens</span>
+  </div>
+  <p class="sec-desc">全部界面由同一组语义令牌生成：纸（底色）、墨（文字）、发丝线（分隔）、朱砂（唯一强调色，慎用）。阅读主题与批注色板是阅读器特有的两组子令牌。</p>
+
+  <div class="tokens-grid">
+    <div class="token-cell">
+      <h4>语义色 Semantic</h4>
+      <div class="swatch-row"><span class="swatch" style="background:#17140f"></span><div><b>墨 ink</b><br><span>#17140F · 正文 / 强调</span></div></div>
+      <div class="swatch-row"><span class="swatch" style="background:#faf7f1"></span><div><b>纸 paper</b><br><span>#FAF7F1 · 界面底色</span></div></div>
+      <div class="swatch-row"><span class="swatch" style="background:#e3ddcf"></span><div><b>线 line</b><br><span>#E3DDCF · 1px 发丝分隔</span></div></div>
+      <div class="swatch-row"><span class="swatch" style="background:#bf3a2b"></span><div><b>朱砂 cinnabar</b><br><span>#BF3A2B · 主按钮 / 进度 / 选中</span></div></div>
+    </div>
+
+    <div class="token-cell">
+      <h4>阅读主题 Reading Themes</h4>
+      <div class="theme-trio">
+        <div class="theme-chip" style="background:#fbf8f2;color:#2a251c">日间<small>#FBF8F2</small></div>
+        <div class="theme-chip" style="background:#f1e7d0;color:#3d3324">宣纸<small>#F1E7D0</small></div>
+        <div class="theme-chip" style="background:#181611;color:#c9c2b2">夜间<small>#181611</small></div>
+      </div>
+      <p style="font-size:11px;color:var(--ink-3);margin-top:14px;line-height:1.7">主题仅作用于阅读画布，界面壳层保持纸墨体系，避免「全书换肤」造成的视觉割裂。</p>
+      <h4 style="margin-top:22px">批注色板 · 朱砂谱系</h4>
+      <div class="palette-dots">
+        <div class="palette-item"><i style="background:#c53d2e"></i><span>朱砂</span></div>
+        <div class="palette-item"><i style="background:#d9a441"></i><span>藤黄</span></div>
+        <div class="palette-item"><i style="background:#3e5c8a"></i><span>黛蓝</span></div>
+        <div class="palette-item"><i style="background:#4f7a63"></i><span>竹青</span></div>
+        <div class="palette-item"><i style="background:#8e6a93"></i><span>藕荷</span></div>
+      </div>
+    </div>
+
+    <div class="token-cell">
+      <h4>字排 Typography</h4>
+      <div class="type-spec"><div class="lbl">书文 · Noto Serif SC</div><div class="disp-serif">枕藉而读</div></div>
+      <div class="type-spec"><div class="lbl">界面 · Noto Sans SC / Inter</div><div class="ui-sans">书库 · 批注 · 设置 · 同步</div></div>
+      <div class="type-spec"><div class="lbl">元信息 · 大写加宽字距</div><div class="mono-meta">CHAPTER 3 · 12.4% · WEBDAV</div></div>
+      <p style="font-size:11px;color:var(--ink-3);margin-top:14px;line-height:1.7">中文不使用斜体；强调以字重、朱砂色或底色标记完成。书文两端对齐、首行缩进两字。</p>
+    </div>
+
+    <div class="token-cell">
+      <h4>形制 Form</h4>
+      <div class="type-spec"><div class="lbl">分隔</div><div style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px;font-size:12px;color:var(--ink-2)">一律 1px 发丝线，不用投影堆叠卡片</div></div>
+      <div class="type-spec"><div class="lbl">圆角</div><div style="margin-top:6px;font-size:12px;color:var(--ink-2)">面板 12px · 控件 9px · 按钮全圆角</div></div>
+      <div class="type-spec"><div class="lbl">按钮</div><div style="margin-top:10px;display:flex;gap:10px;align-items:center"><button class="btn-primary">导入图书</button><button class="chip">最近阅读</button></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 书库 ================= -->
+<section class="sheet" id="library">
+  <div class="sec-head">
+    <span class="sec-no">02</span>
+    <h2>书库 · 桌面端</h2>
+    <span class="en">Library — Desktop</span>
+  </div>
+  <p class="sec-desc">对应 ROADMAP Phase 4（LIB-01～04）：封面网格、排序/筛选、阅读进度、导入与文件夹扫描。同步状态以「药丸」常驻顶栏右侧——自托管 WebDAV 的存在感克制但可查证。</p>
+
+  <div class="device">
+    <div class="device-bar"><i></i><i></i><i></i><span class="dev-title">枕籍 — 书库</span></div>
+    <div class="app">
+      <div class="app-topbar">
+        <div class="app-wordmark">枕籍<small>PILLOWTOME</small></div>
+        <div class="lib-search">⌕&ensp;搜索书名、作者或笔记…</div>
+        <span class="sync-pill"><i></i>WebDAV · 已同步 12:34</span>
+        <button class="btn-primary">＋ 导入图书</button>
+      </div>
+      <div class="lib-toolbar">
+        <button class="chip on">全部 128</button>
+        <button class="chip">在读 12</button>
+        <button class="chip">未读 96</button>
+        <button class="chip">读毕 20</button>
+        <span style="width:1px;height:18px;background:var(--line)"></span>
+        <button class="chip chip-accent on">最近阅读</button>
+        <button class="chip chip-accent">书名</button>
+        <button class="chip chip-accent">作者</button>
+        <button class="chip chip-accent">阅读进度</button>
+        <span class="spacer"></span>
+        <div class="view-toggle"><button class="on">▦</button><button>☰</button></div>
+      </div>
+      <div class="shelf">
+        <div class="book">
+          <div class="cover" style="background:#8e3b32;color:#f4e6d4"><span class="v-author">曹雪芹 著</span><span class="v-title">红楼梦</span><span class="seal">枕</span></div>
+          <div class="book-name">红楼梦</div><div class="book-author">曹雪芹</div>
+          <div class="prog"><i style="width:68%"></i></div>
+          <div class="prog-lbl"><span>68%</span><span>3 小时前</span></div>
+        </div>
+        <div class="book">
+          <div class="cover" style="background:#2e2a24;color:#e8ddc6"><span class="v-author">鲁迅 著</span><span class="v-title">呐喊</span><span class="seal">枕</span></div>
+          <div class="book-name">呐喊</div><div class="book-author">鲁迅</div>
+          <div class="prog"><i style="width:32%"></i></div>
+          <div class="prog-lbl"><span>32%</span><span>昨天</span></div>
+        </div>
+        <div class="book">
+          <div class="cover" style="background:#b0a488;color:#2a251c"><span class="v-author">钱钟书 著</span><span class="v-title">围城</span><span class="seal">枕</span></div>
+          <div class="book-name">围城</div><div class="book-author">钱钟书</div>
+          <div class="prog"><i style="width:100%"></i></div>
+          <div class="prog-lbl"><span>读毕</span><span>3 天前</span></div>
+        </div>
+        <div class="book">
+          <div class="cover" style="background:#4f7a63;color:#eef0e4"><span class="v-author">沈从文 著</span><span class="v-title">边城</span><span class="seal">枕</span></div>
+          <div class="book-name">边城</div><div class="book-author">沈从文</div>
+          <div class="prog"><i style="width:12%"></i></div>
+          <div class="prog-lbl"><span>12%</span><span>上周</span></div>
+        </div>
+        <div class="book">
+          <div class="cover" style="background:#3e5c8a;color:#e9e4d6"><span class="v-author">余华 著</span><span class="v-title">活着</span><span class="seal">枕</span></div>
+          <div class="book-name">活着</div><div class="book-author">余华</div>
+          <div class="prog"><i style="width:89%"></i></div>
+          <div class="prog-lbl"><span>89%</span><span>上周</span></div>
+        </div>
+        <div class="book">
+          <div class="cover" style="background:#d9a441;color:#3a2c14"><span class="v-author">鲁迅 著</span><span class="v-title">朝花夕拾</span><span class="seal">枕</span></div>
+          <div class="book-name">朝花夕拾</div><div class="book-author">鲁迅</div>
+          <div class="prog"><i style="width:0%"></i></div>
+          <div class="prog-lbl"><span>未读</span><span>—</span></div>
+        </div>
+        <div class="book">
+          <div class="cover" style="background:#ece4d2;color:#33301f"><span class="v-author">王国维 著</span><span class="v-title">人间词话</span><span class="seal">枕</span></div>
+          <div class="book-name">人间词话</div><div class="book-author">王国维</div>
+          <div class="prog"><i style="width:45%"></i></div>
+          <div class="prog-lbl"><span>45%</span><span>两周前</span></div>
+        </div>
+        <div class="book">
+          <div class="cover" style="background:#6a4a3a;color:#efe2cc"><span class="v-author">孟元老 著</span><span class="v-title">东京梦华录</span><span class="seal">枕</span></div>
+          <div class="book-name">东京梦华录</div><div class="book-author">孟元老</div>
+          <div class="prog"><i style="width:0%"></i></div>
+          <div class="prog-lbl"><span>未读</span><span>—</span></div>
+        </div>
+      </div>
+      <div class="lib-statusbar">
+        <span><b>128</b> 本藏书</span>
+        <span>书库目录：<b>~/Books/枕籍</b></span>
+        <span style="margin-left:auto">文件夹扫描已开启 · 新增书籍自动入库</span>
+      </div>
+    </div>
+  </div>
+  <p class="mock-note">封面对重复系统一律代码绘制竖排书名 + 朱砂印章，保证无封面书籍也不出现「灰砖」。进度条使用朱砂色，与「最近阅读」筛选联动。</p>
+</section>
+
+<!-- ================= 03 阅读界面 ================= -->
+<section class="sheet" id="reader">
+  <div class="sec-head">
+    <span class="sec-no">03</span>
+    <h2>阅读界面 · 桌面端</h2>
+    <span class="en">Reader — Desktop</span>
+  </div>
+  <p class="sec-desc">对应 Phase 2（READ-01～05）：分页/滚动实时切换、日/夜/宣纸主题、沉浸模式隐藏全部 chrome、点按翻页区。下方样机可实时切换三种主题。</p>
+
+  <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+    <span style="font-size:11px;letter-spacing:2px;color:var(--ink-3)">切换主题 →</span>
+    <button class="chip reader-theme-btn" data-t="day">日间</button>
+    <button class="chip reader-theme-btn on" data-t="sepia">宣纸</button>
+    <button class="chip reader-theme-btn" data-t="night">夜间</button>
+  </div>
+
+  <div class="device">
+    <div class="device-bar"><i></i><i></i><i></i><span class="dev-title">枕籍 — 红楼梦 · 第一回</span></div>
+    <div class="reader" id="main-reader" data-theme="sepia">
+      <div class="reader-chrome-top">
+        <button class="chrome-btn">‹ 书库</button>
+        <span class="chrome-title">红楼梦 · 曹雪芹</span>
+        <span style="flex:1"></span>
+        <button class="chrome-btn">☰ 目录</button>
+        <button class="chrome-btn">⌕ 搜索</button>
+        <button class="chrome-btn">⚑ 书签</button>
+        <button class="chrome-btn" style="color:var(--cinnabar);opacity:1">Aa</button>
+        <button class="chrome-btn">⋯</button>
+      </div>
+      <div class="reader-body">
+        <div class="reader-page">
+          <h3>第一回　甄士隐梦幻识通灵　贾雨村风尘怀闺秀</h3>
+          <div class="reader-text">
+            <p>此开卷第一回也。作者自云：因曾历过一番梦幻之后，故将真事隐去，而借「通灵」之说，撰此《石头记》一书也。故曰「甄士隐」云云。但书中所记何事何人？自又云：「今风尘碌碌，一事无成，忽念及当日所有之女子，一一细考较去，觉其行止见识，皆出于我之上。」</p>
+            <p>何我堂堂须眉，诚不若彼裙钗哉？实愧则有馀，悔又无益之大无可如何之日也！当此，则自欲将已往所赖天恩祖德，锦衣纨袴之时，饫甘餍肥之日，背父兄教育之恩，负师友规训之德，以至今日一技无成、半生潦倒之罪，编述一集，以告天下人。</p>
+          </div>
+        </div>
+      </div>
+      <div class="reader-chrome-bottom">
+        <span class="page-lbl">第一回</span>
+        <div class="page-slider">
+          <div class="slider-track"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+        </div>
+        <span class="page-lbl">128 / 342 页 · 37.4%</span>
+      </div>
+    </div>
+  </div>
+  <p class="mock-note">顶/底栏在沉浸模式下整体隐去，仅留阅读画布；悬停上缘或按 Esc 唤回。正文开启标点挤压与禁则：「。」」「」等绝不出现于行首。</p>
+</section>
+
+<!-- ================= 04 排版设置 ================= -->
+<section class="sheet" id="typeset">
+  <div class="sec-head">
+    <span class="sec-no">04</span>
+    <h2>排版设置 · 中文排版为默认</h2>
+    <span class="en">Typography Panel — CJK First</span>
+  </div>
+  <p class="sec-desc">对应 Phase 3（CJK-01～05）：标点挤压、中英自动空格（盘古之白）、标点禁则三项<strong style="color:var(--cinnabar)">默认开启</strong>，这是产品的存在理由。右侧面板全部控件均可实际操作左侧文本——Mockup 即规格。</p>
+
+  <div class="device">
+    <div class="device-bar"><i></i><i></i><i></i><span class="dev-title">枕籍 — 排版设置（Aa 面板）</span></div>
+    <div class="reader" data-theme="day" id="aa-reader">
+      <div class="reader-chrome-top">
+        <button class="chrome-btn">‹ 书库</button>
+        <span class="chrome-title">排版示例 · 枕籍编辑部</span>
+        <span style="flex:1"></span>
+        <button class="chrome-btn">☰</button><button class="chrome-btn">⌕</button>
+        <button class="chrome-btn" style="color:var(--cinnabar);opacity:1">Aa</button>
+      </div>
+      <div class="reader-body" style="min-height:560px">
+        <div class="reader-page" style="padding:40px 48px 24px">
+          <h3 style="font-size:16px">何谓「干净的中文排版」</h3>
+          <div class="reader-text" id="aa-text">
+            <p>所谓「排版」，是让文字各安其位：逗号、句号不再孤悬行首；引号「内外」相依；书名号《石头记》端庄自持。中文与 English 之间留出一线呼吸——所谓盘古之白；到了 2026 年，这仍是多数阅读器做不到的事。</p>
+            <p>禁则（kinsoku）规定：」，。！？」不可居行首，「「『（」不可居行尾。标点挤压让全角符号占回半个身位，中英混排时 text-autospace 自动补白。字体回退按字形覆盖率逐级启用，绝不允许豆腐块 □ 或「 ransom note 」式杂糅出现在读者眼前。</p>
+          </div>
+        </div>
+        <aside class="aa-sheet">
+          <h5>主题</h5>
+          <div class="theme-pick">
+            <div class="tp on" data-t="day" style="background:#fbf8f2;color:#2a251c">日间</div>
+            <div class="tp" data-t="sepia" style="background:#f1e7d0;color:#3d3324">宣纸</div>
+            <div class="tp" data-t="night" style="background:#181611;color:#c9c2b2">夜间</div>
+          </div>
+
+          <h5>字体</h5>
+          <div class="font-list">
+            <button class="on serif-prev">思源宋体 <span class="check">✓ 内置</span></button>
+            <button>思源黑体 <span class="check">✓</span></button>
+            <button>系统默认 <span class="check">✓</span></button>
+            <button style="color:var(--cinnabar)">＋ 导入自定义字体…</button>
+          </div>
+
+          <h5>字号</h5>
+          <div class="aa-row">
+            <span class="cap" style="font-size:13px">A</span>
+            <div class="aa-slider"><div class="slider-wrap">
+              <div class="track" style="position:absolute;left:0;right:0;height:3px;background:var(--line);border-radius:99px"></div>
+              <div class="fill" id="fs-fill" style="width:50%"></div>
+              <div class="thumb" id="fs-thumb" style="left:50%"></div>
+              <input type="range" id="fs-range" min="14" max="24" value="17" step="1">
+            </div></div>
+            <span class="cap" style="font-size:18px">A</span>
+          </div>
+
+          <h5>行距</h5>
+          <div class="aa-row">
+            <div class="aa-slider"><div class="slider-wrap">
+              <div class="track" style="position:absolute;left:0;right:0;height:3px;background:var(--line);border-radius:99px"></div>
+              <div class="fill" id="lh-fill" style="width:60%"></div>
+              <div class="thumb" id="lh-thumb" style="left:60%"></div>
+              <input type="range" id="lh-range" min="15" max="25" value="19" step="1">
+            </div></div>
+            <span class="cap" id="lh-val" style="width:30px">1.9</span>
+          </div>
+
+          <h5>版式</h5>
+          <div class="aa-row"><div class="seg">
+            <button class="on" id="mode-page">分页</button>
+            <button id="mode-scroll">滚动</button>
+          </div></div>
+
+          <h5 style="color:var(--cinnabar)">中文排版 · 默认开启</h5>
+          <div class="switch-row">
+            <span class="lbl">标点挤压<span class="info" title="text-spacing-trim：全角标点自动压缩半角">?</span></span>
+            <button class="sw on" id="sw-trim"></button>
+          </div>
+          <div class="switch-row">
+            <span class="lbl">中英自动空格<span class="info" title="盘古之白：text-autospace">?</span></span>
+            <button class="sw on" id="sw-space"></button>
+          </div>
+          <div class="switch-row">
+            <span class="lbl">标点禁则<span class="info" title="kinsoku：标点不孤悬行首行尾">?</span></span>
+            <button class="sw on" id="sw-kinsoku"></button>
+          </div>
+          <div class="switch-row">
+            <span class="lbl">首行缩进两字</span>
+            <button class="sw on" id="sw-indent"></button>
+          </div>
+          <div class="cjk-note">三项核心排版开关默认 ON，旧版 WebView 由 JS 垫片优雅降级；Blink / WebKit 双引擎以黄金图回归校验。</div>
+        </aside>
+      </div>
+    </div>
+  </div>
+  <p class="mock-note">试着拖动字号、关闭「中英自动空格」——左侧文本实时响应。Mockup 中的行为即前端实现规格（text-spacing-trim / text-autospace / line-break）。</p>
+</section>
+
+<!-- ================= 05 批注系统 ================= -->
+<section class="sheet" id="annotation">
+  <div class="sec-head">
+    <span class="sec-no">05</span>
+    <h2>批注系统 · 高亮 / 笔记 / 书签</h2>
+    <span class="en">Annotations</span>
+  </div>
+  <p class="sec-desc">对应 Phase 5（ANNO-01～04）：划词即出五色气泡；批注以复合定位器（CFI + 文本上下文 + 进度分数）锚定，改字号、换设备不丢失；每条批注携带 UUID 与变更日志，为 Phase 7 同步铺路。</p>
+
+  <div class="device">
+    <div class="device-bar"><i></i><i></i><i></i><span class="dev-title">枕籍 — 红楼梦 · 批注</span></div>
+    <div class="reader" data-theme="day">
+      <div class="reader-chrome-top">
+        <button class="chrome-btn">‹ 书库</button>
+        <span class="chrome-title">红楼梦 · 批注</span>
+        <span style="flex:1"></span>
+        <button class="chrome-btn">⚑</button>
+        <button class="chrome-btn" style="color:var(--cinnabar);opacity:1">✎ 批注 3</button>
+      </div>
+      <div class="reader-body" style="min-height:540px">
+        <div class="reader-page" style="padding:44px 44px 24px">
+          <h3 style="font-size:17px">第一回　甄士隐梦幻识通灵</h3>
+          <div class="reader-text" style="font-size:16px">
+            <p>此开卷第一回也。作者自云：因曾历过一番梦幻之后，故将真事隐去，而借「通灵」之说，撰此《石头记》一书也。</p>
+            <p><span class="hl">何我堂堂须眉，诚不若彼裙钗哉？</span>实愧则有馀，悔又无益之大无可如何之日也！当此，则自欲将已往所赖天恩祖德，<span class="hl-yellow">锦衣纨袴之时，饫甘餍肥之日</span>，背父兄教育之恩，负师友规训之德，以至今日一技无成、半生潦倒之罪，编述一集，以告天下人。</p>
+          </div>
+          <div class="sel-bubble" style="left:50%;transform:translateX(-50%);top:216px">
+            <span class="dot sel" style="background:#c53d2e"></span>
+            <span class="dot" style="background:#d9a441"></span>
+            <span class="dot" style="background:#3e5c8a"></span>
+            <span class="dot" style="background:#4f7a63"></span>
+            <span class="dot" style="background:#8e6a93"></span>
+            <span class="sep"></span>
+            <span class="act">✎ 笔记</span>
+            <span class="act">⧉ 复制</span>
+            <span class="act">字 词典</span>
+          </div>
+        </div>
+        <aside class="anno-sheet">
+          <div class="anno-tabs">
+            <button class="on">高亮 2</button><button>笔记 1</button><button>书签 4</button>
+          </div>
+          <div class="anno-list">
+            <div class="anno-item">
+              <div class="anno-quote">何我堂堂须眉，诚不若彼裙钗哉？</div>
+              <div class="anno-note">自愧之语，实为全书「为女子立传」之纲领。</div>
+              <div class="anno-meta"><span>第一回 · 12.4%</span><span>今天 12:20</span></div>
+            </div>
+            <div class="anno-item y">
+              <div class="anno-quote">锦衣纨袴之时，饫甘餍肥之日</div>
+              <div class="anno-meta"><span>第一回 · 13.1%</span><span>今天 12:18</span></div>
+            </div>
+            <div class="anno-item b">
+              <div class="anno-quote">满纸荒唐言，一把辛酸泪。</div>
+              <div class="anno-meta"><span>第一回 · 15.8%</span><span>昨天 23:04</span></div>
+            </div>
+          </div>
+          <div class="anno-editor">
+            <div class="ta" contenteditable="true">写下这条笔记…</div>
+            <div class="row">
+              <span class="loc">锚点：CFI + 上下文 · 自动保存</span>
+              <button class="btn-primary btn-small">保存笔记</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+  <p class="mock-note">划词气泡的顺序即操作频序：先选色，再笔记，词典入口预留给中文差异化（划词词典/翻译）。批注列表按章节定位，点击跳回原文。</p>
+</section>
+
+<!-- ================= 06 Android ================= -->
+<section class="sheet" id="android">
+  <div class="sec-head">
+    <span class="sec-no">06</span>
+    <h2>Android · 书库与阅读</h2>
+    <span class="en">Android — Library & Reader</span>
+  </div>
+  <p class="sec-desc">移动端沿用同一套纸墨令牌，导航改为底部标签栏；阅读页默认全沉浸，点按翻页分区为「左 25% 上一页 · 中 25% 菜单 · 右 50% 下一页」（符合右手持机热区）。右侧样机展示翻页热区叠加层。</p>
+
+  <div class="phones">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="phone-status"><span>21:47</span><span>◈ 5G ▂▄▆ 87%</span></div>
+          <div class="ph-appbar"><span class="t">枕籍</span><span style="font-size:16px;color:var(--ink-3)">⌕</span></div>
+          <div class="ph-chips">
+            <button class="chip on">全部</button><button class="chip">在读</button>
+            <button class="chip">未读</button><button class="chip">读毕</button>
+          </div>
+          <div class="ph-grid">
+            <div class="ph-book"><div class="cover" style="background:#8e3b32;color:#f4e6d4"><span class="v-title">红楼梦</span></div><div class="n">红楼梦</div><div class="prog"><i style="width:68%"></i></div></div>
+            <div class="ph-book"><div class="cover" style="background:#2e2a24;color:#e8ddc6"><span class="v-title">呐喊</span></div><div class="n">呐喊</div><div class="prog"><i style="width:32%"></i></div></div>
+            <div class="ph-book"><div class="cover" style="background:#b0a488;color:#2a251c"><span class="v-title">围城</span></div><div class="n">围城</div><div class="prog"><i style="width:100%"></i></div></div>
+            <div class="ph-book"><div class="cover" style="background:#4f7a63;color:#eef0e4"><span class="v-title">边城</span></div><div class="n">边城</div><div class="prog"><i style="width:12%"></i></div></div>
+            <div class="ph-book"><div class="cover" style="background:#3e5c8a;color:#e9e4d6"><span class="v-title">活着</span></div><div class="n">活着</div><div class="prog"><i style="width:89%"></i></div></div>
+            <div class="ph-book"><div class="cover" style="background:#d9a441;color:#3a2c14"><span class="v-title">朝花夕拾</span></div><div class="n">朝花夕拾</div><div class="prog"><i style="width:0%"></i></div></div>
+          </div>
+          <button class="fab">＋</button>
+          <div class="tabbar">
+            <button class="on"><b>▦</b>书库</button>
+            <button><b>✎</b>批注</button>
+            <button><b>↻</b>同步</button>
+            <button><b>⚙</b>设置</button>
+          </div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>书库 · Android</b>底部标签栏 + 朱砂 FAB 导入；与桌面同一 SQLite 数据模型</div>
+    </div>
+
+    <div class="phone-wrap">
+      <div class="phone dark">
+        <div class="phone-screen">
+          <div class="phone-status"><span>23:12</span><span>◈ 5G ▂▄▆ 61%</span></div>
+          <div class="ph-reader">
+            <h6>第二十三回　西厢记妙词通戏语</h6>
+            <div class="t">
+              <p>那一日正当三月中浣，早饭后，宝玉携了一套《会真记》，走到沁芳闸桥边桃花底下一块石上坐着，展开细细玩赏。</p>
+              <p>正看到「落红成阵」，只见一阵风过，把树头上桃花吹下一大半来，落的满身满书满地皆是。</p>
+            </div>
+            <div class="tapzones" id="tapzones">
+              <div class="z z1">‹<small>上一页 25%</small></div>
+              <div class="z z2">菜单<small>唤出 chrome</small></div>
+              <div class="z z3">›<small>下一页 50%</small></div>
+            </div>
+          </div>
+          <div class="ph-footer"><span>第二十三回</span><span class="tr"><i></i></span><span>64%</span></div>
+        </div>
+      </div>
+      <div class="phone-caption"><b>阅读 · 夜间 + 翻页热区</b><button class="chip" id="tz-toggle" style="margin-top:8px">隐藏热区叠加层</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 07 WebDAV 同步 ================= -->
+<section class="sheet" id="sync">
+  <div class="sec-head">
+    <span class="sec-no">07</span>
+    <h2>WebDAV 自托管同步</h2>
+    <span class="en">Self-hosted Sync</span>
+  </div>
+  <p class="sec-desc">对应 Phase 7（SYNC-01～05）：凭证存系统钥匙串、绝不经过 WebDAV 通道；进度取最远、批注按 UUID + 墓碑合并；书库文件可选择性同步，大文件不堵通道。</p>
+
+  <div class="device">
+    <div class="device-bar"><i></i><i></i><i></i><span class="dev-title">枕籍 — 设置 · 同步</span></div>
+    <div class="sync-layout">
+      <div class="sync-form">
+        <h4>连接自托管书库</h4>
+        <p class="sub">你的书与批注只去你想让它们去的地方。</p>
+        <div class="field">
+          <label>WEBDAV 服务器地址</label>
+          <div class="in">https://dav.example.com/remote.php/dav/files/moe/books<span class="cur"></span></div>
+        </div>
+        <div class="field">
+          <label>用户名 / 应用密码</label>
+          <div class="in">moe ················</div>
+          <div class="hint">凭证仅保存于系统钥匙串（Keychain / Credential Manager），永不同步</div>
+        </div>
+        <div class="field">
+          <label>同步内容</label>
+          <div class="check-row"><span class="cb on">✓</span>阅读进度<span class="sz">全量 · 极小</span></div>
+          <div class="check-row"><span class="cb on">✓</span>高亮 / 笔记 / 书签<span class="sz">214 条 · 86 KB</span></div>
+          <div class="check-row"><span class="cb on">✓</span>书库文件（按书选择）<span class="sz">已选 42 / 128 本 · 1.8 GB</span></div>
+        </div>
+        <div class="field">
+          <label>冲突策略（极少触发）</label>
+          <div class="radio-row">
+            <span class="radio-pill on">进度取最远</span>
+            <span class="radio-pill">批注全保留（OR-Set）</span>
+            <span class="radio-pill">文件冲突保留双份</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:8px">
+          <button class="btn-primary">立即同步</button>
+          <button class="chip" style="height:32px">断开连接</button>
+        </div>
+      </div>
+      <div class="sync-state">
+        <h4 style="font-family:var(--serif);font-size:15px;letter-spacing:2px">同步状态机</h4>
+        <div class="state-flow">
+          <div class="state-node on">空闲<span class="d">IDLE</span></div>
+          <div class="state-node">拉取变更<span class="d">PULL</span></div>
+          <div class="state-node">合并<span class="d">MERGE</span></div>
+          <div class="state-node">推送<span class="d">PUSH</span></div>
+        </div>
+        <div class="sync-log">
+          <div class="lh">最近同步日志</div>
+          <div class="li"><span class="tm">12:34:07</span><span class="ok">完成</span><span>进度 3 条 · 批注 2 条 · 0 冲突</span></div>
+          <div class="li"><span class="tm">12:34:05</span><span class="mr">合并</span><span>《红楼梦》进度：手机 64% → 桌面 68%，取最远</span></div>
+          <div class="li"><span class="tm">12:34:02</span><span class="mr">合并</span><span>批注按 UUID 合并，墓碑去重，无丢失</span></div>
+          <div class="li"><span class="tm">11:58:41</span><span class="wr">提示</span><span>《东京梦华录》42 MB 未选同步，仅本地保留</span></div>
+        </div>
+        <p style="font-size:11px;color:var(--ink-3);margin-top:14px;line-height:1.7">Android 端遵循 Doze 调度：后台与关闭时各同步一次；任何合并都不静默丢数据——冲突永远非破坏式解决。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 08 交互说明 ================= -->
+<section class="sheet" id="interaction">
+  <div class="sec-head">
+    <span class="sec-no">08</span>
+    <h2>交互说明</h2>
+    <span class="en">Interaction Notes</span>
+  </div>
+  <p class="sec-desc">样机之外的规则：翻页热区、桌面键盘流、以及贯穿全端的交互原则。</p>
+
+  <div class="ix-grid">
+    <div class="ix-cell">
+      <h4><span class="k">TAP ZONES</span>翻页热区</h4>
+      <div class="tz-diagram">
+        <div class="a">‹ 上一页<small>25% · 拇指回撤</small></div>
+        <div class="b">菜单<small>25% · 唤出 chrome</small></div>
+        <div class="c">下一页 ›<small>50% · 主热区</small></div>
+      </div>
+      <ul class="ix-list" style="margin-top:14px">
+        <li>下一页占半屏：右手持机单拇指即可连续翻页</li>
+        <li>长按划词优先于翻页，热区不拦截文本选择</li>
+        <li>滚动模式下热区自动失效，改为边缘手势</li>
+      </ul>
+    </div>
+    <div class="ix-cell">
+      <h4><span class="k">KEYBOARD</span>桌面键盘流</h4>
+      <div class="kbd-row"><span>翻页</span><span><kbd>←</kbd> <kbd>→</kbd> / <kbd>Space</kbd></span></div>
+      <div class="kbd-row"><span>沉浸模式</span><kbd>F11</kbd></div>
+      <div class="kbd-row"><span>目录 / 搜索</span><span><kbd>Ctrl</kbd><kbd>T</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd></span></div>
+      <div class="kbd-row"><span>排版设置</span><kbd>Ctrl</kbd>+<kbd>,</kbd></div>
+      <div class="kbd-row"><span>书签</span><kbd>Ctrl</kbd>+<kbd>D</kbd></div>
+      <div class="kbd-row"><span>唤出 / 隐藏 chrome</span><kbd>Esc</kbd></div>
+    </div>
+    <div class="ix-cell">
+      <h4><span class="k">PRINCIPLES</span>贯穿原则</h4>
+      <ul class="ix-list">
+        <li>本地优先：无账号可读全程；同步是增益，不是门槛</li>
+        <li>无广告、无追踪式变现，界面无运营位</li>
+        <li>chrome 让位于画布：一切控件可隐藏、可唤回</li>
+        <li>朱砂仅一处一义：主行动、进度、选中态，绝不滥用</li>
+        <li>中文排版三项默认开启，是产品承诺而非高级选项</li>
+        <li>DRM 书籍检测即拒、明示原因，绝不尝试解密</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 页脚 ================= -->
+<footer class="sheet-end">
+  <div>
+    <div class="f-brand">枕籍 PILLOWTOME</div>
+    <div style="margin-top:6px">UI/UX Mockups · 依据 PROJECT.md 与 ROADMAP.md（Phase 1–7）绘制</div>
+  </div>
+  <div class="principles">
+    <span><i></i>本地优先</span>
+    <span><i></i>中文排版</span>
+    <span><i></i>自托管同步</span>
+    <span><i></i>无广告</span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

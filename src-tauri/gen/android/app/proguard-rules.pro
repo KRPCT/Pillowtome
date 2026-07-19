@@ -25,3 +25,11 @@
 # Java_io_crates_keyring_Keyring_00024Companion_initializeNdkContext on
 # release builds (isMinifyEnabled = true).
 -keep class io.crates.keyring.** { *; }
+
+# Tauri mobile plugins are invoked from Rust via JNI/reflection — R8 must not
+# strip or rename them on release builds. Without these keeps the android-fs
+# plugin (SAF picker/read) dies at runtime in the signed release APK while
+# debug builds keep working.
+-keep class com.plugin.** { *; }
+-keep class app.tauri.** { *; }
+-keep class io.crates.** { *; }

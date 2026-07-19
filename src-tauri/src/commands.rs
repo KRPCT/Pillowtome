@@ -523,10 +523,18 @@ async fn pick_source(_app: &AppHandle, path: Option<String>) -> Result<BookSourc
     Ok(BookSource::Path(std::path::PathBuf::from(path)))
 }
 
-/// Show the Android SAF picker, persist the grant, and wrap the URI (FND-03).
+/// Show the Android SAF picker, **copy the bytes into the app-private book
+/// vault**, and wrap the local copy (FND-03, hardened for real devices).
+///
+/// Earlier builds registered the raw `content://` URI behind a persisted SAF
+/// grant. On several real devices (OEM providers, release-signed APKs) reading
+/// that URI later fails or yields garbage, surfacing as「文件已损坏」at import
+/// or on reopen. Copying at pick time needs no manifest permission, no
+/// persisted grant, and survives force-stop / reinstall-permitting upgrades —
+/// the vault is plain private storage the OS can never revoke.
 #[cfg(target_os = "android")]
 async fn pick_source(app: &AppHandle, _path: Option<String>) -> Result<BookSource, String> {
-    use tauri_plugin_android_fs::AndroidFsExt;
+    use tauri_plugin_android_fs::{AndroidFsExt, FileUri};
 
     // Accept all supported book formats. Many sideloaded ebooks report a generic
     // MIME (octet-stream), so include it too; the ingest classifies by content.
@@ -548,14 +556,141 @@ async fn pick_source(app: &AppHandle, _path: Option<String>) -> Result<BookSourc
         .map_err(|e| format!("打开文件选择器失败：{e}"))?
         .ok_or_else(|| "已取消导入".to_string())?;
 
-    // takePersistableUriPermission — the grant must survive a full app restart
-    // so the book reopens without re-granting (FND-03, the hard part).
-    picker
-        .persist_uri_permission(&uri)
-        .await
-        .map_err(|e| format!("无法持久化访问授权：{e}"))?;
+    copy_content_uri_to_vault(app, &uri.uri).await
+}
 
-    Ok(BookSource::ContentUri(uri.uri))
+/// `app_data_dir()/books` — the private book vault on Android (FND-03).
+#[cfg(target_os = "android")]
+fn books_vault_dir<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法定位应用数据目录：{e}"))?
+        .join("books");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建书籍目录：{e}"))?;
+    Ok(dir)
+}
+
+/// Keep the display name (CJK included) but strip anything path-hostile.
+#[cfg(target_os = "android")]
+fn sanitize_file_name(name: &str) -> String {
+    let name = name.trim();
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if "/\\:*?\"<>|".contains(c) || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim().trim_matches('.').trim_matches('_').trim().to_string();
+    if cleaned.is_empty() {
+        "book.epub".to_string()
+    } else {
+        cleaned
+    }
+}
+
+/// First free path for `name` inside `dir` (`name`, `stem-1.ext`, …).
+#[cfg(target_os = "android")]
+fn unique_book_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let candidate = dir.join(name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() && e.len() <= 5 => (s.to_string(), format!(".{e}")),
+        _ => (name.to_string(), String::new()),
+    };
+    for i in 1..1000u32 {
+        let p = dir.join(format!("{stem}-{i}{ext}"));
+        if !p.exists() {
+            return p;
+        }
+    }
+    dir.join(format!("{stem}-{}{}", std::process::id(), ext))
+}
+
+/// Read a SAF `content://` URI fully and store it in the private vault;
+/// returns the [`BookSource::Path`] of the copy.
+#[cfg(target_os = "android")]
+async fn copy_content_uri_to_vault(app: &AppHandle, uri: &str) -> Result<BookSource, String> {
+    use tauri_plugin_android_fs::{AndroidFsExt, FileUri};
+
+    let file_uri = FileUri::from_uri(uri);
+    let name = sanitize_file_name(
+        &app.android_fs()
+            .get_name(&file_uri)
+            .unwrap_or_else(|_| "book.epub".to_string()),
+    );
+    let app2 = app.clone();
+    let uri_owned = uri.to_string();
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        app2.android_fs().read(&FileUri::from_uri(&uri_owned))
+    })
+    .await
+    .map_err(|e| format!("读取所选文件失败：{e}"))?
+    .map_err(|e| format!("无法读取所选文件（可能已被移动或删除）：{e}"))?;
+    if bytes.is_empty() {
+        return Err("所选文件内容为空。".to_string());
+    }
+    let dir = books_vault_dir(app)?;
+    let path = unique_book_path(&dir, &name);
+    std::fs::write(&path, &bytes).map_err(|e| format!("保存书籍失败：{e}"))?;
+    Ok(BookSource::Path(path))
+}
+
+/// Pick up a book staged by `MainActivity.handleOpenIntent` (Android「打开方式」)
+/// and ingest it into the catalog. Returns `None` when nothing is staged.
+///
+/// The staged copy is MOVED into the vault before ingest, so polling is
+/// idempotent: the marker files are consumed exactly once.
+#[tauri::command]
+pub fn take_pending_open(
+    app: AppHandle,
+    registry: State<'_, SourceRegistry>,
+    known_hashes: Option<Vec<String>>,
+) -> Result<Option<IngestResult>, String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, registry, known_hashes);
+        return Ok(None);
+    }
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let base = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("无法定位应用数据目录：{e}"))?;
+        let payload = base.join("pending_open.epub");
+        if !payload.exists() {
+            return Ok(None);
+        }
+        let name = std::fs::read_to_string(base.join("pending_open.name"))
+            .unwrap_or_else(|_| "book.epub".to_string());
+        let dir = books_vault_dir(&app)?;
+        let dest = unique_book_path(&dir, &sanitize_file_name(&name));
+        if std::fs::rename(&payload, &dest).is_err() {
+            std::fs::copy(&payload, &dest)
+                .and_then(|_| std::fs::remove_file(&payload))
+                .map_err(|e| format!("保存书籍失败：{e}"))?;
+        }
+        let _ = std::fs::remove_file(base.join("pending_open.name"));
+        let result = ingest_source(
+            &app,
+            &registry,
+            BookSource::Path(dest.clone()),
+            known_hashes.as_deref(),
+        );
+        if result.status != "imported" {
+            let _ = std::fs::remove_file(&dest);
+        }
+        Ok(Some(result))
+    }
 }
 
 #[cfg(test)]

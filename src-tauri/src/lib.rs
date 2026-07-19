@@ -182,6 +182,7 @@ pub fn run() {
             commands::imported_books,
             commands::library_ingest,
             commands::library_scan_folder,
+            commands::take_pending_open,
             commands::save_cover,
             commands::is_android,
             fonts::import_font,

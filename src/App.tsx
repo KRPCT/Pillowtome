@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { onBackButtonPress } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { BookMarked, RefreshCw, Search, Settings2, X } from "lucide-react";
@@ -23,8 +24,9 @@ import {
   listLibraryItems,
   touchLastOpened,
 } from "./library/library-store";
-import { ingestPathToLibrary } from "./library/import-actions";
-import { knownHashesFromItems } from "./library/import-pipeline";
+import { ingestPathToLibrary, catalogIngestResult } from "./library/import-actions";
+import { knownHashesFromItems, summarizeIngest } from "./library/import-pipeline";
+import type { IngestResult } from "./library/import-pipeline";
 import type { LibraryItem } from "./library/types";
 import {
   LibrarySettingsSheet,
@@ -127,6 +129,41 @@ function App() {
 
   useEffect(() => {
     void refreshShelf();
+  }, [refreshShelf]);
+
+  // Android「打开方式」导入：MainActivity 已把 VIEW 文件复制进私有目录
+  // （pending_open.epub），这里每 3 秒 + 窗口聚焦时取走入库。桌面端恒为 null。
+  useEffect(() => {
+    let disposed = false;
+    let active = false;
+    const poll = async () => {
+      if (disposed) return;
+      try {
+        if (!active) {
+          active = await invoke<boolean>("is_android");
+          if (!active) return;
+        }
+        const existing = await listLibraryItems();
+        const known = knownHashesFromItems(existing.map((i) => ({ workId: i.workId })));
+        const staged = await invoke<IngestResult | null>("take_pending_open", {
+          knownHashes: known,
+        });
+        if (!staged || disposed) return;
+        const result = await catalogIngestResult(staged);
+        setStatus(summarizeIngest(result));
+        void refreshShelf();
+      } catch (err) {
+        console.warn("[App] take_pending_open 轮询失败", err);
+      }
+    };
+    void poll();
+    const id = window.setInterval(() => void poll(), 3000);
+    window.addEventListener("focus", poll);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+      window.removeEventListener("focus", poll);
+    };
   }, [refreshShelf]);
 
   // 窄屏搜索展开后聚焦输入框。

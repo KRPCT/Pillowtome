@@ -26,34 +26,14 @@ function cleanErr(err: unknown): string {
     .trim();
 }
 
-export async function ingestPathToLibrary(
-  path: string | null,
-  knownHashes: string[],
+/**
+ * Write a successful Rust ingest into the library SQL catalog (LIB-01).
+ * Shared by the picker flow and the Android「打开方式」pending-open flow.
+ * Duplicate / refused results pass through untouched.
+ */
+export async function catalogIngestResult(
+  result: IngestResult,
 ): Promise<IngestResult> {
-  let result: IngestResult;
-  try {
-    result = await invoke<IngestResult>("library_ingest", {
-      path,
-      knownHashes,
-    });
-  } catch (err) {
-    // Fallback: legacy register-only import if catalog command missing/fails hard.
-    try {
-      const book = await invoke<{ id: string; name: string }>("import", { path });
-      return {
-        status: "imported",
-        sourceId: book.id,
-        title: book.name,
-        message: "已注册书籍（书库表写入稍后重试）",
-      };
-    } catch (err2) {
-      return {
-        status: "refused",
-        message: cleanErr(err2) || cleanErr(err) || "导入失败，请重试。",
-      };
-    }
-  }
-
   if (result.status === "imported" && result.workId && result.sourceId) {
     try {
       if (await libraryHasWorkId(result.workId)) {
@@ -89,4 +69,35 @@ export async function ingestPathToLibrary(
     }
   }
   return result;
+}
+
+export async function ingestPathToLibrary(
+  path: string | null,
+  knownHashes: string[],
+): Promise<IngestResult> {
+  let result: IngestResult;
+  try {
+    result = await invoke<IngestResult>("library_ingest", {
+      path,
+      knownHashes,
+    });
+  } catch (err) {
+    // Fallback: legacy register-only import if catalog command missing/fails hard.
+    try {
+      const book = await invoke<{ id: string; name: string }>("import", { path });
+      return {
+        status: "imported",
+        sourceId: book.id,
+        title: book.name,
+        message: "已注册书籍（书库表写入稍后重试）",
+      };
+    } catch (err2) {
+      return {
+        status: "refused",
+        message: cleanErr(err2) || cleanErr(err) || "导入失败，请重试。",
+      };
+    }
+  }
+
+  return catalogIngestResult(result);
 }

@@ -79,7 +79,7 @@ export async function importCustomFont(): Promise<CustomFont> {
     filters: [
       {
         name: "Fonts",
-        extensions: ["ttf", "otf", "woff"],
+        extensions: ["ttf", "otf", "woff", "woff2"],
       },
     ],
   });
@@ -130,8 +130,9 @@ export const BUNDLED_SERIF_CJK_FAMILY = "PillowBundledSerifCJK";
 /** Pillow protocol font ids for materialized Noto SC/TC (safe flat tokens). */
 export const BUNDLED_NOTO_SC_ID = "bundled-noto-sc";
 export const BUNDLED_NOTO_TC_ID = "bundled-noto-tc";
-/** Pillow protocol font id for materialized Noto Serif SC variable OTF. */
-export const BUNDLED_NOTO_SERIF_SC_ID = "bundled-noto-serif-sc";
+/** Pillow protocol font ids for the materialized Noto Serif SC static faces. */
+export const BUNDLED_NOTO_SERIF_SC_400_ID = "bundled-noto-serif-sc-400";
+export const BUNDLED_NOTO_SERIF_SC_700_ID = "bundled-noto-serif-sc-700";
 
 /** Aa 面板内置字体键（prefs.fontFamilyKey；activeFontId 恒为 null）。 */
 export const FONT_KEY_SYSTEM = "system";
@@ -141,6 +142,12 @@ export const FONT_KEY_NOTO_SANS = "noto-sans";
 /**
  * `@font-face` CSS for bundled CJK faces (same family, SC + TC sources).
  * Served via pillow fonts path — never IPC bytes (D-06).
+ *
+ * `font-display: block`, not `swap`: the pillow protocol is local and the
+ * WOFF2 faces decode in well under a second even on low-end WebViews, so the
+ * block window is imperceptible — while `swap` guaranteed a visible
+ * fallback→bundled swap-flicker on EVERY book open (the「进入书籍字体闪烁」
+ * complaint). Custom user faces keep `swap` (unknown size/latency).
  */
 export function buildBundledCjkFontFaceCss(): string {
   const sc = pillowFontUrl(BUNDLED_NOTO_SC_ID);
@@ -149,28 +156,38 @@ export function buildBundledCjkFontFaceCss(): string {
     @font-face {
       font-family: "${BUNDLED_CJK_FAMILY}";
       src: url("${sc}");
-      font-display: swap;
+      font-display: block;
     }
     @font-face {
       font-family: "${BUNDLED_CJK_FAMILY}";
       src: url("${tc}");
-      font-display: swap;
+      font-display: block;
     }
   `;
 }
 
 /**
- * `@font-face` CSS for the bundled Noto Serif CJK SC variable face.
- * Single full-coverage OTF — no unicode-range splitting, so glyphs never
- * fallback-flicker mid-reading.
+ * `@font-face` CSS for the bundled Noto Serif CJK SC faces (static 400/700).
+ * Two static instances rather than the variable font: Chromium OTS caps the
+ * DECOMPRESSED web-font payload at 30 MiB — the Serif VF (52.8 MiB) failed to
+ * decode entirely on Android; the static instances pass with full glyph
+ * coverage, and 标题/粗体 get a real bold instead of synthetic emboldening.
  */
 export function buildBundledSerifCjkFontFaceCss(): string {
-  const serif = pillowFontUrl(BUNDLED_NOTO_SERIF_SC_ID);
+  const regular = pillowFontUrl(BUNDLED_NOTO_SERIF_SC_400_ID);
+  const bold = pillowFontUrl(BUNDLED_NOTO_SERIF_SC_700_ID);
   return `
     @font-face {
       font-family: "${BUNDLED_SERIF_CJK_FAMILY}";
-      src: url("${serif}");
-      font-display: swap;
+      src: url("${regular}");
+      font-weight: 400;
+      font-display: block;
+    }
+    @font-face {
+      font-family: "${BUNDLED_SERIF_CJK_FAMILY}";
+      src: url("${bold}");
+      font-weight: 700;
+      font-display: block;
     }
   `;
 }

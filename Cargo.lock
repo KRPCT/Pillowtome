@@ -3193,7 +3193,7 @@ dependencies = [
 
 [[package]]
 name = "pillowtome"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "android-native-keyring-store",
  "blake3",
@@ -3221,7 +3221,7 @@ dependencies = [
 
 [[package]]
 name = "pillowtome-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "blake3",
  "quick-xml",

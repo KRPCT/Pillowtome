@@ -19,8 +19,8 @@ pub const MAX_CUSTOM_FONTS: usize = 20;
 /// Max size of a single custom font file in bytes (D-28) — 20 MiB.
 pub const MAX_FONT_BYTES: u64 = 20 * 1024 * 1024;
 
-/// Allowed font extensions (UI-SPEC: TTF / OTF / WOFF). Case-insensitive.
-const ALLOWED_EXTS: &[&str] = &["ttf", "otf", "woff"];
+/// Allowed font extensions (UI-SPEC: TTF / OTF / WOFF / WOFF2). Case-insensitive.
+const ALLOWED_EXTS: &[&str] = &["ttf", "otf", "woff", "woff2"];
 
 /// Metadata returned by [`import_font`] — small struct only, never bytes (T-02-ipc).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -81,10 +81,10 @@ pub fn import_font_into(
         .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_ascii_lowercase())
-        .ok_or_else(|| "仅支持 TTF、OTF、WOFF 字体文件。".to_string())?;
+        .ok_or_else(|| "仅支持 TTF、OTF、WOFF / WOFF2 字体文件。".to_string())?;
 
     if !ALLOWED_EXTS.contains(&ext.as_str()) {
-        return Err("仅支持 TTF、OTF、WOFF 字体文件。".to_string());
+        return Err("仅支持 TTF、OTF、WOFF / WOFF2 字体文件。".to_string());
     }
 
     let meta = fs::metadata(source_path).map_err(|_| "无法读取字体文件。".to_string())?;
@@ -214,7 +214,23 @@ pub fn resolve_font_path(fonts_dir: &Path, id: &str) -> Option<PathBuf> {
 /// Reserved bundled face ids (CJK-05). Flat tokens that pass [`is_safe_font_id`].
 pub const BUNDLED_NOTO_SC_ID: &str = "bundled-noto-sc";
 pub const BUNDLED_NOTO_TC_ID: &str = "bundled-noto-tc";
-pub const BUNDLED_NOTO_SERIF_SC_ID: &str = "bundled-noto-serif-sc";
+pub const BUNDLED_NOTO_SERIF_SC_400_ID: &str = "bundled-noto-serif-sc-400";
+pub const BUNDLED_NOTO_SERIF_SC_700_ID: &str = "bundled-noto-serif-sc-700";
+
+/// Legacy single-face serif id from pre-split builds — its files are removed
+/// at startup (OTS rejects the 53 MB OTF / 52.8 MiB-payload WOFF2 on Android).
+pub const LEGACY_BUNDLED_SERIF_SC_ID: &str = "bundled-noto-serif-sc";
+
+/// Remove stale bundled faces that current builds no longer serve (best-effort,
+/// never blocks startup): the legacy single serif face in either extension.
+pub fn remove_stale_bundled_fonts(fonts_dir: &Path) {
+    for ext in ["otf", "woff2", "woff"] {
+        let p = fonts_dir.join(format!("{LEGACY_BUNDLED_SERIF_SC_ID}.{ext}"));
+        if p.starts_with(fonts_dir) && p.exists() {
+            let _ = fs::remove_file(&p);
+        }
+    }
+}
 
 /// True when the file stem is a reserved bundled face (excluded from custom count).
 pub fn is_bundled_font_id(id: &str) -> bool {
@@ -246,10 +262,13 @@ pub fn count_font_files(fonts_dir: &Path) -> Result<usize, String> {
     Ok(n)
 }
 
-/// Write embedded bytes to `fonts_dir/{id}.otf` when missing or size-mismatched.
+/// Write embedded bytes to `fonts_dir/{id}.woff2` when missing or size-mismatched.
 ///
-/// Soft-fail friendly: returns Ok(false) when skipped (already present), Ok(true)
-/// when written. Callers log warn on Err without blocking app start.
+/// Also removes the legacy `{id}.otf` from pre-WOFF2 installs — otherwise
+/// [`resolve_font_path`] could keep serving the stale (larger, and for Serif
+/// OTS-rejected) file. Soft-fail friendly: returns Ok(false) when skipped
+/// (already present), Ok(true) when written. Callers log warn on Err without
+/// blocking app start.
 pub fn materialize_bundled_font(
     fonts_dir: &Path,
     id: &str,
@@ -262,7 +281,12 @@ pub fn materialize_bundled_font(
         return Err(format!("bundled font empty: {id}"));
     }
     fs::create_dir_all(fonts_dir).map_err(|e| format!("无法创建字体目录：{e}"))?;
-    let dest = fonts_dir.join(format!("{id}.otf"));
+    // Drop the legacy OTF copy (pre-WOFF2 builds) regardless of write outcome.
+    let legacy = fonts_dir.join(format!("{id}.otf"));
+    if legacy.starts_with(fonts_dir) && legacy.exists() {
+        let _ = fs::remove_file(&legacy);
+    }
+    let dest = fonts_dir.join(format!("{id}.woff2"));
     if !dest.starts_with(fonts_dir) {
         return Err("字体路径无效。".to_string());
     }
@@ -284,6 +308,7 @@ pub fn font_content_type(ext: &str) -> &'static str {
         "ttf" => "font/ttf",
         "otf" => "font/otf",
         "woff" => "font/woff",
+        "woff2" => "font/woff2",
         _ => "application/octet-stream",
     }
 }
@@ -381,13 +406,27 @@ mod tests {
     #[test]
     fn rejects_bad_extension() {
         let dir = temp_fonts_dir("ext");
-        let src = dir.join("face.woff2");
+        let src = dir.join("face.eot");
         write_dummy_font(&src, 32);
         let err = import_font_into(&dir, &src, 0).unwrap_err();
         assert!(err.contains("TTF") || err.contains("仅支持"), "err={err}");
         let src2 = dir.join("face.exe");
         write_dummy_font(&src2, 32);
         assert!(import_font_into(&dir, &src2, 0).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn accepts_woff2_extension() {
+        let dir = temp_fonts_dir("woff2");
+        let src = std::env::temp_dir().join(format!(
+            "pillow-src-font-{}.woff2",
+            std::process::id()
+        ));
+        write_dummy_font(&src, 128);
+        let meta = import_font_into(&dir, &src, 0).expect("woff2 import ok");
+        assert!(meta.file_name.ends_with(".woff2"));
+        let _ = fs::remove_file(&src);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -444,6 +483,22 @@ mod tests {
         assert_eq!(font_content_type("ttf"), "font/ttf");
         assert_eq!(font_content_type("OTF"), "font/otf");
         assert_eq!(font_content_type("woff"), "font/woff");
+        assert_eq!(font_content_type("woff2"), "font/woff2");
+    }
+
+    #[test]
+    fn materialize_removes_legacy_otf() {
+        // Pre-WOFF2 installs hold {id}.otf; after migration the OTF must be
+        // gone (it would win resolve order by directory chance) and only the
+        // fresh {id}.woff2 served.
+        let dir = temp_fonts_dir("legacy");
+        let legacy = dir.join(format!("{BUNDLED_NOTO_SC_ID}.otf"));
+        write_dummy_font(&legacy, 64);
+        assert!(materialize_bundled_font(&dir, BUNDLED_NOTO_SC_ID, b"woff2-bytes").unwrap());
+        assert!(!legacy.exists(), "legacy otf removed");
+        let resolved = resolve_font_path(&dir, BUNDLED_NOTO_SC_ID).expect("resolve");
+        assert!(resolved.ends_with(format!("{BUNDLED_NOTO_SC_ID}.woff2")));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

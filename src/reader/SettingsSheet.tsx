@@ -535,7 +535,7 @@ export function SettingsSheet({
                 ＋ 导入自定义字体…
               </button>
             </div>
-            <p className="reader-aa-hint">仅支持 TTF、OTF、WOFF</p>
+            <p className="reader-aa-hint">仅支持 TTF、OTF、WOFF / WOFF2</p>
             {fontStatus ? (
               <p className="reader-aa-hint" role="status">
                 {fontStatus}

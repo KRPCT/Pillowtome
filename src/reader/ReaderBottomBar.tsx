@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CloudDownload, RotateCcw } from "lucide-react";
 
 /**
@@ -51,6 +51,8 @@ export function ReaderBottomBar({
 }: ReaderBottomBarProps) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
+  /** Whether pointer capture succeeded for the live gesture (UX-02). */
+  const capturedRef = useRef(false);
 
   const fracFromClientX = useCallback((clientX: number): number => {
     const el = trackRef.current;
@@ -63,11 +65,41 @@ export function ReaderBottomBar({
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button != null && e.button !== 0) return;
-      e.currentTarget.setPointerCapture?.(e.pointerId);
+      // setPointerCapture can throw ("No active pointer with the given id") —
+      // on edge WebViews / synthesized pointers / pointercancel races. It must
+      // NEVER kill the gesture (the「进度条无效」bug): the window-level
+      // fallback below owns the drag when capture fails.
+      capturedRef.current = false;
+      try {
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        capturedRef.current = true;
+      } catch {
+        /* capture is best-effort */
+      }
       setDrag(fracFromClientX(e.clientX));
     },
     [fracFromClientX],
   );
+
+  // Uncaptured-gesture safety net: when capture failed, pointermove/up may
+  // never reach the track, so listen on window for the drag's lifetime.
+  useEffect(() => {
+    if (drag == null || capturedRef.current) return;
+    const move = (e: PointerEvent) => setDrag(fracFromClientX(e.clientX));
+    const up = (e: PointerEvent) => {
+      const target = fracFromClientX(e.clientX);
+      setDrag(null);
+      onScrub(target);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+  }, [drag, fracFromClientX, onScrub]);
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {

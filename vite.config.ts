@@ -2,6 +2,7 @@ import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { unwrapCascadeLayers } from "./src/lib/css-unwrap-layers";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
@@ -46,9 +47,47 @@ function wireFoliatePdf(): Plugin {
 // NOT a build-time patch: zip.js captures the global at module init, and the
 // vendored bundle ships no JS inflate fallback codec of its own.
 
+/**
+ * Unwrap Tailwind v4's @layer blocks in the final CSS bundle (Chrome ≤ 98
+ * can't parse them; lightningcss intentionally preserves layers). Runs last,
+ * after the lightningcss minifier, on the emitted asset text.
+ */
+function unwrapLayersPlugin(): Plugin {
+  return {
+    name: "pillowtome:unwrap-cascade-layers",
+    apply: "build",
+    enforce: "post",
+    generateBundle(_, bundle) {
+      for (const fileName of Object.keys(bundle)) {
+        if (!fileName.endsWith(".css")) continue;
+        const asset = bundle[fileName];
+        if (asset.type === "asset" && typeof asset.source === "string") {
+          asset.source = unwrapCascadeLayers(asset.source);
+        }
+      }
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [wireFoliatePdf(), react(), tailwindcss()],
+  plugins: [wireFoliatePdf(), unwrapLayersPlugin(), react(), tailwindcss()],
+  css: {
+    // Old-System-WebView compat (Chrome 91 baseline, LDPlayer canary):
+    // Tailwind v4 emits @layer/oklch/color-mix/nesting that Chrome ≤98 cannot
+    // parse — the whole utilities layer was being dropped, which left every
+    // Radix Sheet (设置/目录/搜索/批注) DOM-mounted but UNPOSITIONED
+    // (position: static, off-screen) →「菜单打不开」. lightningcss lowers the
+    // bundle to chrome91 (unwraps @layer, converts oklch/color-mix, flattens
+    // nesting). JS-side gaps are covered by src/lib/webview-shims.ts.
+    transformer: "lightningcss",
+    lightningcss: {
+      targets: { chrome: 91 },
+    },
+  },
+  build: {
+    cssMinify: "lightningcss",
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

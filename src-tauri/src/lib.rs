@@ -33,18 +33,28 @@ use storage::SourceRegistry;
 /// Real books arrive as a `BookSource` (file picker / Android SAF) in Plan 01-05.
 const SAMPLE_EPUB: &[u8] = include_bytes!("../assets/sample/sample.epub");
 
-/// Bundled Noto Sans CJK SC/TC variable OTFs (OFL) — same Android materialize
+/// Bundled Noto Sans CJK SC/TC variable WOFF2s (OFL) — same Android materialize
 /// path as the sample EPUB (CJK-05 / D-43..D-45). Served via pillow fonts ids
 /// `bundled-noto-sc` / `bundled-noto-tc` (never IPC bytes).
+/// WOFF2 (Brotli) instead of OTF: Chromium OTS rejects web fonts > 30 MiB —
+/// the Serif VF (52.8 MiB) failed to decode at all, and the Sans VFs (29.3 MiB)
+/// sat 700 KiB from the limit. WOFF2 keeps the full variable font + full CJK
+/// coverage at 12.9/18.8 MiB (scripts/fonts-woff2.py regenerates).
 const BUNDLED_NOTO_SC: &[u8] =
-    include_bytes!("../assets/fonts/noto-cjk/NotoSansCJKsc-VF.otf");
+    include_bytes!("../assets/fonts/noto-cjk/NotoSansCJKsc-VF.woff2");
 const BUNDLED_NOTO_TC: &[u8] =
-    include_bytes!("../assets/fonts/noto-cjk/NotoSansCJKtc-VF.otf");
+    include_bytes!("../assets/fonts/noto-cjk/NotoSansCJKtc-VF.woff2");
 
-/// Bundled Noto Serif CJK SC variable OTF (OFL) — serif reading face, same
-/// materialize path; served via pillow fonts id `bundled-noto-serif-sc`.
-const BUNDLED_NOTO_SERIF_SC: &[u8] =
-    include_bytes!("../assets/fonts/noto-cjk/NotoSerifCJKsc-VF.otf");
+/// Bundled Noto Serif CJK SC static WOFF2s (OFL, wght 400/700) — serif reading
+/// face, same materialize path; pillow font ids `bundled-noto-serif-sc-400` /
+/// `-700`. Two STATIC instances, not the VF: Chromium OTS caps the DECOMPRESSED
+/// web-font payload at 30 MiB — the Serif VF is 52.8 MiB (rejected outright on
+/// Android), its static instances are ~26.6 MiB. Full glyph coverage kept
+/// (scripts/fonts-woff2.py regenerates).
+const BUNDLED_NOTO_SERIF_SC_400: &[u8] =
+    include_bytes!("../assets/fonts/noto-cjk/NotoSerifCJKsc-400.woff2");
+const BUNDLED_NOTO_SERIF_SC_700: &[u8] =
+    include_bytes!("../assets/fonts/noto-cjk/NotoSerifCJKsc-700.woff2");
 
 /// Sample id registered in the [`SourceRegistry`]; the reader fetches
 /// `pillow://.../sample`.
@@ -74,10 +84,14 @@ fn materialize_sample(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Box<
 fn materialize_bundled_cjk_fonts(app: &tauri::AppHandle) {
     match fonts::fonts_dir(app) {
         Ok(dir) => {
+            // Drop stale serif faces from pre-split builds (single VF id) so
+            // they can never be served (and stop wasting 19–53 MB).
+            fonts::remove_stale_bundled_fonts(&dir);
             for (id, bytes) in [
                 (fonts::BUNDLED_NOTO_SC_ID, BUNDLED_NOTO_SC),
                 (fonts::BUNDLED_NOTO_TC_ID, BUNDLED_NOTO_TC),
-                (fonts::BUNDLED_NOTO_SERIF_SC_ID, BUNDLED_NOTO_SERIF_SC),
+                (fonts::BUNDLED_NOTO_SERIF_SC_400_ID, BUNDLED_NOTO_SERIF_SC_400),
+                (fonts::BUNDLED_NOTO_SERIF_SC_700_ID, BUNDLED_NOTO_SERIF_SC_700),
             ] {
                 if let Err(err) = fonts::materialize_bundled_font(&dir, id, bytes) {
                     eprintln!("[pillowtome] bundled CJK font materialize failed ({id}): {err}");
@@ -226,7 +240,16 @@ pub fn run() {
             // Re-hydrate persisted SAF grants so a previously imported book
             // reopens after a restart without re-granting (FND-03).
             #[cfg(target_os = "android")]
-            rehydrate_imports(app.handle());
+            {
+                rehydrate_imports(app.handle());
+                // Vault-copied imports (BookSource::Path under app_data/books)
+                // also vanish from the registry at restart — the SAF grant loop
+                // above can't cover them (they're plain files, not grants).
+                // Their ids are deterministic (hash of the vault path) so they
+                // match the source_id persisted at import; without this every
+                // imported book opens as「找不到该书籍」after a cold start.
+                rehydrate_vault_books(app.handle());
+            }
 
             // A4 runtime probe (07-02): the shared plugin pool only exists
             // after the frontend Database.load — retry briefly, then log the
@@ -264,6 +287,30 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Re-register vault-copied books (`app_data_dir()/books`) at startup so
+/// SAF imports — copied into the private vault at pick time — reopen after a
+/// cold start. `book_id` is deterministic (hash of the absolute vault path),
+/// so re-registration lands on the same id the import persisted as source_id.
+#[cfg(target_os = "android")]
+fn rehydrate_vault_books(app: &tauri::AppHandle) {
+    use pillowtome_core::source::BookSource;
+
+    let Ok(dir) = app.path().app_data_dir().map(|d| d.join("books")) else {
+        return;
+    };
+    let Ok(rd) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let registry = app.state::<SourceRegistry>();
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            let source = BookSource::Path(path);
+            registry.register(commands::book_id(&source), source);
+        }
+    }
 }
 
 /// Re-register books the app still holds a persisted SAF grant for, so they

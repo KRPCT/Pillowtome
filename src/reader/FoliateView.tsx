@@ -25,6 +25,10 @@ import {
   type ReadingPrefs,
 } from "./apply-reading-styles";
 import {
+  applyPaginatorMotion,
+  prefersReducedMotion,
+} from "./paginator-motion";
+import {
   PREFS_SAVE_DEBOUNCE_MS,
   loadReadingPrefs,
   saveReadingPrefs,
@@ -667,6 +671,7 @@ export function FoliateView({
       const prevFlow = renderer.getAttribute?.("flow");
       const nextFlow = flowAttr(next.mode);
       renderer.setAttribute?.("flow", nextFlow);
+      applyPaginatorMotion(renderer, prefersReducedMotion());
       applyFoliateLayoutAttrs(renderer, hostRef.current?.clientHeight);
       renderer.setStyles?.(css);
 
@@ -1614,18 +1619,37 @@ export function FoliateView({
     const renderer = viewRef.current?.renderer;
     if (!host || !renderer) return;
 
+    // Guard + rAF coalesce: applyFoliateLayoutAttrs writes attributes that
+    // force a full paginator relayout. Re-applying identical values re-triggers
+    // that relayout, which can itself resize the host — an endless
+    // ResizeObserver fight ("ResizeObserver loop limit exceeded" spam and a
+    // pegged CPU on low-end WebViews). Only apply when the height changed.
+    let lastHeight = -1;
+    let raf = 0;
     const sync = () => {
-      applyFoliateLayoutAttrs(renderer, host.clientHeight);
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const h = host.clientHeight;
+        if (h === lastHeight) return;
+        lastHeight = h;
+        applyFoliateLayoutAttrs(renderer, h);
+      });
     };
     sync();
 
     if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", sync);
-      return () => window.removeEventListener("resize", sync);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener("resize", sync);
+      };
     }
     const ro = new ResizeObserver(() => sync());
     ro.observe(host);
-    return () => ro.disconnect();
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
   }, [status, prefs.mode]);
 
   // Mode switch: continuous stream is a SECOND surface. Snapshot SSOT position,
@@ -2087,6 +2111,7 @@ export function FoliateView({
           const engineMode =
             loaded.mode === "scroll" ? "paginate" : loaded.mode;
           view.renderer?.setAttribute?.("flow", flowAttr(engineMode));
+          applyPaginatorMotion(view.renderer, prefersReducedMotion());
           applyFoliateLayoutAttrs(view.renderer, host.clientHeight);
           const caps = ensureCjkCaps();
           const openCss = buildCss(loaded);

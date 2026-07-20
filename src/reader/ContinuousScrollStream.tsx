@@ -487,7 +487,11 @@ export function ContinuousScrollStream({
         doc.body?.scrollHeight ?? 0,
         1,
       );
-      iframe.style.height = `${h}px`;
+      // Guard: identical height writes re-layout the scroller, and this very
+      // observer (below) listens to the scroller — an unguarded write can feed
+      // a ResizeObserver fight on low-end WebViews.
+      const next = `${h}px`;
+      if (iframe.style.height !== next) iframe.style.height = next;
       const idx = Number(iframe.dataset.linearIndex);
       if (Number.isFinite(idx)) heightsRef.current.set(idx, h);
     },
@@ -507,9 +511,18 @@ export function ContinuousScrollStream({
       });
     injectAll();
     if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => injectAll());
+    // rAF-coalesce resize bursts (and any residual feedback): at most one
+    // re-inject per frame instead of a synchronous RO → layout → RO storm.
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => injectAll());
+    });
     ro.observe(root);
-    return () => ro.disconnect();
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
   }, [readingCss, autospaceShimEnabled, injectStyles]);
 
   useEffect(() => {

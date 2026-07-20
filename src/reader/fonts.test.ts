@@ -7,7 +7,8 @@ vi.mock("../lib/pillow", () => ({
 import {
   BUNDLED_CJK_FAMILY,
   BUNDLED_NOTO_SC_ID,
-  BUNDLED_NOTO_SERIF_SC_ID,
+  BUNDLED_NOTO_SERIF_SC_400_ID,
+  BUNDLED_NOTO_SERIF_SC_700_ID,
   BUNDLED_NOTO_TC_ID,
   BUNDLED_SERIF_CJK_FAMILY,
   FONT_KEY_NOTO_SANS,
@@ -27,15 +28,21 @@ describe("buildBundledCjkFontFaceCss", () => {
     expect(css).toContain(`font-family: "${BUNDLED_CJK_FAMILY}"`);
     expect(css).toContain(BUNDLED_NOTO_SC_ID);
     expect(css).toContain(BUNDLED_NOTO_TC_ID);
-    expect(css).toContain("font-display: swap");
+    // block, not swap: local pillow protocol decodes fast — swap caused a
+    // guaranteed fallback→bundled flicker on every book open.
+    expect(css).toContain("font-display: block");
+    expect(css).not.toContain("font-display: swap");
   });
 });
 
 describe("buildBundledSerifCjkFontFaceCss", () => {
-  it("emits a single full-coverage serif face (no unicode-range subsets)", () => {
+  it("emits static 400/700 serif faces with full coverage (no unicode-range subsets)", () => {
     const css = buildBundledSerifCjkFontFaceCss();
     expect(css).toContain(`font-family: "${BUNDLED_SERIF_CJK_FAMILY}"`);
-    expect(css).toContain(BUNDLED_NOTO_SERIF_SC_ID);
+    expect(css).toContain(BUNDLED_NOTO_SERIF_SC_400_ID);
+    expect(css).toContain(BUNDLED_NOTO_SERIF_SC_700_ID);
+    expect(css).toContain("font-weight: 400");
+    expect(css).toContain("font-weight: 700");
     expect(css).not.toContain("unicode-range");
   });
 

@@ -3193,15 +3193,18 @@ dependencies = [
 
 [[package]]
 name = "pillowtome"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "android-native-keyring-store",
  "blake3",
+ "jni 0.22.4",
  "keyring",
  "keyring-core",
+ "ndk-context",
  "pillowtome-core",
  "reqwest",
  "reqwest_dav",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "sqlx",
@@ -3218,7 +3221,7 @@ dependencies = [
 
 [[package]]
 name = "pillowtome-core"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "blake3",
  "quick-xml",

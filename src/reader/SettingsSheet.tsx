@@ -129,6 +129,8 @@ export interface SettingsSheetProps {
   showLibraryPrefs?: boolean;
   /** Optional 同步 section (Phase 7) — rendered after the 书库 block. */
   syncSection?: ReactNode;
+  /** Optional 关于 section (UPD-01) — rendered after 同步. */
+  aboutSection?: ReactNode;
   /** Reader theme — flips the sheet to 墨壳 at night (library 恒为纸面 day)。 */
   theme?: ReadingTheme;
 }
@@ -368,6 +370,7 @@ export function SettingsSheet({
   fontStatus = null,
   showLibraryPrefs = false,
   syncSection = null,
+  aboutSection = null,
   theme = "day",
 }: SettingsSheetProps) {
   const isDesktop = useIsDesktop();
@@ -676,6 +679,10 @@ export function SettingsSheet({
 
           {syncSection ? (
             <div className="reader-aa-sync">{syncSection}</div>
+          ) : null}
+
+          {aboutSection ? (
+            <div className="reader-aa-sync">{aboutSection}</div>
           ) : null}
         </div>
       </SheetContent>

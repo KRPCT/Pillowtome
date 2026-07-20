@@ -12,6 +12,7 @@ pub mod migrations;
 pub mod protocol;
 pub mod storage;
 pub mod sync;
+pub mod update;
 
 use tauri::http::header;
 use tauri::Manager;
@@ -185,6 +186,7 @@ pub fn run() {
             commands::take_pending_open,
             commands::save_cover,
             commands::is_android,
+            update::check_update,
             fonts::import_font,
             fonts::remove_font,
             sync::commands::sync_get_config,
@@ -199,6 +201,15 @@ pub fn run() {
             sync::commands::sync_set_file_sync,
         ])
         .setup(|app| {
+            // Android: rustls-platform-verifier 的 JVM 初始化（UPD-01）——
+            // reqwest 的 HTTPS（check_update、https WebDAV 同步）依赖它，未
+            // 初始化即 panic。失败只记日志：check_update 调用点会再兜底一次
+            // 并转成干净的中文 Err，而不是 panic。
+            #[cfg(target_os = "android")]
+            if let Err(err) = update::ensure_tls_verifier_init() {
+                eprintln!("[pillowtome] rustls-platform-verifier init failed: {err}");
+            }
+
             // Materialize the embedded sample to a real filesystem path and
             // register it, so `pillow://.../sample` resolves before the frontend
             // ever fetches it. Uses `app_data_dir()` rather than

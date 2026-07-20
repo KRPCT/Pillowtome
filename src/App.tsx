@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { onBackButtonPress } from "@tauri-apps/api/app";
+import { getVersion, onBackButtonPress } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { BookMarked, RefreshCw, Search, Settings2, X } from "lucide-react";
 import { ThemeProvider } from "@mui/material/styles";
@@ -46,6 +46,12 @@ import {
 } from "./sync/sync-status";
 import { SyncStatusButton } from "./sync/SyncStatusButton";
 import { SyncSettingsSheet } from "./sync/SyncSettingsSheet";
+import { UpdateDialog } from "./components/UpdateDialog";
+import {
+  checkForUpdate,
+  isUpdateDismissed,
+  type UpdateInfo,
+} from "./lib/update";
 
 /** 窄屏底部 tab（mockup §06 .tabbar）：React 状态驱动，不引路由。 */
 type MobileTab = "library" | "sync" | "settings";
@@ -72,6 +78,11 @@ function App() {
   /** 窄屏顶栏搜索展开态（>640px 搜索 pill 常驻）。 */
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("library");
+  /** UPD-01 更新检查：检出的更新、弹窗开关、手动检查进行中标记。 */
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
   const openIdRef = useRef<string | null>(null);
   openIdRef.current = openId;
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -130,6 +141,41 @@ function App() {
   useEffect(() => {
     void refreshShelf();
   }, [refreshShelf]);
+
+  // UPD-01 更新检查。manual=false 为启动自动检查：失败静默、被「忽略此版本」
+  // 压住的版本不弹；manual=true 为设置页手动触发：结果必达（弹窗或 toast）。
+  const updateCheckingRef = useRef(false);
+  const runUpdateCheck = useCallback(async (manual: boolean) => {
+    if (updateCheckingRef.current) return;
+    updateCheckingRef.current = true;
+    setCheckingUpdate(true);
+    try {
+      const info = await checkForUpdate();
+      if (!info) {
+        if (manual) setStatus("已是最新版本");
+        return;
+      }
+      if (manual || !isUpdateDismissed(info.version)) {
+        setUpdateInfo(info);
+        setUpdateOpen(true);
+      }
+    } catch (err) {
+      console.warn("[update] 检查更新失败", err);
+      if (manual) setStatus("检查更新失败，请检查网络后重试");
+    } finally {
+      updateCheckingRef.current = false;
+      setCheckingUpdate(false);
+    }
+  }, []);
+
+  // 启动即「推送」：冷启动 2.5s 后自动检查一次（避开首屏竞争），并取版本号。
+  useEffect(() => {
+    void getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion(""));
+    const timer = window.setTimeout(() => void runUpdateCheck(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [runUpdateCheck]);
 
   // Android「打开方式」导入：MainActivity 已把 VIEW 文件复制进私有目录
   // （pending_open.epub），这里每 3 秒 + 窗口聚焦时取走入库。桌面端恒为 null。
@@ -495,6 +541,12 @@ function App() {
           </DialogActions>
         </Dialog>
 
+        <UpdateDialog
+          info={updateInfo}
+          open={updateOpen}
+          onClose={() => setUpdateOpen(false)}
+        />
+
         <LibrarySettingsSheet
           open={settingsOpen}
           onOpenChange={sheetClosed("settings")}
@@ -505,6 +557,9 @@ function App() {
             setSettingsOpen(false);
             setSyncSettingsOpen(true);
           }}
+          appVersion={appVersion}
+          checkingUpdate={checkingUpdate}
+          onCheckUpdate={() => void runUpdateCheck(true)}
         />
 
         <SyncSettingsSheet

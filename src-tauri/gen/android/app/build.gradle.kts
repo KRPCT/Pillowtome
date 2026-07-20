@@ -20,6 +20,32 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// rustls-platform-verifier（reqwest/rustls 在 Android 的证书验证）需要随伴随
+// crate `rustls-platform-verifier-android` 分发的 JVM 组件（CertificateVerifier
+// AAR），否则任何 HTTPS（更新检查 / https WebDAV 同步）在首次连接时 panic。
+// crate 把 maven 仓库打在本地 cargo registry 里，这里动态定位，避免硬编码
+// 用户目录。AAR 版本必须与 Cargo.lock 中该 crate 版本一致（当前 0.1.1）。
+// 注意：本文件在 gitignored 的 gen/android 内，但经 `git add -f` force-track —
+// `tauri android init` 重刷后按 docs/ANDROID-BUILD.md § 固化的原生改动 还原。
+val rustlsPlatformVerifierMaven: File = run {
+    val cargoHome = System.getenv("CARGO_HOME")
+        ?: File(System.getProperty("user.home"), ".cargo").absolutePath
+    val registrySrc = File(cargoHome, "registry/src")
+    val crate = registrySrc.listFiles()
+        ?.flatMap { index -> index.listFiles()?.toList() ?: emptyList() }
+        ?.filter { it.isDirectory && it.name.startsWith("rustls-platform-verifier-android-") }
+        ?.maxByOrNull { it.name }
+        ?: throw GradleException(
+            "rustls-platform-verifier-android crate 未在 $registrySrc 找到；" +
+                "请先跑一次 cargo 构建（tauri android build 会自动拉取依赖）"
+        )
+    File(crate, "maven")
+}
+
+repositories {
+    maven { url = uri(rustlsPlatformVerifierMaven) }
+}
+
 android {
     compileSdk = 36
     namespace = "com.pillowtome.app"
@@ -74,6 +100,9 @@ rust {
 }
 
 dependencies {
+    // rustls TLS 验证的 JVM 组件（见上方 rustlsPlatformVerifierMaven；版本锁
+    // 与 Cargo.lock 的 rustls-platform-verifier-android crate 一致）。
+    implementation("rustls:rustls-platform-verifier:0.1.1@aar")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")

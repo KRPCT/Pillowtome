@@ -1,6 +1,6 @@
 [package]
 name = "pillowtome"
-version = "0.2.0"
+version = "1.0.0"
 description = "枕籍 (Pillowtome) — cross-platform Chinese-first e-book reader."
 authors = ["Pillowtome"]
 edition = "2021"
@@ -71,6 +71,16 @@ tauri-plugin-android-fs = "=28.2.2"
 # android-native-keyring-store feature — dep edges only, no new packages (D-13).
 android-native-keyring-store = "=1.0.0"
 keyring-core = "=1.0.0"
+# UPD-01 TLS init (rustls-platform-verifier on Android panics uninitialized —
+# any reqwest HTTPS call dies, incl. check_update AND https WebDAV sync). All
+# three edges are already locked in Cargo.lock (via reqwest 0.13.4 /
+# tauri-plugin-android-fs) — dep edges only, no new packages (D-13). The
+# `jni` pin MUST match rustls-platform-verifier 0.7.0's own (types cross
+# the `init_with_env` boundary). The AAR for `CertificateVerifier` is wired
+# in gen/android/app/build.gradle.kts (see ANDROID-BUILD.md § TLS).
+rustls-platform-verifier = "=0.7.0"
+jni = "=0.22.4"
+ndk-context = "=0.1.1"
 
 [dev-dependencies]
 # tokio drives the async sqlx/wiremock tests (macros + rt); the same 1.52.3 is

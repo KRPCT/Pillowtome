@@ -36,6 +36,12 @@ export interface LibrarySettingsSheetProps {
   syncState: SyncViewState;
   /** Open the SyncSettingsSheet (from the section CTA / 同步设置 row). */
   onOpenSyncSettings: () => void;
+  /** 当前应用版本（UPD-01 关于 section），如 `1.0.0`。 */
+  appVersion: string;
+  /** 「检查更新」进行中（按钮禁用 + 文案）。 */
+  checkingUpdate: boolean;
+  /** 手动检查更新（结果由 App 以弹窗/toast 呈现）。 */
+  onCheckUpdate: () => void;
 }
 
 export function LibrarySettingsSheet({
@@ -45,6 +51,9 @@ export function LibrarySettingsSheet({
   onPrefsChange,
   syncState,
   onOpenSyncSettings,
+  appVersion,
+  checkingUpdate,
+  onCheckUpdate,
 }: LibrarySettingsSheetProps) {
   const [fonts, setFonts] = useState<CustomFont[]>([]);
   const [fontStatus, setFontStatus] = useState<string | null>(null);
@@ -100,6 +109,33 @@ export function LibrarySettingsSheet({
     </Box>
   );
 
+  // UPD-01 关于 section：版本号 + 手动检查更新（自动检查在 App 启动时进行）。
+  const aboutSection = (
+    <Box sx={{ mb: 3 }}>
+      <Typography
+        variant="subtitle2"
+        sx={{ color: "text.secondary", mb: 1.25, letterSpacing: "0.02em" }}
+      >
+        关于
+      </Typography>
+      <Typography variant="body2">
+        枕籍 Pillowtome{appVersion ? ` v${appVersion}` : ""}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+        中文优先的跨平台电子书阅读器
+      </Typography>
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={onCheckUpdate}
+        disabled={checkingUpdate}
+        sx={{ mt: 1.5 }}
+      >
+        {checkingUpdate ? "正在检查…" : "检查更新"}
+      </Button>
+    </Box>
+  );
+
   return (
     <SettingsSheet
       open={open}
@@ -108,6 +144,7 @@ export function LibrarySettingsSheet({
       onPrefsChange={onPrefsChange}
       showLibraryPrefs
       syncSection={syncSection}
+      aboutSection={aboutSection}
       fonts={fonts.map((f) => ({ id: f.id, familyName: f.familyName }))}
       fontStatus={fontStatus}
       onImportFont={async () => {

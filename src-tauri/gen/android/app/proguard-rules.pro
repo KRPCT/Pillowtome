@@ -33,3 +33,8 @@
 -keep class com.plugin.** { *; }
 -keep class app.tauri.** { *; }
 -keep class io.crates.** { *; }
+
+# UPD-01: rustls-platform-verifier 的 JVM 组件（CertificateVerifier）只经
+# Rust JNI 按类名反射加载，R8 会误判为死代码剥离/改名 —— 整包保留。
+# 见 docs/ANDROID-BUILD.md § 固化的原生改动。
+-keep class org.rustls.platformverifier.** { *; }

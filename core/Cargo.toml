@@ -1,6 +1,6 @@
 [package]
 name = "pillowtome-core"
-version = "0.2.0"
+version = "1.0.0"
 edition = "2021"
 description = "Portable, platform-agnostic core for Pillowtome (no Tauri/platform deps; unit-testable off-device)."
 license = "MIT"

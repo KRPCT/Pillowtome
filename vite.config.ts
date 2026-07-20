@@ -40,6 +40,12 @@ function wireFoliatePdf(): Plugin {
   };
 }
 
+// NOTE: foliate-js's zip.js needs `DecompressionStream('deflate-raw')`
+// (Chrome 103+) to unzip EPUBs. Older WebViews are covered by the fflate-based
+// ponyfill installed at app entry (`src/lib/webview-shims.ts`) — deliberately
+// NOT a build-time patch: zip.js captures the global at module init, and the
+// vendored bundle ships no JS inflate fallback codec of its own.
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [wireFoliatePdf(), react(), tailwindcss()],
